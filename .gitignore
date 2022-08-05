@@ -1,6 +1,7 @@
 .DS_Store
 .AppleDouble
 .LSOverride
+.vscode
 
 *.exe
 *.exe~
@@ -10,3 +11,5 @@
 *.test
 *.out
 go.work
+**/__debug_bin
+*.code-workspace
