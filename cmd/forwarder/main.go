@@ -34,7 +34,11 @@ func run(cmd *cobra.Command, args []string) {
 	if err != nil {
 		logrus.WithError(err).Error("error while creating UDP backend")
 	}
-	forwarder.NewForwarder(backend)
+	fwd, err := forwarder.NewForwarder(backend)
+	if err != nil {
+		logrus.WithError(err).Fatal("unable to instantie forwarder")
+	}
+	fwd.Run()
 
 	backend.Start()
 

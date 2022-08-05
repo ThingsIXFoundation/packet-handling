@@ -8,6 +8,7 @@ import (
 	"github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/backend"
 	"github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/backend/events"
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
+	"github.com/ThingsIXFoundation/router-api/go/router"
 	"github.com/brocaar/chirpstack-api/go/v3/gw"
 	"github.com/brocaar/lorawan"
 	"github.com/sirupsen/logrus"
@@ -20,12 +21,14 @@ type Forwarder struct {
 	routerPool     *RouterPool
 	gatewayStore   gateway.GatewayStore
 	onlineGateways mapset.Set[lorawan.EUI64]
+	routerEvents   chan *router.RouterToHotspotEvent
 }
 
 func NewForwarder(backend backend.Backend) (*Forwarder, error) {
 	fw := &Forwarder{
 		backend:        backend,
 		onlineGateways: mapset.New[lorawan.EUI64](),
+		routerEvents:   make(chan *router.RouterToHotspotEvent),
 	}
 
 	rp, err := NewRouterPool()
@@ -38,6 +41,28 @@ func NewForwarder(backend backend.Backend) (*Forwarder, error) {
 	fw.setup()
 
 	return fw, nil
+}
+
+// Run the forwarder, this waits for received router events and forwards them to
+// to correct gateway. Events coming from gateways are received by the backend
+// that publishes them through the forwader that calls the callbacks on the
+// router client that sends the event to the router.
+func (fw *Forwarder) Run() {
+	go func() {
+		for ev := range fw.routerEvents {
+			fw.handleRouterEvent(ev)
+		}
+	}()
+}
+
+func (fw *Forwarder) handleRouterEvent(event *router.RouterToHotspotEvent) {
+	// TODO: deliver received router packet to gateway
+	// frame.GetDownlinkFrame().GatewayId
+	if frame := event.GetDownlinkFrameEvent(); frame != nil {
+		logrus.Info("TODO: handle router received downlink frame")
+	} else if airtimePayment := event.GetAirtimePaymentEvent(); airtimePayment != nil {
+		logrus.Info("TODO: handle router received airtime payment")
+	}
 }
 
 func (fw *Forwarder) setup() error {
@@ -54,7 +79,12 @@ func (fw *Forwarder) setup() error {
 func (fw *Forwarder) UplinkFrame(frame gw.UplinkFrame) {
 	var phy lorawan.PHYPayload
 
-	logrus.Infof("received packet from gateway: %s rssi: %d freq: %d payload: %s", hex.EncodeToString(frame.RxInfo.GatewayId), frame.RxInfo.Rssi, frame.TxInfo.Frequency, base64.RawStdEncoding.EncodeToString(frame.PhyPayload))
+	logrus.WithFields(logrus.Fields{
+		"gateway": hex.EncodeToString(frame.RxInfo.GatewayId),
+		"rssi":    frame.RxInfo.Rssi,
+		"freq":    frame.TxInfo.Frequency,
+		"payload": base64.RawStdEncoding.EncodeToString(frame.PhyPayload),
+	}).Info("reveived packet from gateway")
 
 	err := phy.UnmarshalBinary(frame.PhyPayload)
 	if err != nil {

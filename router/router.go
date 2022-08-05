@@ -20,7 +20,7 @@ func NewRouter(int integration.Integration) (*Router, error) {
 }
 
 func (r *Router) setup() {
-
+	// r.integration.SetDownlinkFrameFunc() // external/forwarder/forwarder.go
 }
 
 func (r *Router) NetIds(ctx context.Context, req *router.NetIdsRequest) (*router.NetIdsResponse, error) {

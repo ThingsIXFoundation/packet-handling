@@ -3,6 +3,8 @@ module github.com/ThingsIXFoundation/packet-handling
 go 1.18
 
 require (
+	github.com/ThingsIXFoundation/coverage-api/go v0.0.0-20220803123334-7bbcb33bb9d9
+	github.com/ThingsIXFoundation/router-api/go v0.0.0-20220803123204-b0f6e2479172
 	github.com/brocaar/chirpstack-api/go/v3 v3.12.5
 	github.com/brocaar/lorawan v0.0.0-20220207095711-d675789e16ab
 	github.com/eclipse/paho.mqtt.golang v1.4.1
@@ -18,13 +20,13 @@ require (
 	github.com/prometheus/client_golang v1.12.2
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.7.2
+	github.com/uber/h3-go v3.0.1+incompatible
+	github.com/zyedidia/generic v1.1.0
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616
 )
 
 require (
 	github.com/Masterminds/semver v1.4.2 // indirect
-	github.com/ThingsIXFoundation/coverage-api/go v0.0.0-20220803123334-7bbcb33bb9d9 // indirect
-	github.com/ThingsIXFoundation/router-api/go v0.0.0-20220803123204-b0f6e2479172 // indirect
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d // indirect
 	github.com/apex/log v1.1.0 // indirect
@@ -58,8 +60,6 @@ require (
 	github.com/prometheus/procfs v0.7.3 // indirect
 	github.com/smartystreets/assertions v1.0.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/uber/h3-go v3.0.1+incompatible // indirect
-	github.com/zyedidia/generic v1.1.0 // indirect
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519 // indirect
 	golang.org/x/net v0.0.0-20220607020251-c690dde0001d // indirect
 	golang.org/x/oauth2 v0.0.0-20220411215720-9780585627b5 // indirect
