@@ -21,6 +21,11 @@ type RouterClient struct {
 	hotspotEvents chan *inProgressHotspotEventSend
 }
 
+type routerEvent struct {
+	router *Router
+	ev     *router.RouterToHotspotEvent
+}
+
 // DialRouter tries to connect to the router at the given endpoint.
 func DialRouter(ctx context.Context, endpoint string) (*RouterClient, error) {
 	conn, err := grpc.DialContext(ctx, endpoint)
@@ -37,7 +42,7 @@ func DialRouter(ctx context.Context, endpoint string) (*RouterClient, error) {
 
 // Run the router until the given context expires and emit reveived router
 // events on the given routerEvents channel.
-func (rc *RouterClient) Run(ctx context.Context, routerEvents chan<- *router.RouterToHotspotEvent) error {
+func (rc *RouterClient) Run(ctx context.Context, r *Router, routerEvents chan<- *routerEvent) error {
 	// create bi-directory event stream to exchange events with the router
 	eventStream, err := rc.client.Events(ctx)
 	if err != nil {
@@ -63,9 +68,11 @@ func (rc *RouterClient) Run(ctx context.Context, routerEvents chan<- *router.Rou
 				rc.conn.Close()
 				return fmt.Errorf("unable to receive router event: %w", err)
 			}
-			// broadcast router event to forwarder that keeps a list of online
-			// hotspots and can deliver the event to the correct hotspot
-			routerEvents <- event
+			// broadcast router event to forwarder that calls the appropiate callback
+			routerEvents <- &routerEvent{
+				router: r,
+				ev:     event,
+			}
 		// wait for the context to expire
 		case <-ctx.Done():
 			return ctx.Err()

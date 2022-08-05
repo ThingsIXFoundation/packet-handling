@@ -8,7 +8,6 @@ import (
 	"github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/backend"
 	"github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/backend/events"
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
-	"github.com/ThingsIXFoundation/router-api/go/router"
 	"github.com/brocaar/chirpstack-api/go/v3/gw"
 	"github.com/brocaar/lorawan"
 	"github.com/sirupsen/logrus"
@@ -21,14 +20,14 @@ type Forwarder struct {
 	routerPool     *RouterPool
 	gatewayStore   gateway.GatewayStore
 	onlineGateways mapset.Set[lorawan.EUI64]
-	routerEvents   chan *router.RouterToHotspotEvent
+	routerEvents   chan *routerEvent
 }
 
 func NewForwarder(backend backend.Backend) (*Forwarder, error) {
 	fw := &Forwarder{
 		backend:        backend,
 		onlineGateways: mapset.New[lorawan.EUI64](),
-		routerEvents:   make(chan *router.RouterToHotspotEvent),
+		routerEvents:   make(chan *routerEvent, 4096),
 	}
 
 	rp, err := NewRouterPool()
@@ -43,10 +42,10 @@ func NewForwarder(backend backend.Backend) (*Forwarder, error) {
 	return fw, nil
 }
 
-// Run the forwarder, this waits for received router events and forwards them to
-// to correct gateway. Events coming from gateways are received by the backend
-// that publishes them through the forwader that calls the callbacks on the
-// router client that sends the event to the router.
+// Run the forwarder in the background. This waits for received router events
+// and forwards them to to correct gateway. Events coming from gateways are
+// received by the backend that publishes them through the forwader that calls
+// the callbacks on the router client that sends the event to the router.
 func (fw *Forwarder) Run() {
 	go func() {
 		for ev := range fw.routerEvents {
@@ -55,12 +54,10 @@ func (fw *Forwarder) Run() {
 	}()
 }
 
-func (fw *Forwarder) handleRouterEvent(event *router.RouterToHotspotEvent) {
-	// TODO: deliver received router packet to gateway
-	// frame.GetDownlinkFrame().GatewayId
-	if frame := event.GetDownlinkFrameEvent(); frame != nil {
-		logrus.Info("TODO: handle router received downlink frame")
-	} else if airtimePayment := event.GetAirtimePaymentEvent(); airtimePayment != nil {
+func (fw *Forwarder) handleRouterEvent(event *routerEvent) {
+	if frame := event.ev.GetDownlinkFrameEvent(); frame != nil {
+		fw.SendDownlinkFrameFromRouter(event.router, *frame.DownlinkFrame)
+	} else if airtimePayment := event.ev.GetAirtimePaymentEvent(); airtimePayment != nil {
 		logrus.Info("TODO: handle router received airtime payment")
 	}
 }
@@ -172,7 +169,7 @@ func (fw *Forwarder) SubscribeEvent(event events.Subscribe) {
 
 }
 
-func (fw *Forwarder) SendDownlinkFrameFromRouter(router Router, frame gw.DownlinkFrame) {
+func (fw *Forwarder) SendDownlinkFrameFromRouter(router *Router, frame gw.DownlinkFrame) {
 	frame, err := fw.updateDownlinkFrameFromNetworkFormat(frame)
 	if err != nil {
 		logrus.WithError(err).Error("could not send downlink frame, dropping packet")
