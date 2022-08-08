@@ -2,7 +2,9 @@ package forwarder
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 
 	"github.com/ThingsIXFoundation/router-api/go/router"
 	"github.com/brocaar/chirpstack-api/go/v3/gw"
@@ -50,23 +52,23 @@ func (rc *RouterClient) Run(ctx context.Context, r *Router, routerEvents chan<- 
 	}
 
 	// turn incoming router events stream into a readable channel
-	re := rc.routerEvents(eventStream)
+	re := routerEventsChan(eventStream)
+
+	// ensure that connection is closed when stopped
+	defer rc.conn.Close()
 
 	for {
 		select {
 		// wait for hotspot events that must be emitted to the router
 		case hotspotEvent := <-rc.hotspotEvents:
 			sendErr := eventStream.Send(hotspotEvent.ev)
-			hotspotEvent.err <- sendErr
-			if sendErr != nil {
-				rc.conn.Close()
+			if hotspotEvent.err <- sendErr; sendErr != nil {
 				return fmt.Errorf("unable to send hotspot event to router: %w", err)
 			}
 		// wait for incoming events from the router that must be send to the hotspot
 		case event, ok := <-re:
 			if !ok {
-				rc.conn.Close()
-				return fmt.Errorf("unable to receive router event: %w", err)
+				return nil
 			}
 			// broadcast router event to forwarder that calls the appropiate callback
 			routerEvents <- &routerEvent{
@@ -80,14 +82,18 @@ func (rc *RouterClient) Run(ctx context.Context, r *Router, routerEvents chan<- 
 	}
 }
 
-// routerEvents turns the given router events stream into a readable go channel
-// it closes the returns channel when receiving an event fails
-func (rc *RouterClient) routerEvents(events router.RouterV1_EventsClient) <-chan *router.RouterToHotspotEvent {
+// routerEventsChan turns the given events readable into a readable go channel
+// it closes the returned channel when receiving an event fails
+func routerEventsChan(events router.RouterV1_EventsClient) <-chan *router.RouterToHotspotEvent {
 	receivedRouterEvents := make(chan *router.RouterToHotspotEvent)
 	go func() {
 		defer close(receivedRouterEvents)
 		for {
 			in, err := events.Recv()
+			if errors.Is(err, io.EOF) {
+				logrus.Info("router disconnected")
+				return
+			}
 			if err != nil {
 				logrus.WithError(err).Warn("unable to receive events from router")
 				return
