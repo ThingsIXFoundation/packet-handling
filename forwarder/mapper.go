@@ -32,6 +32,13 @@ func IsMaybeMapperPacket(payload *lorawan.MACPayload) bool {
 }
 
 func (mc *MapperForwarder) HandleMapperPacket(frame gw.UplinkFrame, mac *lorawan.MACPayload) {
+	gateway, err := mc.gatewayStore.GatewayByLocalID(frame.RxInfo.GatewayId)
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"local_gateway_id": hex.EncodeToString(frame.RxInfo.GatewayId),
+		}).Error("unknown gateway, dropping mapper packet")
+		return
+	}
 	macb, err := mac.MarshalBinary()
 	if err != nil {
 		logrus.WithError(err).Error("could not marshal mapper packet")
@@ -75,12 +82,7 @@ func (mc *MapperForwarder) HandleMapperPacket(frame gw.UplinkFrame, mac *lorawan
 		return
 	}
 	dprbh := sha256.Sum256(dprb)
-	gwkey := mc.gatewayStore.PrivateKeyForGateway(frame.RxInfo.GatewayId)
-	if gwkey == nil {
-		logrus.Errorf("could not sign packet receipt gateway with id: %s not found in store", hex.EncodeToString(frame.RxInfo.GatewayId))
-		return
-	}
-	gwsig, err := crypto.Sign(dprbh[:], gwkey)
+	gwsig, err := crypto.Sign(dprbh[:], gateway.PrivateKey)
 	if err != nil {
 		logrus.WithError(err).Error("could not sign packet receipt: error while signing packet")
 		return

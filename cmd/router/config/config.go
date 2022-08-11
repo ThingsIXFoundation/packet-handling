@@ -5,4 +5,5 @@ var (
 	// from forwarders
 	GrpcListenAddress        = "grpc.listen.address"
 	GrpcListenAddressDefault = "0.0.0.0:3200"
+	LoRaWANNetIDs            = "lorawan.netids"
 )

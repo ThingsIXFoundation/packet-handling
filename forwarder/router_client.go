@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/ThingsIXFoundation/packet-handling/airtime"
+	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	"github.com/ThingsIXFoundation/router-api/go/router"
 	"github.com/brocaar/chirpstack-api/go/v3/gw"
 	"github.com/sirupsen/logrus"
@@ -106,16 +108,57 @@ func routerEventsChan(events router.RouterV1_EventsClient) <-chan *router.Router
 
 // DeliverDataUp forwards the given uplink frame to the router
 // Caller is response to close the returned channel
-func (rc *RouterClient) DeliverDataUp(frame gw.UplinkFrame) chan error {
+func (rc *RouterClient) DeliverDataUp(gw *gateway.Gateway, frame gw.UplinkFrame) chan error {
+	errChan := make(chan error)
+
+	airtime, err := airtime.UplinkAirtime(frame)
+	if err != nil {
+		errChan <- err
+	}
+
+	// TODO: Keep track of airtime
+
 	event := router.HotspotToRouterEvent{
 		GatewayInformation: &router.GatewayInformation{
-			PublicKey: nil, // TODO
-			Owner:     nil, // TODO
+			Id:        gw.NetworkGatewayID.Bytes(),
+			PublicKey: gw.PublicKeyBytes,
+			Owner:     gw.Owner,
 		},
 		Event: &router.HotspotToRouterEvent_UplinkFrameEvent{
 			UplinkFrameEvent: &router.UplinkFrameEvent{
-				UplinkFrame:    &frame,
-				AirtimeReceipt: nil, // TODO
+				UplinkFrame: &frame,
+				AirtimeReceipt: &router.AirtimeReceipt{
+					Owner:   gw.Owner,
+					Airtime: uint32(airtime.Milliseconds()),
+				},
+			},
+		},
+	}
+
+	rc.hotspotEvents <- &inProgressHotspotEventSend{
+		ev:  &event,
+		err: errChan,
+	}
+
+	return errChan
+}
+
+// Caller is response to close the returned channel
+func (rc *RouterClient) DeliverJoin(gw *gateway.Gateway, frame gw.UplinkFrame) chan error {
+	return rc.DeliverDataUp(gw, frame) // Internally joins and data-ups are the same
+}
+
+// Caller is response to close the returned channel
+func (rc *RouterClient) DeliverGatewayStatus(gw *gateway.Gateway, online bool) chan error {
+	event := router.HotspotToRouterEvent{
+		GatewayInformation: &router.GatewayInformation{
+			Id:        gw.NetworkGatewayID.Bytes(),
+			PublicKey: gw.PublicKeyBytes,
+			Owner:     gw.Owner,
+		},
+		Event: &router.HotspotToRouterEvent_StatusEvent{
+			StatusEvent: &router.StatusEvent{
+				Online: online,
 			},
 		},
 	}
@@ -126,23 +169,5 @@ func (rc *RouterClient) DeliverDataUp(frame gw.UplinkFrame) chan error {
 		err: errChan,
 	}
 
-	return errChan
-}
-
-// Caller is response to close the returned channel
-func (rc *RouterClient) DeliverJoin(frame gw.UplinkFrame) chan error {
-	errChan := make(chan error)
-	go func() {
-		errChan <- fmt.Errorf("not implemented")
-	}()
-	return errChan
-}
-
-// Caller is response to close the returned channel
-func (rc *RouterClient) DeliverGatewayStatus(gatewayId []byte, online bool) chan error {
-	errChan := make(chan error)
-	go func() {
-		errChan <- fmt.Errorf("not implemented")
-	}()
 	return errChan
 }

@@ -73,13 +73,13 @@ type Router struct {
 	id         string
 	client     *RouterClient
 	uri        string
-	netIds     []lorawan.NetID
+	netIDs     []lorawan.NetID
 	joinFilter xorfilter.Xor8
 }
 
 func (r *Router) AcceptsDevAddr(devAddr lorawan.DevAddr) bool {
-	for _, netId := range r.netIds {
-		if devAddr.IsNetID(netId) {
+	for _, netID := range r.netIDs {
+		if devAddr.IsNetID(netID) {
 			return true
 		}
 	}

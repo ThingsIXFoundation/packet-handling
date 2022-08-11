@@ -9,7 +9,12 @@ import (
 	"sync/atomic"
 
 	"github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/integration"
+	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	"github.com/ThingsIXFoundation/router-api/go/router"
+	"github.com/apex/log"
+	"github.com/brocaar/chirpstack-api/go/v3/gw"
+	"github.com/brocaar/lorawan"
+	"github.com/gofrs/uuid"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
@@ -126,12 +131,17 @@ func (r *Router) Events(forwarder router.RouterV1_EventsServer) error {
 			}
 
 			var (
-				info      = in.GetGatewayInformation()
-				pubKey    = info.GetPublicKey()
-				gatewayID = info.GetGatewayId() // TODO: as GatewayID
-				owner     = info.GetOwner()
-				event     = in.GetEvent()
+				info           = in.GetGatewayInformation()
+				pubKey         = info.GetPublicKey()
+				gatewayIDbytes = info.GetId() // TODO: as GatewayID
+				owner          = info.GetOwner()
+				event          = in.GetEvent()
 			)
+
+			gatewayID, err := gateway.NewGatewayID(gatewayIDbytes)
+			if err != nil {
+				return err
+			}
 
 			logrus.WithFields(logrus.Fields{
 				"pubKey":  fmt.Sprintf("%x", pubKey),
@@ -188,7 +198,7 @@ func (r *Router) forwarderEventStream(events router.RouterV1_EventsServer) <-cha
 	return receivedForwarderEvents
 }
 
-func (r *Router) handleStatus(forwarderID uint64, gatewayID GatewayID, status *router.HotspotToRouterEvent_StatusEvent, integrationEvents chan<- *router.RouterToHotspotEvent) {
+func (r *Router) handleStatus(forwarderID uint64, gatewayID gateway.GatewayID, status *router.HotspotToRouterEvent_StatusEvent, integrationEvents chan<- *router.RouterToHotspotEvent) {
 	// forwarders send periodically (~30s) an indication if a gateway is still
 	// online or when a gateway goes offline
 	online := status.StatusEvent.GetOnline()
@@ -197,16 +207,53 @@ func (r *Router) handleStatus(forwarderID uint64, gatewayID GatewayID, status *r
 	} else {
 		r.gateways.SetOffline(forwarderID, gatewayID)
 	}
+
+	r.integration.SetGatewaySubscription(online, lorawan.EUI64(gatewayID))
 }
 
 func (r *Router) handleUplink(event *router.HotspotToRouterEvent_UplinkFrameEvent) {
-	logrus.Info("got uplink frame") // TODO: send to integrations layer
+	// TODO: Wrap in go routine?
+	frame := event.UplinkFrameEvent.GetUplinkFrame()
+
+	var gatewayId lorawan.EUI64
+	copy(gatewayId[:], frame.GetRxInfo().GetGatewayId())
+	uplinkId := uuid.FromBytesOrNil(frame.GetRxInfo().GetUplinkId())
+
+	if err := r.integration.PublishEvent(gatewayId, integration.EventUp, uplinkId, frame); err != nil {
+		log.WithError(err).WithFields(log.Fields{
+			"gateway_id": gatewayId,
+			"event_type": integration.EventUp,
+			"uplink_id":  uplinkId,
+		}).Error("publish event error")
+	}
 }
 
 func (r *Router) handleDownlinkTxAck(event *router.HotspotToRouterEvent_DownlinkTXAckEvent) {
-	if ack := event.DownlinkTXAckEvent.GetDownlinkTXAck(); ack != nil {
-		logrus.Info("got downlink tx ack") // TODO: send to integrations layer
-	} else if receipt := event.DownlinkTXAckEvent.GetAirtimeReceipt(); receipt != nil {
-		logrus.Info("got airtime receipt") // TODO: send to integrations layer
+	// TODO: Wrap in go routine?
+	ack := event.DownlinkTXAckEvent.GetDownlinkTXAck()
+
+	gatewayID, err := gateway.NewGatewayID(ack.GetGatewayId())
+	if err != nil {
+		logrus.WithError(err).Error("received invalid gatewayID, dropping downlink-tx-ack")
+	}
+
+	downlinkId := uuid.FromBytesOrNil(ack.GetDownlinkId())
+
+	// for backwards compatibility
+	for _, err := range ack.Items {
+		if err.Status == gw.TxAckStatus_OK {
+			ack.Error = ""
+			break
+		}
+
+		ack.Error = err.String()
+	}
+
+	if err := integration.GetIntegration().PublishEvent(lorawan.EUI64(gatewayID), integration.EventAck, downlinkId, ack); err != nil {
+		log.WithError(err).WithFields(log.Fields{
+			"gateway_id":  gatewayID,
+			"event_type":  integration.EventAck,
+			"downlink_id": downlinkId,
+		}).Error("publish event error")
 	}
 }

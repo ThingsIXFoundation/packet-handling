@@ -3,11 +3,11 @@ package forwarder
 import (
 	"encoding/base64"
 	"encoding/hex"
-	"fmt"
 
 	"github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/backend"
 	"github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/backend/events"
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
+	"github.com/ThingsIXFoundation/packet-handling/gateway/file"
 	"github.com/brocaar/chirpstack-api/go/v3/gw"
 	"github.com/brocaar/lorawan"
 	"github.com/sirupsen/logrus"
@@ -24,10 +24,15 @@ type Forwarder struct {
 }
 
 func NewForwarder(backend backend.Backend) (*Forwarder, error) {
+	gws, err := file.NewFileGatewayStore("gateways.keys")
+	if err != nil {
+		return nil, err
+	}
 	fw := &Forwarder{
 		backend:        backend,
 		onlineGateways: mapset.New[lorawan.EUI64](),
 		routerEvents:   make(chan *routerEvent, 4096),
+		gatewayStore:   gws,
 	}
 
 	rp, err := NewRouterPool()
@@ -81,9 +86,26 @@ func (fw *Forwarder) UplinkFrame(frame gw.UplinkFrame) {
 		"rssi":    frame.RxInfo.Rssi,
 		"freq":    frame.TxInfo.Frequency,
 		"payload": base64.RawStdEncoding.EncodeToString(frame.PhyPayload),
-	}).Info("reveived packet from gateway")
+	}).Info("received uplink from gateway")
 
-	err := phy.UnmarshalBinary(frame.PhyPayload)
+	gw, err := fw.gatewayStore.GatewayByLocalID(frame.RxInfo.GatewayId)
+	if err != nil {
+		logrus.WithError(err).Errorf("could not lookup gateway")
+		return
+	} else if gw == nil {
+		logrus.WithFields(logrus.Fields{
+			"gateway": hex.EncodeToString(frame.RxInfo.GatewayId),
+		}).Errorf("could not find gateway in store")
+		return
+	}
+
+	frame, err = fw.updateUplinkFrameToNetworkFormat(gw, frame)
+	if err != nil {
+		logrus.WithError(err).Errorf("could update uplink frame to network format")
+		return
+	}
+
+	err = phy.UnmarshalBinary(frame.PhyPayload)
 	if err != nil {
 		logrus.WithError(err).Error("could not decode lorawan packet, dropping packet")
 		return
@@ -114,7 +136,7 @@ func (fw *Forwarder) UplinkFrame(frame gw.UplinkFrame) {
 		}
 
 		for _, router := range routers {
-			router.client.DeliverDataUp(frame)
+			router.client.DeliverDataUp(gw, frame)
 		}
 	} else if phy.MHDR.MType == lorawan.JoinRequest || phy.MHDR.MType == lorawan.RejoinRequest {
 		// Filter by Xor8 filter on joinEUI
@@ -135,15 +157,51 @@ func (fw *Forwarder) UplinkFrame(frame gw.UplinkFrame) {
 		}
 
 		for _, router := range routers {
-			router.client.DeliverJoin(frame)
+			router.client.DeliverJoin(gw, frame)
 		}
 	}
 }
 
 func (fw *Forwarder) DownlinkTxAck(txack gw.DownlinkTXAck) {
+	logrus.WithFields(logrus.Fields{
+		"gateway":     hex.EncodeToString(txack.GatewayId),
+		"downlink_id": txack.DownlinkId,
+	}).Info("received txack from gateway")
+
+	gw, err := fw.gatewayStore.GatewayByLocalID(txack.GatewayId)
+	if err != nil {
+		logrus.WithError(err).Errorf("could not lookup gateway")
+		return
+	} else if gw == nil {
+		logrus.WithFields(logrus.Fields{
+			"gateway": hex.EncodeToString(txack.GatewayId),
+		}).Errorf("could not find gateway in store")
+		return
+	}
+
+	txack, err = fw.updateDownlinkTxAckToNetworkFormat(gw, txack)
+	if err != nil {
+		logrus.WithError(err).Errorf("could update txack to network format")
+		return
+	}
+
+	// TODO: Lookup downlink router from cache based on id and deliver to right router
+
 }
 
 func (fw *Forwarder) SubscribeEvent(event events.Subscribe) {
+
+	gw, err := fw.gatewayStore.GatewayByLocalID(event.GatewayID[:])
+	if err != nil {
+		logrus.WithError(err).Errorf("could not lookup gateway")
+		return
+	} else if gw == nil {
+		logrus.WithFields(logrus.Fields{
+			"gateway": hex.EncodeToString(event.GatewayID[:]),
+		}).Errorf("could not find gateway in store")
+		return
+	}
+
 	if event.Subscribe {
 		if !fw.onlineGateways.Has(event.GatewayID) {
 			logrus.Infof("gateway is online: %s", hex.EncodeToString(event.GatewayID[:]))
@@ -164,19 +222,38 @@ func (fw *Forwarder) SubscribeEvent(event events.Subscribe) {
 		return
 	}
 	for _, router := range routers {
-		router.client.DeliverGatewayStatus(fw.gatewayStore.NetworkGatewayIdForGateway(event.GatewayID[:]), event.Subscribe)
+		router.client.DeliverGatewayStatus(gw, event.Subscribe)
 	}
 
 }
 
 func (fw *Forwarder) SendDownlinkFrameFromRouter(router *Router, frame gw.DownlinkFrame) {
-	frame, err := fw.updateDownlinkFrameFromNetworkFormat(frame)
+
+	logrus.WithFields(logrus.Fields{
+		"gateway": hex.EncodeToString(frame.GatewayId),
+		"freq":    frame.TxInfo.Frequency,
+		"payload": base64.RawStdEncoding.EncodeToString(frame.PhyPayload),
+		"router":  router.id,
+	}).Info("received downlink from router for gateway")
+
+	gw, err := fw.gatewayStore.GatewayByNetworkID(frame.GatewayId)
 	if err != nil {
-		logrus.WithError(err).Error("could not send downlink frame, dropping packet")
+		logrus.WithError(err).Errorf("could not lookup gateway")
+		return
+	} else if gw == nil {
+		logrus.WithFields(logrus.Fields{
+			"gateway": hex.EncodeToString(frame.GatewayId),
+		}).Errorf("could not find gateway in store")
 		return
 	}
 
-	// TODO: Cache router so we know to what router to send dowlink ack
+	frame, err = fw.updateDownlinkFrameFromNetworkFormat(gw, frame)
+	if err != nil {
+		logrus.WithError(err).Error("could not update downlink frame, dropping packet")
+		return
+	}
+
+	// TODO: Keep track of router so we know to what router to send dowlink ack
 
 	err = fw.backend.SendDownlinkFrame(frame)
 	if err != nil {
@@ -197,33 +274,22 @@ func (fw *Forwarder) GatewayStats(gwstats gw.GatewayStats) {
 	logrus.Debugf("received gateway stats from gateway: %s", hex.EncodeToString(gwstats.GatewayId))
 }
 
-func (fw *Forwarder) updateUplinkFrameToNetworkFormat(frame gw.UplinkFrame) (gw.UplinkFrame, error) {
-	networkGatewayId := fw.gatewayStore.NetworkGatewayIdForGateway(frame.RxInfo.GatewayId)
-	if networkGatewayId == nil {
-		return gw.UplinkFrame{}, fmt.Errorf("gateway not found in keystore: %s", hex.EncodeToString(frame.RxInfo.GatewayId))
-	}
-
-	frame.RxInfo.GatewayId = networkGatewayId
+func (fw *Forwarder) updateUplinkFrameToNetworkFormat(gw *gateway.Gateway, frame gw.UplinkFrame) (gw.UplinkFrame, error) {
+	frame.RxInfo.GatewayId = gw.NetworkGatewayID.Bytes()
 	return frame, nil
 }
 
-func (fw *Forwarder) updateDownlinkTxAckToNetworkFormat(txack gw.DownlinkTXAck) (gw.DownlinkTXAck, error) {
-	networkGatewayId := fw.gatewayStore.NetworkGatewayIdForGateway(txack.GatewayId)
-	if networkGatewayId == nil {
-		return gw.DownlinkTXAck{}, fmt.Errorf("gateway not found in keystore: %s", hex.EncodeToString(txack.GatewayId))
-	}
-
-	txack.GatewayId = networkGatewayId
-
+func (fw *Forwarder) updateDownlinkTxAckToNetworkFormat(gw *gateway.Gateway, txack gw.DownlinkTXAck) (gw.DownlinkTXAck, error) {
+	txack.GatewayId = gw.NetworkGatewayID.Bytes()
 	return txack, nil
 }
 
-func (fw *Forwarder) updateDownlinkFrameFromNetworkFormat(frame gw.DownlinkFrame) (gw.DownlinkFrame, error) {
-	gatewayId := fw.gatewayStore.GatewayIdForNetworkGatewayId(frame.GatewayId)
-	frame.GatewayId = gatewayId
-	frame.TxInfo.GatewayId = gatewayId
+func (fw *Forwarder) updateDownlinkFrameFromNetworkFormat(gw *gateway.Gateway, frame gw.DownlinkFrame) (gw.DownlinkFrame, error) {
+	gatewayID := gw.LocalGatewayID.Bytes()
+	frame.GatewayId = gatewayID
+	frame.TxInfo.GatewayId = gatewayID
 	for i := range frame.Items {
-		frame.Items[i].TxInfo.GatewayId = gatewayId
+		frame.Items[i].TxInfo.GatewayId = gatewayID
 	}
 
 	return frame, nil

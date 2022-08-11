@@ -4,7 +4,8 @@ go 1.18
 
 require (
 	github.com/ThingsIXFoundation/coverage-api/go v0.0.0-20220803123334-7bbcb33bb9d9
-	github.com/ThingsIXFoundation/router-api/go v0.0.0-20220805093036-7010ebdd2c52
+	github.com/ThingsIXFoundation/router-api/go v0.0.0-20220809154034-d85adf0dcc66
+	github.com/apex/log v1.1.0
 	github.com/brocaar/chirpstack-api/go/v3 v3.12.5
 	github.com/brocaar/lorawan v0.0.0-20220715134808-3b283dda1534
 	github.com/eclipse/paho.mqtt.golang v1.4.1
@@ -31,7 +32,6 @@ require (
 	github.com/Masterminds/semver v1.4.2 // indirect
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d // indirect
-	github.com/apex/log v1.1.0 // indirect
 	github.com/aws/aws-sdk-go v1.27.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blakesmith/ar v0.0.0-20150311145944-8bd4349a67f2 // indirect

@@ -1,35 +1,32 @@
 package router
 
 import (
+	"bytes"
 	"fmt"
 	"sync"
 
+	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	"github.com/ThingsIXFoundation/router-api/go/router"
 	"github.com/brocaar/chirpstack-api/go/v3/gw"
-	"github.com/brocaar/lorawan"
 	"github.com/sirupsen/logrus"
 )
 
-type GatewayID lorawan.EUI64
-
-func (gid GatewayID) String() string {
-	return fmt.Sprintf("%s", gid)
-}
-
 type forwarderManagedGateway struct {
 	forwarderID uint64
-	gatewayID   GatewayID
+	gatewayID   gateway.GatewayID
 	forwarder   chan<- *router.RouterToHotspotEvent
 }
 
 type GatewayPool struct {
 	gatewaysMu sync.Mutex
-	gateways   map[GatewayID]*forwarderManagedGateway
+	gateways   map[gateway.GatewayID]*forwarderManagedGateway
 }
+
+func NewGatewayID([]byte)
 
 // SetOnline must be called when the forwarder has a gateway connected and is
 // able to deliver packets to it.
-func (gp *GatewayPool) SetOnline(forwarderID uint64, gatewayID GatewayID, forwarderEventSender chan<- *router.RouterToHotspotEvent) {
+func (gp *GatewayPool) SetOnline(forwarderID uint64, gatewayID gateway.GatewayID, forwarderEventSender chan<- *router.RouterToHotspotEvent) {
 	gp.gatewaysMu.Lock()
 	defer gp.gatewaysMu.Unlock()
 
@@ -46,7 +43,7 @@ func (gp *GatewayPool) SetOnline(forwarderID uint64, gatewayID GatewayID, forwar
 
 // SetOffline must be called when a forwarder detects one of its gateways is
 // offline so it won't be able to deliver packages to it.
-func (gp *GatewayPool) SetOffline(forwarderID uint64, gatewayID GatewayID) {
+func (gp *GatewayPool) SetOffline(forwarderID uint64, gatewayID gateway.GatewayID) {
 	gp.gatewaysMu.Lock()
 	defer gp.gatewaysMu.Unlock()
 
@@ -84,17 +81,17 @@ func (gp *GatewayPool) DownlinkFrame(frame gw.DownlinkFrame) {
 			},
 		},
 	}
-	gp.send(event)
+	gp.send(frame.GatewayId, event)
 }
 
-func (gp *GatewayPool) send(event *router.RouterToHotspotEvent) {
+func (gp *GatewayPool) send(addressedGatewayID []byte, event *router.RouterToHotspotEvent) {
 	gp.gatewaysMu.Lock()
 	defer gp.gatewaysMu.Unlock()
 
 	// send packet to matched forwarders
 	for gatewayID, gateway := range gp.gateways {
 
-		if true { // TODO: only send event to forwarder that has reported the gateway is online
+		if bytes.Equal(gatewayID[:], addressedGatewayID[:]) {
 			gateway.forwarder <- event
 			logrus.WithFields(logrus.Fields{
 				"gatewayID": gatewayID,
