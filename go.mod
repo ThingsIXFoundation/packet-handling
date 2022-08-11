@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/ThingsIXFoundation/coverage-api/go v0.0.0-20220803123334-7bbcb33bb9d9
-	github.com/ThingsIXFoundation/router-api/go v0.0.0-20220809154034-d85adf0dcc66
+	github.com/ThingsIXFoundation/router-api/go v0.0.0-20220811134609-fe6b1039fe4b
 	github.com/apex/log v1.1.0
 	github.com/brocaar/chirpstack-api/go/v3 v3.12.5
 	github.com/brocaar/lorawan v0.0.0-20220715134808-3b283dda1534

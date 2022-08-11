@@ -18,12 +18,12 @@ import (
 type RouterClient struct {
 	client        router.RouterV1Client
 	conn          *grpc.ClientConn
-	hotspotEvents chan *router.HotspotToRouterEvent
+	gatewayEvents chan *router.GatewayToRouterEvent
 }
 
 type routerEvent struct {
 	router *Router
-	ev     *router.RouterToHotspotEvent
+	ev     *router.RouterToGatewayEvent
 }
 
 // DialRouter tries to connect to the router at the given endpoint.
@@ -36,7 +36,7 @@ func DialRouter(ctx context.Context, endpoint string) (*RouterClient, error) {
 	return &RouterClient{
 		client:        router.NewRouterV1Client(conn),
 		conn:          conn,
-		hotspotEvents: make(chan *router.HotspotToRouterEvent),
+		gatewayEvents: make(chan *router.GatewayToRouterEvent),
 	}, nil
 }
 
@@ -56,16 +56,15 @@ func (rc *RouterClient) Run(ctx context.Context, r *Router, routerEvents chan<- 
 	defer rc.conn.Close()
 
 	for {
-		logrus.Debug("waiting for hotspot events")
+		logrus.Debug("waiting for gateway events")
 		select {
-		// wait for hotspot events that must be emitted to the router
-		case hotspotEvent := <-rc.hotspotEvents:
-			logrus.Debug("started hotspot send")
-			sendErr := eventStream.Send(hotspotEvent)
+		// wait for gateway events that must be emitted to the router
+		case gatewayEvent := <-rc.gatewayEvents:
+			sendErr := eventStream.Send(gatewayEvent)
 			if sendErr != nil {
 				logrus.WithError(err).Errorf("unable to deliver gateway event")
 			}
-		// wait for incoming events from the router that must be send to the hotspot
+		// wait for incoming events from the router that must be send to the gateway
 		case event, ok := <-re:
 			if !ok {
 				return nil
@@ -84,8 +83,8 @@ func (rc *RouterClient) Run(ctx context.Context, r *Router, routerEvents chan<- 
 
 // routerEventsChan turns the given events readable into a readable go channel
 // it closes the returned channel when receiving an event fails
-func routerEventsChan(events router.RouterV1_EventsClient) <-chan *router.RouterToHotspotEvent {
-	receivedRouterEvents := make(chan *router.RouterToHotspotEvent)
+func routerEventsChan(events router.RouterV1_EventsClient) <-chan *router.RouterToGatewayEvent {
+	receivedRouterEvents := make(chan *router.RouterToGatewayEvent)
 	go func() {
 		defer close(receivedRouterEvents)
 		for {
@@ -112,13 +111,13 @@ func (rc *RouterClient) DeliverDataUp(gw *gateway.Gateway, frame gw.UplinkFrame)
 
 	// TODO: Keep track of airtime
 
-	event := router.HotspotToRouterEvent{
+	event := router.GatewayToRouterEvent{
 		GatewayInformation: &router.GatewayInformation{
 			Id:        gw.NetworkGatewayID.Bytes(),
 			PublicKey: gw.PublicKeyBytes,
 			Owner:     gw.Owner,
 		},
-		Event: &router.HotspotToRouterEvent_UplinkFrameEvent{
+		Event: &router.GatewayToRouterEvent_UplinkFrameEvent{
 			UplinkFrameEvent: &router.UplinkFrameEvent{
 				UplinkFrame: &frame,
 				AirtimeReceipt: &router.AirtimeReceipt{
@@ -129,7 +128,7 @@ func (rc *RouterClient) DeliverDataUp(gw *gateway.Gateway, frame gw.UplinkFrame)
 		},
 	}
 
-	rc.hotspotEvents <- &event
+	rc.gatewayEvents <- &event
 
 }
 
@@ -140,19 +139,19 @@ func (rc *RouterClient) DeliverJoin(gw *gateway.Gateway, frame gw.UplinkFrame) {
 
 // Caller is response to close the returned channel
 func (rc *RouterClient) DeliverGatewayStatus(gw *gateway.Gateway, online bool) {
-	event := router.HotspotToRouterEvent{
+	event := router.GatewayToRouterEvent{
 		GatewayInformation: &router.GatewayInformation{
 			Id:        gw.NetworkGatewayID.Bytes(),
 			PublicKey: gw.PublicKeyBytes,
 			Owner:     gw.Owner,
 		},
-		Event: &router.HotspotToRouterEvent_StatusEvent{
+		Event: &router.GatewayToRouterEvent_StatusEvent{
 			StatusEvent: &router.StatusEvent{
 				Online: online,
 			},
 		},
 	}
 
-	rc.hotspotEvents <- &event
+	rc.gatewayEvents <- &event
 
 }

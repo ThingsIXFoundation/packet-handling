@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// hotspotCmd represents the hotspot command
+// gatewayCmd represents the gateway command
 var gatewayCmd = &cobra.Command{
 	Use:   "gateway",
 	Short: "gateways operations",

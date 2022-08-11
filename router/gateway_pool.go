@@ -14,7 +14,7 @@ import (
 type forwarderManagedGateway struct {
 	forwarderID uint64
 	gatewayID   gateway.GatewayID
-	forwarder   chan<- *router.RouterToHotspotEvent
+	forwarder   chan<- *router.RouterToGatewayEvent
 }
 
 type GatewayPool struct {
@@ -31,7 +31,7 @@ func NewGatewayPool() (*GatewayPool, error) {
 
 // SetOnline must be called when the forwarder has a gateway connected and is
 // able to deliver packets to it.
-func (gp *GatewayPool) SetOnline(forwarderID uint64, gatewayID gateway.GatewayID, forwarderEventSender chan<- *router.RouterToHotspotEvent) {
+func (gp *GatewayPool) SetOnline(forwarderID uint64, gatewayID gateway.GatewayID, forwarderEventSender chan<- *router.RouterToGatewayEvent) {
 	gp.gatewaysMu.Lock()
 	defer gp.gatewaysMu.Unlock()
 
@@ -79,8 +79,8 @@ func (gp *GatewayPool) AllOffline(forwarderID uint64) {
 // it wants to send a downlink frame to a gateway through the forwarder it is
 // connected to.
 func (gp *GatewayPool) DownlinkFrame(frame gw.DownlinkFrame) {
-	event := &router.RouterToHotspotEvent{
-		Event: &router.RouterToHotspotEvent_DownlinkFrameEvent{
+	event := &router.RouterToGatewayEvent{
+		Event: &router.RouterToGatewayEvent_DownlinkFrameEvent{
 			DownlinkFrameEvent: &router.DownlinkFrameEvent{
 				DownlinkFrame: &frame,
 			},
@@ -89,7 +89,7 @@ func (gp *GatewayPool) DownlinkFrame(frame gw.DownlinkFrame) {
 	gp.send(frame.GatewayId, event)
 }
 
-func (gp *GatewayPool) send(addressedGatewayID []byte, event *router.RouterToHotspotEvent) {
+func (gp *GatewayPool) send(addressedGatewayID []byte, event *router.RouterToGatewayEvent) {
 	gp.gatewaysMu.Lock()
 	defer gp.gatewaysMu.Unlock()
 

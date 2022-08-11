@@ -122,7 +122,7 @@ func (r *Router) Events(forwarder router.RouterV1_EventsServer) error {
 
 	// channel that the integration layer uses to forward messages to gateways
 	// that are managed by this forwarder.
-	integrationEvents := make(chan *router.RouterToHotspotEvent, 256)
+	integrationEvents := make(chan *router.RouterToGatewayEvent, 256)
 	defer close(integrationEvents)
 
 	for {
@@ -157,11 +157,11 @@ func (r *Router) Events(forwarder router.RouterV1_EventsServer) error {
 				"gateway": gatewayID,
 			}).Debug("received event from forwarder")
 
-			if uplink, ok := event.(*router.HotspotToRouterEvent_UplinkFrameEvent); ok {
+			if uplink, ok := event.(*router.GatewayToRouterEvent_UplinkFrameEvent); ok {
 				r.handleUplink(uplink)
-			} else if downlinkAck, ok := event.(*router.HotspotToRouterEvent_DownlinkTXAckEvent); ok {
+			} else if downlinkAck, ok := event.(*router.GatewayToRouterEvent_DownlinkTXAckEvent); ok {
 				r.handleDownlinkTxAck(downlinkAck)
-			} else if status, ok := event.(*router.HotspotToRouterEvent_StatusEvent); ok {
+			} else if status, ok := event.(*router.GatewayToRouterEvent_StatusEvent); ok {
 				r.handleStatus(forwarderID, gatewayID, status, integrationEvents)
 			}
 		// events from the integrations layer that must be send to a gateway through
@@ -185,8 +185,8 @@ func (r *Router) Events(forwarder router.RouterV1_EventsServer) error {
 
 // forwarderEventerRWChan turns the given events readable into a readable go
 // channel with a reader and writer.
-func (r *Router) forwarderEventStream(events router.RouterV1_EventsServer) <-chan *router.HotspotToRouterEvent {
-	receivedForwarderEvents := make(chan *router.HotspotToRouterEvent, 4096)
+func (r *Router) forwarderEventStream(events router.RouterV1_EventsServer) <-chan *router.GatewayToRouterEvent {
+	receivedForwarderEvents := make(chan *router.GatewayToRouterEvent, 4096)
 	go func() {
 		defer close(receivedForwarderEvents)
 		for {
@@ -205,7 +205,7 @@ func (r *Router) forwarderEventStream(events router.RouterV1_EventsServer) <-cha
 	return receivedForwarderEvents
 }
 
-func (r *Router) handleStatus(forwarderID uint64, gatewayID gateway.GatewayID, status *router.HotspotToRouterEvent_StatusEvent, integrationEvents chan<- *router.RouterToHotspotEvent) {
+func (r *Router) handleStatus(forwarderID uint64, gatewayID gateway.GatewayID, status *router.GatewayToRouterEvent_StatusEvent, integrationEvents chan<- *router.RouterToGatewayEvent) {
 	// forwarders send periodically (~30s) an indication if a gateway is still
 	// online or when a gateway goes offline
 	online := status.StatusEvent.GetOnline()
@@ -218,7 +218,7 @@ func (r *Router) handleStatus(forwarderID uint64, gatewayID gateway.GatewayID, s
 	r.integration.SetGatewaySubscription(online, lorawan.EUI64(gatewayID))
 }
 
-func (r *Router) handleUplink(event *router.HotspotToRouterEvent_UplinkFrameEvent) {
+func (r *Router) handleUplink(event *router.GatewayToRouterEvent_UplinkFrameEvent) {
 	// TODO: Wrap in go routine?
 	frame := event.UplinkFrameEvent.GetUplinkFrame()
 
@@ -235,7 +235,7 @@ func (r *Router) handleUplink(event *router.HotspotToRouterEvent_UplinkFrameEven
 	}
 }
 
-func (r *Router) handleDownlinkTxAck(event *router.HotspotToRouterEvent_DownlinkTXAckEvent) {
+func (r *Router) handleDownlinkTxAck(event *router.GatewayToRouterEvent_DownlinkTXAckEvent) {
 	// TODO: Wrap in go routine?
 	ack := event.DownlinkTXAckEvent.GetDownlinkTXAck()
 

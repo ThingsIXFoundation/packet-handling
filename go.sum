@@ -49,6 +49,8 @@ github.com/ThingsIXFoundation/router-api/go v0.0.0-20220809111947-8a7bf814a5e0 h
 github.com/ThingsIXFoundation/router-api/go v0.0.0-20220809111947-8a7bf814a5e0/go.mod h1:iRSTgTcT2QgBzDIA/FrutGtLRXh9EVuK155HdjYj7X8=
 github.com/ThingsIXFoundation/router-api/go v0.0.0-20220809154034-d85adf0dcc66 h1:6w/WV5y8oxMbpKoPoi8/aSAJAeXH676UOyq+hqXqnJs=
 github.com/ThingsIXFoundation/router-api/go v0.0.0-20220809154034-d85adf0dcc66/go.mod h1:iRSTgTcT2QgBzDIA/FrutGtLRXh9EVuK155HdjYj7X8=
+github.com/ThingsIXFoundation/router-api/go v0.0.0-20220811134609-fe6b1039fe4b h1:3ziLkDqtPbKJqb1IiE2cl05ufeLN35DDytyzo9LZHlo=
+github.com/ThingsIXFoundation/router-api/go v0.0.0-20220811134609-fe6b1039fe4b/go.mod h1:iRSTgTcT2QgBzDIA/FrutGtLRXh9EVuK155HdjYj7X8=
 github.com/alecthomas/kingpin v2.2.6+incompatible/go.mod h1:59OFYbFVLKQKq+mqrL6Rw5bR0c3ACQaawgXx0QYndlE=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 h1:JYp7IbQjafoB+tBA3gMyHYHrpOtNuDiK/uB5uXxq5wM=
