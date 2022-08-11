@@ -1,8 +1,10 @@
 package forwarder
 
 import (
+	"context"
 	"encoding/binary"
 	"sync"
+	"time"
 
 	"github.com/FastFilter/xorfilter"
 	"github.com/brocaar/lorawan"
@@ -14,7 +16,23 @@ type RouterPool struct {
 }
 
 func NewRouterPool() (*RouterPool, error) {
-	rp := &RouterPool{}
+	rp := &RouterPool{
+		routers: map[string]*Router{},
+	}
+
+	r := &Router{
+		uri: "https://0.0.0.0:3200",
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	rc, err := DialRouter(ctx, r.uri)
+	if err != nil {
+		return nil, err
+	}
+
+	r.client = rc
 
 	return rp, nil
 }
@@ -42,6 +60,8 @@ func (rp *RouterPool) GetRoutersForDataUp(devAddr lorawan.DevAddr) ([]*Router, e
 		}
 	}
 
+	ret = append(ret, rp.routers["test"])
+
 	return ret, nil
 }
 
@@ -55,6 +75,8 @@ func (rp *RouterPool) GetRoutersForJoin(joinEUI lorawan.EUI64) ([]*Router, error
 			ret = append(ret, router)
 		}
 	}
+
+	ret = append(ret, rp.routers["test"])
 
 	return ret, nil
 }

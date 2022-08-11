@@ -22,8 +22,6 @@ type GatewayPool struct {
 	gateways   map[gateway.GatewayID]*forwarderManagedGateway
 }
 
-func NewGatewayID([]byte)
-
 // SetOnline must be called when the forwarder has a gateway connected and is
 // able to deliver packets to it.
 func (gp *GatewayPool) SetOnline(forwarderID uint64, gatewayID gateway.GatewayID, forwarderEventSender chan<- *router.RouterToHotspotEvent) {

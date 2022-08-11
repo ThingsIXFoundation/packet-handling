@@ -84,7 +84,9 @@ func (fw *Forwarder) UplinkFrame(frame gw.UplinkFrame) {
 	logrus.WithFields(logrus.Fields{
 		"gateway": hex.EncodeToString(frame.RxInfo.GatewayId),
 		"rssi":    frame.RxInfo.Rssi,
+		"snr":     frame.RxInfo.LoraSnr,
 		"freq":    frame.TxInfo.Frequency,
+		"sf":      frame.TxInfo.GetLoraModulationInfo().GetSpreadingFactor(),
 		"payload": base64.RawStdEncoding.EncodeToString(frame.PhyPayload),
 	}).Info("received uplink from gateway")
 

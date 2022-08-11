@@ -12,6 +12,7 @@ import (
 	"github.com/brocaar/chirpstack-api/go/v3/gw"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type inProgressHotspotEventSend struct {
@@ -32,7 +33,7 @@ type routerEvent struct {
 
 // DialRouter tries to connect to the router at the given endpoint.
 func DialRouter(ctx context.Context, endpoint string) (*RouterClient, error) {
-	conn, err := grpc.DialContext(ctx, endpoint)
+	conn, err := grpc.DialContext(ctx, endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, fmt.Errorf("unable to dial router: %w", err)
 	}

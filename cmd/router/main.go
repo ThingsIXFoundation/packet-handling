@@ -8,7 +8,9 @@ import (
 	"syscall"
 
 	"github.com/ThingsIXFoundation/packet-handling/cmd/router/config"
+	chirpconfig "github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/config"
 	"github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/integration"
+
 	phrouter "github.com/ThingsIXFoundation/packet-handling/router"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -38,7 +40,21 @@ func run(cmd *cobra.Command, args []string) {
 	logrus.SetLevel(logrus.InfoLevel)
 	logrus.Info("starting router")
 
-	var int integration.Integration
+	// TODO: Improve
+	chirpconf := chirpconfig.Config{}
+	chirpconf.Integration.MQTT.Auth.Type = "generic"
+	chirpconf.Integration.MQTT.Auth.Generic.Servers = []string{"tcp://localhost:1883"}
+	chirpconf.Integration.MQTT.Auth.Generic.Username = ""
+	chirpconf.Integration.MQTT.Auth.Generic.Password = ""
+	chirpconf.Integration.MQTT.EventTopicTemplate = "eu868/gateway/{{ .GatewayID }}/event/{{ .EventType }}"
+	chirpconf.Integration.MQTT.StateTopicTemplate = "eu868/gateway/{{ .GatewayID }}/state/{{ .StateType }}"
+	chirpconf.Integration.MQTT.CommandTopicTemplate = "eu868/gateway/{{ .GatewayID }}/command/#"
+	chirpconf.Integration.Marshaler = "protobuf"
+	err := integration.Setup(chirpconf)
+	if err != nil {
+		logrus.WithError(err).Fatal("could not setup MQTT")
+	}
+	int := integration.GetIntegration()
 	r, err := phrouter.NewRouter(int)
 	if err != nil {
 		logrus.WithError(err).Fatal("unable to setup router")

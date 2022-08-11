@@ -20,7 +20,12 @@ type FileGatewayStore struct {
 var _ gateway.GatewayStore = (*FileGatewayStore)(nil)
 
 func NewFileGatewayStore(path string) (*FileGatewayStore, error) {
-	return &FileGatewayStore{path: path}, nil
+	fs := &FileGatewayStore{path: path}
+	err := fs.readKeys()
+	if err != nil {
+		return nil, err
+	}
+	return fs, nil
 }
 
 func (ks *FileGatewayStore) Gateways() ([]*gateway.Gateway, error) {
@@ -47,14 +52,12 @@ func (ks *FileGatewayStore) GatewayByNetworkID(networkGatewayID []byte) (*gatewa
 	return nil, nil
 }
 
-func (ks *FileGatewayStore) CreateKeyPairForGateway(gatewayID []byte) error {
-	// Read the file again so we have the latest version
-	ks.readKeys()
-	gw, err := ks.GatewayByLocalID(gatewayID)
+func (ks *FileGatewayStore) AddGateway(gw *gateway.Gateway) error {
+	egw, err := ks.GatewayByLocalID(gw.LocalGatewayID[:])
 	if err != nil {
 		return err
-	} else if gw != nil {
-		return fmt.Errorf("gateway: %s, already exists in keystore", hex.EncodeToString(gatewayID))
+	} else if egw != nil {
+		return fmt.Errorf("gateway: %s, already exists in keystore", gw.LocalGatewayID)
 	}
 
 	f, err := os.OpenFile(ks.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
@@ -63,15 +66,11 @@ func (ks *FileGatewayStore) CreateKeyPairForGateway(gatewayID []byte) error {
 	}
 	defer f.Close()
 
-	priv, err := crypto.GenerateKey()
-	if err != nil {
-		return err
-	}
-
-	f.WriteString(fmt.Sprintf("%s:%s", hex.EncodeToString(gatewayID), crypto.FromECDSA(priv)))
+	f.WriteString(fmt.Sprintf("%s:%s\n", gw.LocalGatewayID, hex.EncodeToString(crypto.FromECDSA(gw.PrivateKey))))
 	ks.readKeys()
 
 	return nil
+
 }
 
 func (ks *FileGatewayStore) readKeys() error {
