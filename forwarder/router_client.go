@@ -15,15 +15,10 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-type inProgressHotspotEventSend struct {
-	ev  *router.HotspotToRouterEvent
-	err chan error
-}
-
 type RouterClient struct {
 	client        router.RouterV1Client
 	conn          *grpc.ClientConn
-	hotspotEvents chan *inProgressHotspotEventSend
+	hotspotEvents chan *router.HotspotToRouterEvent
 }
 
 type routerEvent struct {
@@ -41,7 +36,7 @@ func DialRouter(ctx context.Context, endpoint string) (*RouterClient, error) {
 	return &RouterClient{
 		client:        router.NewRouterV1Client(conn),
 		conn:          conn,
-		hotspotEvents: make(chan *inProgressHotspotEventSend),
+		hotspotEvents: make(chan *router.HotspotToRouterEvent),
 	}, nil
 }
 
@@ -61,12 +56,14 @@ func (rc *RouterClient) Run(ctx context.Context, r *Router, routerEvents chan<- 
 	defer rc.conn.Close()
 
 	for {
+		logrus.Debug("waiting for hotspot events")
 		select {
 		// wait for hotspot events that must be emitted to the router
 		case hotspotEvent := <-rc.hotspotEvents:
-			sendErr := eventStream.Send(hotspotEvent.ev)
-			if hotspotEvent.err <- sendErr; sendErr != nil {
-				return fmt.Errorf("unable to send hotspot event to router: %w", err)
+			logrus.Debug("started hotspot send")
+			sendErr := eventStream.Send(hotspotEvent)
+			if sendErr != nil {
+				logrus.WithError(err).Errorf("unable to deliver gateway event")
 			}
 		// wait for incoming events from the router that must be send to the hotspot
 		case event, ok := <-re:
@@ -109,13 +106,9 @@ func routerEventsChan(events router.RouterV1_EventsClient) <-chan *router.Router
 
 // DeliverDataUp forwards the given uplink frame to the router
 // Caller is response to close the returned channel
-func (rc *RouterClient) DeliverDataUp(gw *gateway.Gateway, frame gw.UplinkFrame) chan error {
-	errChan := make(chan error)
+func (rc *RouterClient) DeliverDataUp(gw *gateway.Gateway, frame gw.UplinkFrame) {
 
-	airtime, err := airtime.UplinkAirtime(frame)
-	if err != nil {
-		errChan <- err
-	}
+	airtime, _ := airtime.UplinkAirtime(frame)
 
 	// TODO: Keep track of airtime
 
@@ -136,21 +129,17 @@ func (rc *RouterClient) DeliverDataUp(gw *gateway.Gateway, frame gw.UplinkFrame)
 		},
 	}
 
-	rc.hotspotEvents <- &inProgressHotspotEventSend{
-		ev:  &event,
-		err: errChan,
-	}
+	rc.hotspotEvents <- &event
 
-	return errChan
 }
 
 // Caller is response to close the returned channel
-func (rc *RouterClient) DeliverJoin(gw *gateway.Gateway, frame gw.UplinkFrame) chan error {
-	return rc.DeliverDataUp(gw, frame) // Internally joins and data-ups are the same
+func (rc *RouterClient) DeliverJoin(gw *gateway.Gateway, frame gw.UplinkFrame) {
+	rc.DeliverDataUp(gw, frame) // Internally joins and data-ups are the same
 }
 
 // Caller is response to close the returned channel
-func (rc *RouterClient) DeliverGatewayStatus(gw *gateway.Gateway, online bool) chan error {
+func (rc *RouterClient) DeliverGatewayStatus(gw *gateway.Gateway, online bool) {
 	event := router.HotspotToRouterEvent{
 		GatewayInformation: &router.GatewayInformation{
 			Id:        gw.NetworkGatewayID.Bytes(),
@@ -164,11 +153,6 @@ func (rc *RouterClient) DeliverGatewayStatus(gw *gateway.Gateway, online bool) c
 		},
 	}
 
-	errChan := make(chan error)
-	rc.hotspotEvents <- &inProgressHotspotEventSend{
-		ev:  &event,
-		err: errChan,
-	}
+	rc.hotspotEvents <- &event
 
-	return errChan
 }

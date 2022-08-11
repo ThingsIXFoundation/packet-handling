@@ -8,8 +8,9 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/ThingsIXFoundation/packet-handling/cmd/forwarder/config"
 	"github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/backend/semtechudp"
-	"github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/config"
+	chirpconfig "github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/config"
 	"github.com/ThingsIXFoundation/packet-handling/forwarder"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -27,6 +28,8 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	cobra.OnInitialize(initConfig)
+
+	rootCmd.Flags().String(config.DefaultRouter, "", "set the default router (used for development)")
 
 	viper.BindPFlags(rootCmd.Flags())
 	viper.BindPFlags(rootCmd.PersistentFlags())
@@ -52,10 +55,10 @@ func initConfig() {
 
 func run(cmd *cobra.Command, args []string) {
 	_, shutdown := context.WithCancel(context.Background())
-	logrus.SetLevel(logrus.InfoLevel)
+	logrus.SetLevel(logrus.DebugLevel)
 	logrus.Info("starting forwarder")
 
-	gb_conf := config.Config{}
+	gb_conf := chirpconfig.Config{}
 	gb_conf.Backend.Type = "semtech_udp"
 	gb_conf.Backend.SemtechUDP.UDPBind = "0.0.0.0:1680"
 
@@ -67,7 +70,7 @@ func run(cmd *cobra.Command, args []string) {
 	if err != nil {
 		logrus.WithError(err).Fatal("unable to instantie forwarder")
 	}
-	fwd.Run()
+	fwd.Start()
 
 	backend.Start()
 

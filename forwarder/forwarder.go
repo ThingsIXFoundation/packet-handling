@@ -35,7 +35,7 @@ func NewForwarder(backend backend.Backend) (*Forwarder, error) {
 		gatewayStore:   gws,
 	}
 
-	rp, err := NewRouterPool()
+	rp, err := NewRouterPool(fw)
 	if err != nil {
 		return nil, err
 	}
@@ -47,11 +47,13 @@ func NewForwarder(backend backend.Backend) (*Forwarder, error) {
 	return fw, nil
 }
 
-// Run the forwarder in the background. This waits for received router events
+// Start the forwarder in the background. This waits for received router events
 // and forwards them to to correct gateway. Events coming from gateways are
 // received by the backend that publishes them through the forwader that calls
 // the callbacks on the router client that sends the event to the router.
-func (fw *Forwarder) Run() {
+func (fw *Forwarder) Start() {
+	// TODO Fix handling err
+	go fw.routerPool.Start()
 	go func() {
 		for ev := range fw.routerEvents {
 			fw.handleRouterEvent(ev)
@@ -223,17 +225,21 @@ func (fw *Forwarder) SubscribeEvent(event events.Subscribe) {
 		logrus.WithError(err).Error("error while getting routers to report hotspot status to, dropping status update")
 		return
 	}
-	for _, router := range routers {
+	for routerAddress, router := range routers {
+		logrus.WithFields(logrus.Fields{
+			"router":  routerAddress,
+			"gateway": gw.NetworkGatewayID,
+			"online":  event.Subscribe,
+		}).Info("develivering status to router")
 		router.client.DeliverGatewayStatus(gw, event.Subscribe)
 	}
 
 }
 
 func (fw *Forwarder) SendDownlinkFrameFromRouter(router *Router, frame gw.DownlinkFrame) {
-
+	logrus.Infof("frame: %s", frame.GatewayId)
 	logrus.WithFields(logrus.Fields{
 		"gateway": hex.EncodeToString(frame.GatewayId),
-		"freq":    frame.TxInfo.Frequency,
 		"payload": base64.RawStdEncoding.EncodeToString(frame.PhyPayload),
 		"router":  router.id,
 	}).Info("received downlink from router for gateway")
@@ -289,7 +295,9 @@ func (fw *Forwarder) updateDownlinkTxAckToNetworkFormat(gw *gateway.Gateway, txa
 func (fw *Forwarder) updateDownlinkFrameFromNetworkFormat(gw *gateway.Gateway, frame gw.DownlinkFrame) (gw.DownlinkFrame, error) {
 	gatewayID := gw.LocalGatewayID.Bytes()
 	frame.GatewayId = gatewayID
-	frame.TxInfo.GatewayId = gatewayID
+	if frame.TxInfo != nil {
+		frame.TxInfo.GatewayId = gatewayID
+	}
 	for i := range frame.Items {
 		frame.Items[i].TxInfo.GatewayId = gatewayID
 	}

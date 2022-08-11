@@ -33,7 +33,7 @@ type Router struct {
 
 	// gatways keeps track which gateways are online and are connected through
 	// which forwarder
-	gateways GatewayPool
+	gateways *GatewayPool
 
 	// atomic counter that is incremented each time a forwarder connects and used
 	// internally to give each forwarder an unique id. This id is used when the
@@ -46,6 +46,12 @@ var _ router.RouterV1Server = (*Router)(nil)
 
 func NewRouter(int integration.Integration) (*Router, error) {
 	r := Router{integration: int}
+	gp, err := NewGatewayPool()
+	if err != nil {
+		return nil, err
+	}
+	r.gateways = gp
+
 	r.integration.SetDownlinkFrameFunc(r.gateways.DownlinkFrame)
 	// TODO: additional callbacks
 	return &r, nil
@@ -120,6 +126,7 @@ func (r *Router) Events(forwarder router.RouterV1_EventsServer) error {
 	defer close(integrationEvents)
 
 	for {
+		logrus.Debug("waiting for event")
 		select {
 		// events received from the forwarder that must be forwarded to the integrations
 		case in, ok := <-forwarderEventsReceiver:

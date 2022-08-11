@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/ThingsIXFoundation/packet-handling/cmd/router/config"
 	chirpconfig "github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/config"
@@ -37,11 +38,15 @@ func init() {
 
 func run(cmd *cobra.Command, args []string) {
 	ctx, shutdown := context.WithCancel(context.Background())
-	logrus.SetLevel(logrus.InfoLevel)
+	logrus.SetLevel(logrus.DebugLevel)
 	logrus.Info("starting router")
 
 	// TODO: Improve
 	chirpconf := chirpconfig.Config{}
+	chirpconf.Integration.MQTT.StateRetained = true
+	chirpconf.Integration.MQTT.KeepAlive = 30 * time.Second
+	chirpconf.Integration.MQTT.MaxReconnectInterval = time.Minute
+	chirpconf.Integration.MQTT.MaxTokenWait = time.Second
 	chirpconf.Integration.MQTT.Auth.Type = "generic"
 	chirpconf.Integration.MQTT.Auth.Generic.Servers = []string{"tcp://localhost:1883"}
 	chirpconf.Integration.MQTT.Auth.Generic.Username = ""
@@ -49,12 +54,15 @@ func run(cmd *cobra.Command, args []string) {
 	chirpconf.Integration.MQTT.EventTopicTemplate = "eu868/gateway/{{ .GatewayID }}/event/{{ .EventType }}"
 	chirpconf.Integration.MQTT.StateTopicTemplate = "eu868/gateway/{{ .GatewayID }}/state/{{ .StateType }}"
 	chirpconf.Integration.MQTT.CommandTopicTemplate = "eu868/gateway/{{ .GatewayID }}/command/#"
+	chirpconf.Integration.MQTT.Auth.Generic.CleanSession = true
+	//chirpconf.Integration.MQTT.Auth.Generic.ClientID = "auto-81DE6B71-E671-5889-19E2-319916050B16"
 	chirpconf.Integration.Marshaler = "protobuf"
 	err := integration.Setup(chirpconf)
 	if err != nil {
 		logrus.WithError(err).Fatal("could not setup MQTT")
 	}
 	int := integration.GetIntegration()
+	go int.Start()
 	r, err := phrouter.NewRouter(int)
 	if err != nil {
 		logrus.WithError(err).Fatal("unable to setup router")

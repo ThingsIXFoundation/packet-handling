@@ -7,32 +7,31 @@ import (
 	"time"
 
 	"github.com/FastFilter/xorfilter"
+	"github.com/ThingsIXFoundation/packet-handling/cmd/forwarder/config"
 	"github.com/brocaar/lorawan"
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 )
 
 type RouterPool struct {
 	routers     map[string]*Router
 	routerMutex sync.RWMutex
+	forwarder   *Forwarder
 }
 
-func NewRouterPool() (*RouterPool, error) {
+func NewRouterPool(forwarder *Forwarder) (*RouterPool, error) {
 	rp := &RouterPool{
-		routers: map[string]*Router{},
+		routers:   map[string]*Router{},
+		forwarder: forwarder,
 	}
 
-	r := &Router{
-		uri: "https://0.0.0.0:3200",
+	if viper.GetString(config.DefaultRouter) != "" {
+		logrus.Infof("DEBUG: Default router added: %s", viper.GetString(config.DefaultRouter))
+		rp.routers["default"] = &Router{
+			id:  "default",
+			uri: viper.GetString(config.DefaultRouter),
+		}
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	rc, err := DialRouter(ctx, r.uri)
-	if err != nil {
-		return nil, err
-	}
-
-	r.client = rc
 
 	return rp, nil
 }
@@ -42,6 +41,25 @@ func NewRouterPool() (*RouterPool, error) {
 // Poll routers to get latest routing data
 
 func (rp *RouterPool) Start() error {
+	for _, router := range rp.routers {
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		rc, err := DialRouter(ctx, router.uri)
+		if err != nil {
+			return err
+		}
+
+		router.client = rc
+		go func(router *Router) {
+			err := rc.Run(context.Background(), router, rp.forwarder.routerEvents)
+			if err != nil {
+				logrus.WithError(err).Fatal()
+			}
+		}(router)
+
+	}
 	return nil
 }
 
@@ -60,7 +78,9 @@ func (rp *RouterPool) GetRoutersForDataUp(devAddr lorawan.DevAddr) ([]*Router, e
 		}
 	}
 
-	ret = append(ret, rp.routers["test"])
+	if viper.GetString(config.DefaultRouter) != "" {
+		ret = append(ret, rp.routers["default"])
+	}
 
 	return ret, nil
 }
@@ -75,8 +95,9 @@ func (rp *RouterPool) GetRoutersForJoin(joinEUI lorawan.EUI64) ([]*Router, error
 			ret = append(ret, router)
 		}
 	}
-
-	ret = append(ret, rp.routers["test"])
+	if viper.GetString(config.DefaultRouter) != "" {
+		ret = append(ret, rp.routers["default"])
+	}
 
 	return ret, nil
 }
@@ -110,5 +131,8 @@ func (r *Router) AcceptsDevAddr(devAddr lorawan.DevAddr) bool {
 }
 
 func (r *Router) AcceptsJoin(joinEUI lorawan.EUI64) bool {
+	if len(r.joinFilter.Fingerprints) == 0 {
+		return false
+	}
 	return r.joinFilter.Contains(binary.BigEndian.Uint64(joinEUI[:]))
 }

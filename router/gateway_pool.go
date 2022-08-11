@@ -22,6 +22,13 @@ type GatewayPool struct {
 	gateways   map[gateway.GatewayID]*forwarderManagedGateway
 }
 
+func NewGatewayPool() (*GatewayPool, error) {
+	return &GatewayPool{
+		gatewaysMu: sync.Mutex{},
+		gateways:   make(map[gateway.GatewayID]*forwarderManagedGateway),
+	}, nil
+}
+
 // SetOnline must be called when the forwarder has a gateway connected and is
 // able to deliver packets to it.
 func (gp *GatewayPool) SetOnline(forwarderID uint64, gatewayID gateway.GatewayID, forwarderEventSender chan<- *router.RouterToHotspotEvent) {
@@ -85,6 +92,8 @@ func (gp *GatewayPool) DownlinkFrame(frame gw.DownlinkFrame) {
 func (gp *GatewayPool) send(addressedGatewayID []byte, event *router.RouterToHotspotEvent) {
 	gp.gatewaysMu.Lock()
 	defer gp.gatewaysMu.Unlock()
+
+	logrus.Debug("hier")
 
 	// send packet to matched forwarders
 	for gatewayID, gateway := range gp.gateways {
