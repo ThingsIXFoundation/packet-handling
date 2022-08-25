@@ -1,0 +1,1 @@
+This folder contains a clone of the https://github.com/brocaar/chirpstack-gateway-bridge repository. Sadly their folder setup with a internal folder doesn't allow for clean integration. So we clone it here
