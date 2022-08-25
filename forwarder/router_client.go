@@ -114,7 +114,7 @@ func (rc *RouterClient) DeliverDataUp(gw *gateway.Gateway, frame gw.UplinkFrame)
 	event := router.GatewayToRouterEvent{
 		GatewayInformation: &router.GatewayInformation{
 			Id:        gw.NetworkGatewayID.Bytes(),
-			PublicKey: gw.PublicKeyBytes,
+			PublicKey: gw.CompressedPublicKeyBytes,
 			Owner:     gw.Owner,
 		},
 		Event: &router.GatewayToRouterEvent_UplinkFrameEvent{
@@ -142,7 +142,7 @@ func (rc *RouterClient) DeliverGatewayStatus(gw *gateway.Gateway, online bool) {
 	event := router.GatewayToRouterEvent{
 		GatewayInformation: &router.GatewayInformation{
 			Id:        gw.NetworkGatewayID.Bytes(),
-			PublicKey: gw.PublicKeyBytes,
+			PublicKey: gw.CompressedPublicKeyBytes,
 			Owner:     gw.Owner,
 		},
 		Event: &router.GatewayToRouterEvent_StatusEvent{

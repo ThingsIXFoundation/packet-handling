@@ -28,11 +28,13 @@ func NewForwarder(backend backend.Backend) (*Forwarder, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	fw := &Forwarder{
 		backend:        backend,
 		onlineGateways: mapset.New[lorawan.EUI64](),
 		routerEvents:   make(chan *routerEvent, 4096),
 		gatewayStore:   gws,
+		mapperClient:   nil,
 	}
 
 	rp, err := NewRouterPool(fw)
@@ -41,6 +43,13 @@ func NewForwarder(backend backend.Backend) (*Forwarder, error) {
 	}
 
 	fw.routerPool = rp
+
+	mf, err := NewMapperForwarder(fw, fw.gatewayStore)
+	if err != nil {
+		return nil, err
+	}
+
+	fw.mapperClient = mf
 
 	fw.setup()
 

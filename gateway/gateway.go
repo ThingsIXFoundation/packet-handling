@@ -12,12 +12,13 @@ import (
 )
 
 type Gateway struct {
-	LocalGatewayID   GatewayID
-	NetworkGatewayID GatewayID
-	PrivateKey       *ecdsa.PrivateKey
-	PublicKey        *ecdsa.PublicKey
-	PublicKeyBytes   []byte
-	Owner            string
+	LocalGatewayID           GatewayID
+	NetworkGatewayID         GatewayID
+	PrivateKey               *ecdsa.PrivateKey
+	PublicKey                *ecdsa.PublicKey
+	PublicKeyBytes           []byte
+	CompressedPublicKeyBytes []byte
+	Owner                    string
 }
 
 func NewGateway(localGatewayIDBytes []byte, priv *ecdsa.PrivateKey) (*Gateway, error) {
@@ -26,12 +27,13 @@ func NewGateway(localGatewayIDBytes []byte, priv *ecdsa.PrivateKey) (*Gateway, e
 		return nil, err
 	}
 	return &Gateway{
-		LocalGatewayID:   localGatewayID,
-		NetworkGatewayID: CalculateNetworkGatewayID(priv),
-		PrivateKey:       priv,
-		PublicKey:        &priv.PublicKey,
-		PublicKeyBytes:   CalculatePublicKeyBytes(&priv.PublicKey),
-		Owner:            "", // TODO
+		LocalGatewayID:           localGatewayID,
+		NetworkGatewayID:         CalculateNetworkGatewayID(priv),
+		PrivateKey:               priv,
+		PublicKey:                &priv.PublicKey,
+		CompressedPublicKeyBytes: CalculateCompressedPublicKeyBytes(&priv.PublicKey),
+		PublicKeyBytes:           CalculatePublicKeyBytes(&priv.PublicKey),
+		Owner:                    "", // TODO
 	}, nil
 }
 
@@ -47,18 +49,18 @@ func GenerateNewGateway(localGatewayIDBytes []byte) (*Gateway, error) {
 	}
 
 	return &Gateway{
-		LocalGatewayID:   localGatewayID,
-		NetworkGatewayID: CalculateNetworkGatewayID(priv),
-		PrivateKey:       priv,
-		PublicKey:        &priv.PublicKey,
-		PublicKeyBytes:   CalculatePublicKeyBytes(&priv.PublicKey),
-		Owner:            "", // TODO
+		LocalGatewayID:           localGatewayID,
+		NetworkGatewayID:         CalculateNetworkGatewayID(priv),
+		PrivateKey:               priv,
+		PublicKey:                &priv.PublicKey,
+		CompressedPublicKeyBytes: CalculateCompressedPublicKeyBytes(&priv.PublicKey),
+		Owner:                    "", // TODO
 	}, nil
 }
 
 func CalculateNetworkGatewayID(priv *ecdsa.PrivateKey) GatewayID {
 	pub := priv.PublicKey
-	pubBytes := CalculatePublicKeyBytes(&pub)
+	pubBytes := CalculateCompressedPublicKeyBytes(&pub)
 	h := sha256.Sum256(pubBytes)
 
 	gatewayID, _ := NewGatewayID(h[0:8])
@@ -66,8 +68,12 @@ func CalculateNetworkGatewayID(priv *ecdsa.PrivateKey) GatewayID {
 	return gatewayID
 }
 
-func CalculatePublicKeyBytes(pub *ecdsa.PublicKey) []byte {
+func CalculateCompressedPublicKeyBytes(pub *ecdsa.PublicKey) []byte {
 	return crypto.CompressPubkey(pub)[1:]
+}
+
+func CalculatePublicKeyBytes(pub *ecdsa.PublicKey) []byte {
+	return crypto.FromECDSAPub(pub)
 }
 
 func (gw *Gateway) Address() string {
