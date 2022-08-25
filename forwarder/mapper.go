@@ -44,7 +44,7 @@ func (mc *MapperForwarder) HandleMapperPacket(frame gw.UplinkFrame, mac *lorawan
 		return
 	}
 
-	dp, _ := mapperpacket.NewDiscoveryPacket(frame.PhyPayload)
+	dp, _ := mapperpacket.NewDiscoveryPacketFromBytes(frame.PhyPayload)
 
 	h := sha256.Sum256(frame.PhyPayload[0:22])
 	sig := frame.PhyPayload[22:]

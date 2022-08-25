@@ -1,6 +1,8 @@
 package mapperpacket
 
 import (
+	"fmt"
+
 	"github.com/ThingsIXFoundation/bitoffset"
 	"github.com/brocaar/lorawan"
 	"github.com/uber/h3-go"
@@ -33,8 +35,22 @@ func (mp MapperPacket) Payload() []byte {
 	return mp.b[9:]
 }
 
+func (mp MapperPacket) Phy() []byte {
+	return mp.b
+}
+
 type DiscoveryPacket struct {
 	MapperPacket
+}
+
+func NewDiscoveryPacketFromBytes(phy []byte) (*DiscoveryPacket, error) {
+	if len(phy) != 9+13+65 {
+		return nil, fmt.Errorf("invalid packet length: %d", len(phy))
+	}
+	dp := &DiscoveryPacket{}
+	dp.b = phy
+
+	return dp, nil
 }
 
 func (dp DiscoveryPacket) LatLon() (int32, int32) {
@@ -56,6 +72,13 @@ func (dp DiscoveryPacket) LatLonGeoCoordinate() h3.GeoCoord {
 
 type DownlinkTransmitPacket struct {
 	MapperPacket
+}
+
+func NewDownlinkTransmitPacket() *DownlinkTransmitPacket {
+	dtp := &DownlinkTransmitPacket{}
+	dtp.b = make([]byte, 9+8)
+
+	return dtp
 }
 
 func (dtp DownlinkTransmitPacket) SetChallenge(challenge []byte) {
