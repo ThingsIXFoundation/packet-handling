@@ -6,29 +6,31 @@ import (
 	"github.com/uber/h3-go"
 )
 
-type MapperPacket []byte
+type MapperPacket struct {
+	b []byte
+}
 
 func (mp MapperPacket) SetFType(ftype uint8) {
-	bitoffset.SetUint8(mp, 0, 3, ftype)
+	bitoffset.SetUint8(mp.b, 0, 3, ftype)
 }
 
 func (mp MapperPacket) SetDevAddr(devAddr lorawan.DevAddr) {
-	bitoffset.SetUint8(mp, 8+24, 8, devAddr[0])
-	bitoffset.SetUint8(mp, 8+16, 8, devAddr[1])
-	bitoffset.SetUint8(mp, 8+8, 8, devAddr[2])
-	bitoffset.SetUint8(mp, 8+0, 8, devAddr[3])
+	bitoffset.SetUint8(mp.b, 8+24, 8, devAddr[0])
+	bitoffset.SetUint8(mp.b, 8+16, 8, devAddr[1])
+	bitoffset.SetUint8(mp.b, 8+8, 8, devAddr[2])
+	bitoffset.SetUint8(mp.b, 8+0, 8, devAddr[3])
 }
 
 func (mp MapperPacket) SetFPort(fport uint8) {
-	bitoffset.SetUint8(mp, 8*8, 8, fport)
+	bitoffset.SetUint8(mp.b, 8*8, 8, fport)
 }
 
 func (mp MapperPacket) DevAddr() lorawan.DevAddr {
-	return [4]byte{bitoffset.Uint8(mp, 8+24, 8), bitoffset.Uint8(mp, 8+16, 8), bitoffset.Uint8(mp, 8+8, 8), bitoffset.Uint8(mp, 8+0, 8)}
+	return [4]byte{bitoffset.Uint8(mp.b, 8+24, 8), bitoffset.Uint8(mp.b, 8+16, 8), bitoffset.Uint8(mp.b, 8+8, 8), bitoffset.Uint8(mp.b, 8+0, 8)}
 }
 
 func (mp MapperPacket) Payload() []byte {
-	return mp[9:]
+	return mp.b[9:]
 }
 
 type DiscoveryPacket struct {
