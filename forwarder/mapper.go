@@ -13,6 +13,7 @@ import (
 	"github.com/brocaar/chirpstack-api/go/v3/gw"
 	"github.com/brocaar/lorawan"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/gofrs/uuid"
 	"github.com/golang/protobuf/proto"
 	"github.com/sirupsen/logrus"
 	"github.com/uber/h3-go"
@@ -142,12 +143,14 @@ func (mc *MapperForwarder) HandleMapperPacket(frame gw.UplinkFrame, mac *lorawan
 				},
 				Context: frame.RxInfo.Context,
 			},
+			PhyPayload: dtr.GetPhy(),
 		}
 
 		df := gw.DownlinkFrame{
-			DownlinkId: nil, //
+			DownlinkId: uuid.Must(uuid.NewV4()).Bytes(), //
 			Items:      []*gw.DownlinkFrameItem{&dfi},
 			GatewayId:  frame.RxInfo.GatewayId,
+			PhyPayload: dtr.GetPhy(),
 		}
 
 		mc.forwarder.SendDownlinkFrame(df)

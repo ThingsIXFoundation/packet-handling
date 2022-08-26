@@ -93,12 +93,14 @@ func (fw *Forwarder) UplinkFrame(frame gw.UplinkFrame) {
 	var phy lorawan.PHYPayload
 
 	logrus.WithFields(logrus.Fields{
-		"gateway": hex.EncodeToString(frame.RxInfo.GatewayId),
-		"rssi":    frame.RxInfo.Rssi,
-		"snr":     frame.RxInfo.LoraSnr,
-		"freq":    frame.TxInfo.Frequency,
-		"sf":      frame.TxInfo.GetLoraModulationInfo().GetSpreadingFactor(),
-		"payload": base64.RawStdEncoding.EncodeToString(frame.PhyPayload),
+		"gateway":  hex.EncodeToString(frame.RxInfo.GatewayId),
+		"rssi":     frame.RxInfo.Rssi,
+		"snr":      frame.RxInfo.LoraSnr,
+		"freq":     frame.TxInfo.Frequency,
+		"sf":       frame.TxInfo.GetLoraModulationInfo().GetSpreadingFactor(),
+		"pol":      frame.TxInfo.GetLoraModulationInfo().GetPolarizationInversion(),
+		"coderate": frame.TxInfo.GetLoraModulationInfo().GetCodeRate(),
+		"payload":  base64.RawStdEncoding.EncodeToString(frame.PhyPayload),
 	}).Info("received uplink from gateway")
 
 	gw, err := fw.gatewayStore.GatewayByLocalID(frame.RxInfo.GatewayId)
@@ -280,7 +282,32 @@ func (fw *Forwarder) SendDownlinkFrameFromRouter(router *Router, frame gw.Downli
 }
 
 func (fw *Forwarder) SendDownlinkFrame(frame gw.DownlinkFrame) {
-	err := fw.backend.SendDownlinkFrame(frame)
+	logrus.WithFields(logrus.Fields{
+		"gateway":       hex.EncodeToString(frame.GatewayId),
+		"frequency":     frame.Items[0].GetTxInfo().Frequency,
+		"pol":           frame.Items[0].GetTxInfo().GetLoraModulationInfo().PolarizationInversion,
+		"payload":       base64.RawStdEncoding.EncodeToString(frame.PhyPayload),
+		"payload (hex)": hex.EncodeToString(frame.PhyPayload),
+	}).Info("received downlink for gateway")
+
+	gw, err := fw.gatewayStore.GatewayByNetworkID(frame.GatewayId)
+	if err != nil {
+		logrus.WithError(err).Errorf("could not lookup gateway")
+		return
+	} else if gw == nil {
+		logrus.WithFields(logrus.Fields{
+			"gateway": hex.EncodeToString(frame.GatewayId),
+		}).Errorf("could not find gateway in store")
+		return
+	}
+
+	frame, err = fw.updateDownlinkFrameFromNetworkFormat(gw, frame)
+	if err != nil {
+		logrus.WithError(err).Error("could not update downlink frame, dropping packet")
+		return
+	}
+
+	err = fw.backend.SendDownlinkFrame(frame)
 	if err != nil {
 		logrus.WithError(err).Error("could not send downlink frame, dropping packet")
 		return
