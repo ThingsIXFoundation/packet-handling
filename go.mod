@@ -30,7 +30,7 @@ require (
 
 require (
 	github.com/Masterminds/semver v1.4.2 // indirect
-	github.com/ThingsIXFoundation/bitoffset v0.0.0-20220825135025-a14e93adda7d // indirect
+	github.com/ThingsIXFoundation/bitoffset v0.0.0-20220901094204-e13ace111f87 // indirect
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d // indirect
 	github.com/aws/aws-sdk-go v1.27.0 // indirect

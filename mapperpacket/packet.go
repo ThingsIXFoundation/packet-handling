@@ -86,3 +86,41 @@ func (dtp DownlinkTransmitPacket) SetChallenge(challenge []byte) {
 		dtp.Payload()[i] = challenge[i]
 	}
 }
+
+type DownlinkConfirmationPacket struct {
+	MapperPacket
+}
+
+func NewDownlinkConfirmationPacketFromBytes(phy []byte) (*DownlinkConfirmationPacket, error) {
+	if len(phy) != 9+13+65 {
+		return nil, fmt.Errorf("invalid packet length: %d", len(phy))
+	}
+	dcp := &DownlinkConfirmationPacket{}
+	dcp.b = phy
+
+	return dcp, nil
+}
+
+func (dcp *DownlinkConfirmationPacket) Challenge() []byte {
+	return dcp.Payload()[5 : 5+8]
+}
+
+func (dcp *DownlinkConfirmationPacket) Version() uint8 {
+	return bitoffset.Uint8(dcp.Payload(), 0, 4)
+}
+
+func (dcp *DownlinkConfirmationPacket) Rssi() int {
+	return int(bitoffset.Int32(dcp.Payload(), 4, 16))
+}
+
+func (dcp *DownlinkConfirmationPacket) Snr() int {
+	return int(bitoffset.Int32(dcp.Payload(), 20, 8))
+}
+
+func (dcp *DownlinkConfirmationPacket) Battery() uint8 {
+	return bitoffset.Uint8(dcp.Payload(), 28, 8)
+}
+
+func (dcp *DownlinkConfirmationPacket) Flags() uint8 {
+	return bitoffset.Uint8(dcp.Payload(), 36, 4)
+}
