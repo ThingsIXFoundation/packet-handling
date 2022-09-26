@@ -13,3 +13,4 @@
 go.work
 **/__debug_bin
 *.code-workspace
+/cmd/forwarder
