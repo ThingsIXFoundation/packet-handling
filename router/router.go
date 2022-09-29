@@ -226,6 +226,12 @@ func (r *Router) handleUplink(event *router.GatewayToRouterEvent_UplinkFrameEven
 	copy(gatewayId[:], frame.GetRxInfo().GetGatewayId())
 	uplinkId := uuid.FromBytesOrNil(frame.GetRxInfo().GetUplinkId())
 
+	log.WithFields(log.Fields{
+		"gateway_id": gatewayId,
+		"event_type": integration.EventUp,
+		"uplink_id":  uplinkId,
+	}).Info("publish uplink event")
+
 	if err := r.integration.PublishEvent(gatewayId, integration.EventUp, uplinkId, frame); err != nil {
 		log.WithError(err).WithFields(log.Fields{
 			"gateway_id": gatewayId,

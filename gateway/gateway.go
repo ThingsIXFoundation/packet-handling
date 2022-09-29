@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/brocaar/lorawan"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -18,22 +19,18 @@ type Gateway struct {
 	PublicKey                *ecdsa.PublicKey
 	PublicKeyBytes           []byte
 	CompressedPublicKeyBytes []byte
-	Owner                    string
+	Owner                    common.Address
 }
 
-func NewGateway(localGatewayIDBytes []byte, priv *ecdsa.PrivateKey) (*Gateway, error) {
-	localGatewayID, err := NewGatewayID(localGatewayIDBytes)
-	if err != nil {
-		return nil, err
-	}
+func NewGateway(localGatewayID lorawan.EUI64, priv *ecdsa.PrivateKey) (*Gateway, error) {
 	return &Gateway{
-		LocalGatewayID:           localGatewayID,
+		LocalGatewayID:           GatewayID(localGatewayID),
 		NetworkGatewayID:         CalculateNetworkGatewayID(priv),
 		PrivateKey:               priv,
 		PublicKey:                &priv.PublicKey,
 		CompressedPublicKeyBytes: CalculateCompressedPublicKeyBytes(&priv.PublicKey),
 		PublicKeyBytes:           CalculatePublicKeyBytes(&priv.PublicKey),
-		Owner:                    "", // TODO
+		Owner:                    common.Address{}, // TODO
 	}, nil
 }
 
@@ -54,7 +51,7 @@ func GenerateNewGateway(localGatewayIDBytes []byte) (*Gateway, error) {
 		PrivateKey:               priv,
 		PublicKey:                &priv.PublicKey,
 		CompressedPublicKeyBytes: CalculateCompressedPublicKeyBytes(&priv.PublicKey),
-		Owner:                    "", // TODO
+		Owner:                    common.Address{}, // TODO
 	}, nil
 }
 

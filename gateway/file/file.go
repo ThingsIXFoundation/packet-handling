@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
+	"github.com/brocaar/lorawan"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -91,10 +92,12 @@ func (ks *FileGatewayStore) readKeys() error {
 		}
 
 		gatewayIDs := split[0]
-		gatewayID, err := hex.DecodeString(gatewayIDs)
-		if err != nil {
+
+		var gatewayID lorawan.EUI64
+		if err := gatewayID.UnmarshalText([]byte(gatewayIDs)); err != nil {
 			return err
 		}
+
 		priv, err := crypto.HexToECDSA(split[1])
 		if err != nil {
 			return err

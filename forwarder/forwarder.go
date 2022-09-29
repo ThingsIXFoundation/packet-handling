@@ -205,7 +205,6 @@ func (fw *Forwarder) DownlinkTxAck(txack gw.DownlinkTXAck) {
 }
 
 func (fw *Forwarder) SubscribeEvent(event events.Subscribe) {
-
 	gw, err := fw.gatewayStore.GatewayByLocalID(event.GatewayID[:])
 	if err != nil {
 		logrus.WithError(err).Errorf("could not lookup gateway")
@@ -238,9 +237,10 @@ func (fw *Forwarder) SubscribeEvent(event events.Subscribe) {
 	}
 	for routerAddress, router := range routers {
 		logrus.WithFields(logrus.Fields{
-			"router":  routerAddress,
-			"gateway": gw.NetworkGatewayID,
-			"online":  event.Subscribe,
+			"router":             routerAddress,
+			"gateway-local-id":   gw.LocalGatewayID,
+			"gateway-network-id": gw.NetworkGatewayID,
+			"online":             event.Subscribe,
 		}).Info("develivering status to router")
 		router.client.DeliverGatewayStatus(gw, event.Subscribe)
 	}
