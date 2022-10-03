@@ -37,8 +37,10 @@ func init() {
 }
 
 func run(cmd *cobra.Command, args []string) {
+	logrus.SetFormatter(&logrus.TextFormatter{FullTimestamp: true})
+
 	ctx, shutdown := context.WithCancel(context.Background())
-	logrus.SetLevel(logrus.DebugLevel)
+	logrus.SetLevel(logrus.InfoLevel)
 	logrus.Info("starting router")
 
 	// TODO: Improve

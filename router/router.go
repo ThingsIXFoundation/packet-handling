@@ -10,10 +10,12 @@ import (
 
 	"github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/integration"
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
+	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/ThingsIXFoundation/router-api/go/router"
 	"github.com/apex/log"
 	"github.com/brocaar/chirpstack-api/go/v3/gw"
 	"github.com/brocaar/lorawan"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/gofrs/uuid"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -138,12 +140,16 @@ func (r *Router) Events(forwarder router.RouterV1_EventsServer) error {
 			}
 
 			var (
-				info           = in.GetGatewayInformation()
-				pubKey         = info.GetPublicKey()
-				gatewayIDbytes = info.GetId() // TODO: as GatewayID
-				owner          = info.GetOwner()
-				event          = in.GetEvent()
+				info                         = in.GetGatewayInformation()
+				pubKey                       = info.GetPublicKey()
+				gatewayIDbytes, gatewayIdErr = utils.GatewayPublicKeyToID(pubKey)
+				owner                        = common.BytesToAddress(info.GetOwner())
+				event                        = in.GetEvent()
 			)
+
+			if gatewayIdErr != nil {
+				return gatewayIdErr
+			}
 
 			gatewayID, err := gateway.NewGatewayID(gatewayIDbytes)
 			if err != nil {
@@ -162,7 +168,7 @@ func (r *Router) Events(forwarder router.RouterV1_EventsServer) error {
 			} else if downlinkAck, ok := event.(*router.GatewayToRouterEvent_DownlinkTXAckEvent); ok {
 				r.handleDownlinkTxAck(downlinkAck)
 			} else if status, ok := event.(*router.GatewayToRouterEvent_StatusEvent); ok {
-				r.handleStatus(forwarderID, gatewayID, status, integrationEvents)
+				r.handleStatus(forwarderID, gatewayID, owner, status, integrationEvents)
 			}
 		// events from the integrations layer that must be send to a gateway through
 		// the connected forwarder
@@ -177,7 +183,7 @@ func (r *Router) Events(forwarder router.RouterV1_EventsServer) error {
 			if err := forwarder.Send(ev); err != nil {
 				logrus.WithError(err).WithField("event", ev.GetEvent()).Warn("unable to send event to forwarder")
 			} else {
-				logrus.WithField("event", ev.GetEvent()).Info("send event to forwarder")
+				logrus.WithField("event", ev.GetEvent()).Info("event sent to forwarder")
 			}
 		}
 	}
@@ -205,12 +211,12 @@ func (r *Router) forwarderEventStream(events router.RouterV1_EventsServer) <-cha
 	return receivedForwarderEvents
 }
 
-func (r *Router) handleStatus(forwarderID uint64, gatewayID gateway.GatewayID, status *router.GatewayToRouterEvent_StatusEvent, integrationEvents chan<- *router.RouterToGatewayEvent) {
+func (r *Router) handleStatus(forwarderID uint64, gatewayID gateway.GatewayID, gatewayOwner common.Address, status *router.GatewayToRouterEvent_StatusEvent, integrationEvents chan<- *router.RouterToGatewayEvent) {
 	// forwarders send periodically (~30s) an indication if a gateway is still
 	// online or when a gateway goes offline
 	online := status.StatusEvent.GetOnline()
 	if online {
-		r.gateways.SetOnline(forwarderID, gatewayID, integrationEvents)
+		r.gateways.SetOnline(forwarderID, gatewayID, gatewayOwner, integrationEvents)
 	} else {
 		r.gateways.SetOffline(forwarderID, gatewayID)
 	}

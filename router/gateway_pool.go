@@ -8,6 +8,7 @@ import (
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	"github.com/ThingsIXFoundation/router-api/go/router"
 	"github.com/brocaar/chirpstack-api/go/v3/gw"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/sirupsen/logrus"
 )
 
@@ -31,7 +32,7 @@ func NewGatewayPool() (*GatewayPool, error) {
 
 // SetOnline must be called when the forwarder has a gateway connected and is
 // able to deliver packets to it.
-func (gp *GatewayPool) SetOnline(forwarderID uint64, gatewayID gateway.GatewayID, forwarderEventSender chan<- *router.RouterToGatewayEvent) {
+func (gp *GatewayPool) SetOnline(forwarderID uint64, gatewayID gateway.GatewayID, gatewayOwner common.Address, forwarderEventSender chan<- *router.RouterToGatewayEvent) {
 	gp.gatewaysMu.Lock()
 	defer gp.gatewaysMu.Unlock()
 
@@ -43,7 +44,8 @@ func (gp *GatewayPool) SetOnline(forwarderID uint64, gatewayID gateway.GatewayID
 
 	logrus.WithFields(logrus.Fields{
 		"forwarder": forwarderID,
-		"gateway":   gatewayID}).Debug("gateway online")
+		"gateway":   gatewayID,
+		"owner":     gatewayOwner}).Info("gateway online")
 }
 
 // SetOffline must be called when a forwarder detects one of its gateways is
@@ -97,13 +99,12 @@ func (gp *GatewayPool) send(addressedGatewayID []byte, event *router.RouterToGat
 
 	// send packet to matched forwarders
 	for gatewayID, gateway := range gp.gateways {
-
 		if bytes.Equal(gatewayID[:], addressedGatewayID[:]) {
 			gateway.forwarder <- event
 			logrus.WithFields(logrus.Fields{
 				"gatewayID": gatewayID,
 				"eventType": fmt.Sprintf("%T", event.GetEvent()),
-			}).Debug("send event to forwarder")
+			}).Debug("sent event to forwarder")
 		}
 	}
 }

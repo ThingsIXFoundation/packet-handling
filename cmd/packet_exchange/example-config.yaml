@@ -1,0 +1,45 @@
+log:
+    level: info
+    timestamp: true
+
+packet_exchange:
+    # supported backend where gateways connect to
+    backend:
+        type: semtech_udp
+        udp_bind: 0.0.0.0:1680
+        skip_crc_check: false
+        fake_rx_time: false
+    
+    accounting:
+        type: no_accounting
+    
+    # list of gateways that are allowed to use this packet exchange
+    gateways:
+        - local_id: 0016c001f1500812
+          private_key: 22cb0649f72fb2adb5160028751a336883c395cd9652cb36f00007e523d29e6b
+          owner: 0xE10A9A4263eE02062f1248Ff79090cAF48176E01
+
+routes:
+    # default routers, usefull for personal routers that are not registered
+    # but will receive all data
+    default:
+        # list with (default) router endpoints
+        - endpoint: localhost:3200
+    # retrieve routes snapshot every update_interval
+    update_interval: 30m
+    # Polygon chain id, 80001 for testnet, 137 for production
+    chain_id: 80001
+    # indicate that routes must be fetched from the ThingsIX router API
+    # thingsix_api:
+    #     # location where to fetch routes snapshot from
+    #     endpoint: http://168.119.163.23/routers/v1/snapshot
+    # smart_contract:
+    #     confirmations: 128
+    #     address: 0x
+    #     endpoint:
+
+# enable prometheus metrics endpoint
+metrics:
+    host: 0.0.0.0
+    port: 8888
+    path: /metrics
