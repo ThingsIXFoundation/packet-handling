@@ -128,7 +128,8 @@ func (rc *RouterClient) run(ctx context.Context) error {
 		pendingDownlinkAcks = make(map[[32]byte]time.Time)
 	)
 	log.WithFields(logrus.Fields{
-		"router": rc.router.ThingsIXID,
+		"router":   rc.router,
+		"endpoint": rc.router.Endpoint,
 	}).Info("connect to router")
 
 	// connect to the router
@@ -298,7 +299,8 @@ func (rc *RouterClient) run(ctx context.Context) error {
 
 func isDownlinkAckEvent(event *router.RouterToGatewayEvent) bool {
 	// TODO: check if event is a downlink that requires an ACK
-	return true
+	// for now return true if its a downlink
+	return event.GetDownlinkFrameEvent().GetDownlinkFrame() != nil
 
 	// var (
 	// 	phy   lorawan.PHYPayload

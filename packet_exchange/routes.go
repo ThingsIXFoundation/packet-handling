@@ -32,16 +32,28 @@ func (id ID) String() string {
 }
 
 type Router struct {
+	// ID is the routers identity as its registered in the smart contract
 	ThingsIXID ID
-	Endpoint   string
-	Default    bool
-	NetIDs     []lorawan.NetID
-	Owner      common.Address
+	// Endpoint is the URI where the router can be reached
+	Endpoint string
+	// Default is an indication if the router is configured in the configuration and wants to receive all data
+	Default bool
+	// Name is an optional name users can appoint to routers that are in the configuration
+	Name string
+	// NetIDs is the set of network identifiers this routers wants to receive packets from
+	NetIDs []lorawan.NetID
+	// Owner is the routers owner
+	Owner common.Address
+	// JoinFilter is the filter of devices that are allowed to join the network this router is part of
 	joinFilter xorfilter.Xor8
+	// Accounting keeps track if this router pays for the data is received from the gateways
 	accounting Accounter
 }
 
 func (r Router) String() string {
+	if r.Name != "" {
+		return r.Name
+	}
 	return r.ThingsIXID.String()
 }
 
