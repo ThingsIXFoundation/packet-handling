@@ -3,6 +3,7 @@ package packetexchange
 import (
 	"context"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,7 +13,6 @@ import (
 	"github.com/FastFilter/xorfilter"
 	"github.com/ThingsIXFoundation/packet-handling/packet_exchange/broadcast"
 	"github.com/brocaar/lorawan"
-	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/sirupsen/logrus"
 )
@@ -29,6 +29,15 @@ func (id ID) String() string {
 		return "default"
 	}
 	return fmt.Sprintf("0x%x", id[:])
+}
+
+type RouterDetails struct {
+	// Endpoint is the URI where the router can be reached
+	Endpoint string
+	// NetIDs is the set of network identifiers this routers wants to receive packets from
+	NetIDs []lorawan.NetID
+	// Owner is the routers owner
+	Owner common.Address
 }
 
 type Router struct {
@@ -180,8 +189,11 @@ func (r *RoutingTable) Run(ctx context.Context) {
 
 func (r *RoutingTable) keepRouteTableUpToDate(ctx context.Context) {
 	var (
-		newRoutes      = make(chan []*Router)
-		existingRoutes = mapset.NewThreadUnsafeSet[[32]byte]()
+		newRoutes       = make(chan []*Router)
+		existingRouters = make(map[[32]byte]*struct {
+			stop    context.CancelFunc
+			details chan *RouterDetails
+		})
 	)
 	// routes table broadcaster emits the latest retrieved routes
 	// periodically.
@@ -190,41 +202,69 @@ func (r *RoutingTable) keepRouteTableUpToDate(ctx context.Context) {
 
 	for {
 		select {
+		// new set of routes fetched, determine which one are new and
+		// startup a client for them. Or broadcast routing details update
+		// for existing routes, or stop routes if the router is removed.
 		case routers := <-newRoutes:
-			// new set of routes fetched, determine which one are new
-			// ans startup a client for them. This client will from
-			// then on process new routes and determine if it need to
-			// stop (route deleted) or update its configuration (route
-			// updated)
-			latestRoutes := mapset.NewThreadUnsafeSet[[32]byte]()
-			for _, r := range routers {
-				latestRoutes.Add(r.ThingsIXID)
+			var (
+				newRoutesCount      = 0
+				existingRoutesCount = 0
+				deletedRoutesCount  = 0
+			)
+
+			// determine which existing routes are not in the new routing table
+			// and stop the associated clients
+			for id, client := range existingRouters {
+				deleted := true
+				for _, r := range routers {
+					if r.ThingsIXID == id {
+						deleted = false
+						break
+					}
+				}
+				if deleted {
+					go client.stop()
+					deletedRoutesCount++
+					delete(existingRouters, id)
+				}
 			}
 
-			// determine which routes are new and start a client. Existing
-			// routes are managed by a client that is subscribed to the
-			// new routes broadcaster and will either stop if they are
-			// dropped in the routing table or update their routing info
-			// if its updated. Therefore only start clients for new routes.
-			newRoutesCount := 0
-			latestRoutes.Each(func(id [32]byte) bool {
-				if !existingRoutes.Contains(id) {
-					for _, router := range routers {
-						if router.ThingsIXID == id {
-							go NewRouterClient(ctx, router, r.routesTableBroadcaster, r.networkEvents, r.gatewayEvents).Run(ctx)
-							existingRoutes.Add(id) // add to routing table
-							break
+			for _, router := range routers {
+				if client, ok := existingRouters[router.ThingsIXID]; ok {
+					// existing route, send route details update to client, in case
+					// the client is dialing the router this can temporarly block
+					// therefore do it in the background.
+					go func() {
+						client.details <- &RouterDetails{
+							Endpoint: router.Endpoint,
+							NetIDs:   router.NetIDs,
+							Owner:    router.Owner,
 						}
+					}()
+					existingRoutesCount++
+				} else {
+					// new route, startup client and add it to the routing table
+					var (
+						clientCtx, clientCancel = context.WithCancel(ctx)
+						details                 = make(chan *RouterDetails)
+					)
+					go NewRouterClient(clientCtx, router, r.routesTableBroadcaster, r.networkEvents, r.gatewayEvents, details).Run(ctx)
+					existingRouters[router.ThingsIXID] = &struct {
+						stop    context.CancelFunc
+						details chan *RouterDetails
+					}{
+						clientCancel,
+						details,
 					}
 					newRoutesCount++
 				}
-				return false // continue iterating over set
-			})
+			}
 
-			logrus.WithField("new-routes", newRoutesCount).Info("refreshed routing table")
-
-			// make the latest routes the new route table
-			existingRoutes = latestRoutes
+			logrus.WithFields(logrus.Fields{
+				"new":      newRoutesCount,
+				"existing": existingRoutesCount,
+				"deleted":  deletedRoutesCount,
+			}).Info("refreshed routing table")
 		case <-ctx.Done():
 			return
 		}
@@ -239,7 +279,8 @@ func (r *RoutingTable) runDefaultRouting(ctx context.Context) {
 		cpy := dr
 		go func() {
 			// run router client until ctx expires
-			NewRouterClient(ctx, cpy, r.routesTableBroadcaster, r.networkEvents, r.gatewayEvents).Run(ctx)
+			ignore := make(chan *RouterDetails) // default routes are never updated
+			NewRouterClient(ctx, cpy, r.routesTableBroadcaster, r.networkEvents, r.gatewayEvents, ignore).Run(ctx)
 			allStopped.Done()
 		}()
 	}
@@ -309,8 +350,13 @@ func obtainThingsIXRoutesFunc(cfg *Config) (RoutesUpdaterFunc, error) {
 					id     [32]byte
 					netids = make([]lorawan.NetID, len(r.Networks))
 				)
+				rID, err := hex.DecodeString(r.ID)
+				if err != nil {
+					logrus.WithError(err).Error("unable to decode router id")
+					continue
+				}
 
-				copy(id[:], r.ID)
+				copy(id[:], rID)
 				for i, id := range r.Networks {
 					var netid [4]byte
 					binary.LittleEndian.PutUint32(netid[:], id)

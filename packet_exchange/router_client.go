@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
-	"reflect"
 	"time"
 
 	"github.com/ThingsIXFoundation/packet-handling/packet_exchange/broadcast"
@@ -41,11 +40,15 @@ type RouterClient struct {
 	// determine if the event is of interest of the router it is connected
 	// to and forward it if necessary.
 	gatewayEvents *broadcast.Broadcaster[*GatewayEvent]
+
+	// receives router details
+	routerDetails <-chan *RouterDetails
 }
 
 func NewRouterClient(ctx context.Context, router *Router,
 	routeTableBroadcaster *broadcast.Broadcaster[[]*Router],
-	routerEvents chan *NetworkEvent, gatewayEvents *broadcast.Broadcaster[*GatewayEvent]) *RouterClient {
+	routerEvents chan *NetworkEvent, gatewayEvents *broadcast.Broadcaster[*GatewayEvent],
+	routerDetails <-chan *RouterDetails) *RouterClient {
 
 	routerInfo := make(chan []*Router)
 	routeTableBroadcaster.Subscribe(routerInfo)
@@ -56,6 +59,7 @@ func NewRouterClient(ctx context.Context, router *Router,
 		routeTableBroadcaster: routeTableBroadcaster,
 		routerEvents:          routerEvents,
 		gatewayEvents:         gatewayEvents,
+		routerDetails:         routerDetails,
 	}
 }
 
@@ -99,41 +103,82 @@ func (rc *RouterClient) Run(ctx context.Context) {
 		case <-ctx.Done():
 			log.Info("router disconnected")
 			return
+		case details := <-rc.routerDetails:
+			rc.router.Endpoint = details.Endpoint
+			rc.router.NetIDs = details.NetIDs
+			rc.router.Owner = details.Owner
+
+			log = logrus.WithFields(logrus.Fields{
+				"endpoint": rc.router.Endpoint,
+				"default":  rc.router.Default,
+			})
+
+			// attempt was more than 1 minute ago this indicates the communication
+			// was good for at least a short period, reset reconnect interval so it
+			// will retry to connect immediately
+			if time.Since(lastConnectAttempt) > (2 * time.Minute) {
+				reconnectInterval = 0
+			}
 		default: // connection with router dropped for whatever reason last connect
 			// attempt was more than 1 minute ago this indicates the communication
 			// was good for at least a short period, reset reconnect interval so it
 			// will retry to connect immediately
-			if time.Since(lastConnectAttempt) > time.Minute {
+			if time.Since(lastConnectAttempt) > (2 * time.Minute) {
 				reconnectInterval = 0
 			}
 		}
 
 		log.WithError(err).Errorf("router client stopped unexpected, reconnect in %v", reconnectInterval)
 		routersDisconnectedGauge.Add(1)
-		select {
-		case <-time.After(nextReconnectInterval()):
-			routersDisconnectedGauge.Sub(1)
-			continue
-		case <-ctx.Done():
-			log.Trace("router client stopped")
-			routersDisconnectedGauge.Sub(1)
-			return
+		wait := true
+		retry := time.After(nextReconnectInterval())
+		for wait {
+			select {
+			case <-retry:
+				routersDisconnectedGauge.Sub(1)
+				wait = false
+			case details := <-rc.routerDetails:
+				rc.router.Endpoint = details.Endpoint
+				rc.router.NetIDs = details.NetIDs
+				rc.router.Owner = details.Owner
+
+				log = logrus.WithFields(logrus.Fields{
+					"endpoint": rc.router.Endpoint,
+					"default":  rc.router.Default,
+				})
+			case <-ctx.Done():
+				log.Trace("router client stopped")
+				routersDisconnectedGauge.Sub(1)
+				return
+			}
 		}
 	}
+}
+
+func logRouterDialDetails(router *Router) {
+	log := logrus.WithFields(logrus.Fields{
+		"router":   router,
+		"endpoint": router.Endpoint,
+		"default":  router.Default,
+	})
+	if !router.Default {
+		log = log.WithField("owner", router.Owner)
+	}
+
+	log.Info("connect to router")
 }
 
 func (rc *RouterClient) run(ctx context.Context) error {
 	var (
 		log                 = logrus.WithField("router", rc.router)
 		pendingDownlinkAcks = make(map[[32]byte]time.Time)
+		dialCtx, cancel     = context.WithTimeout(ctx, 15*time.Second)
 	)
-	log.WithFields(logrus.Fields{
-		"router":   rc.router,
-		"endpoint": rc.router.Endpoint,
-	}).Info("connect to router")
+	defer cancel()
+	logRouterDialDetails(rc.router)
 
 	// connect to the router
-	conn, err := grpc.DialContext(ctx, rc.router.Endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.DialContext(dialCtx, rc.router.Endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return fmt.Errorf("unable to dial router: %w", err)
 	}
@@ -181,6 +226,16 @@ func (rc *RouterClient) run(ctx context.Context) error {
 					delete(pendingDownlinkAcks, id)
 					log.WithField("downlink_id", id).Warn("delete expired downlink ACK")
 				}
+			}
+		case details := <-rc.routerDetails:
+			reconnect := rc.router.Endpoint != details.Endpoint
+			rc.router.Endpoint = details.Endpoint
+			rc.router.NetIDs = details.NetIDs
+			rc.router.Owner = details.Owner
+
+			if reconnect {
+				log.WithField("new-endpoint", rc.router.Endpoint).Info("reconnect router on new endpoint")
+				return nil
 			}
 		case ev, ok := <-fromGateway:
 			if ok {
@@ -274,22 +329,19 @@ func (rc *RouterClient) run(ctx context.Context) error {
 				for _, router := range latestRoutesInfo {
 					if rc.router.ThingsIXID == router.ThingsIXID {
 						found = true
+						endpointChanged := rc.router.Endpoint != router.Endpoint
 						// update router details
-						if rc.router.Endpoint != router.Endpoint ||
-							!reflect.DeepEqual(rc.router.NetIDs, router.NetIDs) ||
-
-							rc.router.Owner != router.Owner {
-							rc.router.Endpoint = router.Endpoint
-							rc.router.NetIDs = router.NetIDs
-
-							log.WithField("endpoint", rc.router.Endpoint)
-							log.Info("updated router details")
+						rc.router.Endpoint = router.Endpoint
+						rc.router.NetIDs = router.NetIDs
+						rc.router.Owner = router.Owner
+						if endpointChanged {
+							return fmt.Errorf("endpoint changed") // force reconnect
 						}
 					}
 				}
 
 				if !found {
-					log.Info("disconnect from router - router not part of ThingsIX anymore")
+					log.WithField("endpoint", rc.router.Endpoint).Info("disconnect from router - router not part of ThingsIX anymore")
 					return nil
 				}
 			}

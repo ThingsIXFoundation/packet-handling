@@ -52,9 +52,7 @@ func (bc *Broadcaster[T]) broadcast(msg T) {
 		case ch <- msg:
 			continue
 		default:
-			// if one of the subscribers is too slow drop the message
-			// for it to prevent locking up for other subscribers
-			logrus.Warn("broadcast, drop message")
+			logrus.Trace("broadcast, drop message")
 		}
 	}
 }
