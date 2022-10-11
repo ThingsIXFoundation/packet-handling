@@ -189,13 +189,6 @@ func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
 		airtime, _ := airtime.UplinkAirtime(frame)
 
 		// Join is internally an Uplink
-		frame, err := localUplinkFrameToNetwork(gw, frame)
-		if err != nil {
-			uplinksFailedCounter.WithLabelValues(gw.NetworkID.String()).Inc()
-			log.WithError(err).Error("update join frame to network format failed, drop packet")
-			return
-		}
-
 		event := router.GatewayToRouterEvent{
 			GatewayInformation: &router.GatewayInformation{
 				PublicKey: gw.CompressedPublicKeyBytes,

@@ -8,7 +8,7 @@ import (
 // localUplinkFrameToNetwork converts the given frame that was received from a gateway
 // into a frame that can be send anto the network on behalf of the given gw.
 func localUplinkFrameToNetwork(gw *Gateway, frame gw.UplinkFrame) (gw.UplinkFrame, error) {
-	frame.RxInfo.GatewayId = gw.NetworkID[:]
+	copy(frame.RxInfo.GatewayId, gw.NetworkID[:])
 	return frame, nil
 }
 
