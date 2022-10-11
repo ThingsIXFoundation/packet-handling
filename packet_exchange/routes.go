@@ -99,7 +99,7 @@ func (r Router) InterestedIn(addr lorawan.DevAddr) bool {
 // network is accepted by this router.
 func (r Router) AcceptsJoin(joinEUI lorawan.EUI64) bool {
 	if len(r.joinFilter.Fingerprints) == 0 {
-		return false
+		return r.Default || false
 	}
 	return r.joinFilter.Contains(binary.BigEndian.Uint64(joinEUI[:]))
 }

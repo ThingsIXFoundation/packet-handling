@@ -86,13 +86,13 @@ func NewExchange(cfg *Config) (*Exchange, error) {
 func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
 	uplinksCounter.Inc()
 
-	gatewayNetID := hex.EncodeToString(frame.GetRxInfo().GetGatewayId())
-	log := logrus.WithField("gw-local-id", gatewayNetID)
+	gatewayLocalID := hex.EncodeToString(frame.GetRxInfo().GetGatewayId())
+	log := logrus.WithField("gw-local-id", gatewayLocalID)
 
 	// ensure that received frame is from a trusted gateway if not drop it
 	gw, ok := e.trustedGateways.ByLocalIDBytes(frame.RxInfo.GatewayId)
 	if !ok {
-		uplinksFailedCounter.WithLabelValues(gatewayNetID).Inc()
+		uplinksFailedCounter.WithLabelValues(gw.NetworkID.String()).Inc()
 		log.Warn("uplink from unknown gateway, drop packet")
 		return
 	}
@@ -113,7 +113,7 @@ func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
 	// representation (exchange <-> router) so it can be broadcasted onto the network
 	frame, err := localUplinkFrameToNetwork(gw, frame)
 	if err != nil {
-		uplinksFailedCounter.WithLabelValues(gatewayNetID).Inc()
+		uplinksFailedCounter.WithLabelValues(gw.NetworkID.String()).Inc()
 		log.WithError(err).Error("update uplink frame to network format failed, drop packet")
 		return
 	}
@@ -121,7 +121,7 @@ func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
 	// decode it into a lorawan packet to determine what needs to be done
 	var phy lorawan.PHYPayload
 	if err := phy.UnmarshalBinary(frame.PhyPayload); err != nil {
-		uplinksFailedCounter.WithLabelValues(gatewayNetID).Inc()
+		uplinksFailedCounter.WithLabelValues(gw.NetworkID.String()).Inc()
 		log.WithError(err).Error("could not decode lorawan packet, drop packet")
 		return
 	}
@@ -131,7 +131,7 @@ func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
 		// Filter by NetID
 		mac, ok := phy.MACPayload.(*lorawan.MACPayload)
 		if !ok {
-			uplinksFailedCounter.WithLabelValues(gatewayNetID).Inc()
+			uplinksFailedCounter.WithLabelValues(gw.NetworkID.String()).Inc()
 			log.Error("invalid packet: data-up but no mac-payload, drop packet")
 			return
 		}
@@ -175,7 +175,7 @@ func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
 			},
 			receivedFrom: gw,
 		}) {
-			uplinksFailedCounter.WithLabelValues(gatewayNetID).Inc()
+			uplinksFailedCounter.WithLabelValues(gw.NetworkID.String()).Inc()
 			log.Warn("unable to broadcast uplink to routing table, drop packet")
 		}
 	case lorawan.JoinRequest, lorawan.RejoinRequest:
@@ -189,6 +189,13 @@ func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
 		airtime, _ := airtime.UplinkAirtime(frame)
 
 		// Join is internally an Uplink
+		frame, err := localUplinkFrameToNetwork(gw, frame)
+		if err != nil {
+			uplinksFailedCounter.WithLabelValues(gw.NetworkID.String()).Inc()
+			log.WithError(err).Error("update join frame to network format failed, drop packet")
+			return
+		}
+
 		event := router.GatewayToRouterEvent{
 			GatewayInformation: &router.GatewayInformation{
 				PublicKey: gw.CompressedPublicKeyBytes,
@@ -217,7 +224,7 @@ func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
 				jr.JoinEUI, &event,
 			},
 		}) {
-			uplinksFailedCounter.WithLabelValues(gatewayNetID).Inc()
+			uplinksFailedCounter.WithLabelValues(gw.NetworkID.String()).Inc()
 			log.Warn("unable to broadcast uplink to routing table, drop packet")
 		}
 	}

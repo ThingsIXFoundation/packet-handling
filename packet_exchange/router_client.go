@@ -268,7 +268,6 @@ func (rc *RouterClient) run(ctx context.Context) error {
 							"joinEUI":       ev.join.joinEUI,
 							"gw-network-id": ev.receivedFrom.NetworkID,
 							"gw-local-id":   ev.receivedFrom.LocalID,
-							"uplink_id":     uuid.FromBytesOrNil(ev.uplink.event.GetUplinkFrameEvent().UplinkFrame.GetRxInfo().GetUplinkId()),
 						}).Info("forward join to router")
 						if err := eventStream.Send(ev.join.event); err != nil {
 							return fmt.Errorf("unable to send event to router: %w", err)
