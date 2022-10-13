@@ -12,8 +12,10 @@ import (
 
 type RouterConfig struct {
 	Forwarder struct {
-		Host string
-		Port uint16
+		Endpoint struct {
+			Host string
+			Port uint16
+		}
 	}
 
 	Integration struct {
@@ -73,11 +75,11 @@ func (rc RouterConfig) ForwarderListenerAddress() string {
 		port = uint16(8080)
 	)
 
-	if rc.Forwarder.Host != "" {
-		host = rc.Forwarder.Host
+	if rc.Forwarder.Endpoint.Host != "" {
+		host = rc.Forwarder.Endpoint.Host
 	}
-	if rc.Forwarder.Port != 0 {
-		port = rc.Forwarder.Port
+	if rc.Forwarder.Endpoint.Port != 0 {
+		port = rc.Forwarder.Endpoint.Port
 	}
 
 	return fmt.Sprintf("%s:%d", host, port)
@@ -92,10 +94,40 @@ type Config struct {
 	Router RouterConfig `mapstructure:"router"`
 
 	Metrics *struct {
-		Host string
-		Port uint16
-		Path string
+		Prometheus *struct {
+			Host string
+			Port uint16
+			Path string
+		}
 	}
+}
+
+func (cfg Config) PrometheusEnabled() bool {
+	return cfg.Metrics != nil &&
+		cfg.Metrics.Prometheus != nil
+}
+
+func (cfg Config) MetricsPrometheusAddress() string {
+	var (
+		host        = "localhost"
+		port uint16 = 8080
+	)
+
+	if cfg.Metrics.Prometheus.Host != "" {
+		host = cfg.Metrics.Prometheus.Host
+	}
+	if cfg.Metrics.Prometheus.Port != 0 {
+		port = cfg.Metrics.Prometheus.Port
+	}
+	return fmt.Sprintf("%s:%d", host, port)
+}
+
+func (cfg Config) MetricsPrometheusPath() string {
+	path := "/metrics"
+	if cfg.Metrics.Prometheus.Path != "" {
+		path = cfg.Metrics.Prometheus.Path
+	}
+	return path
 }
 
 func mustLoadConfig(args []string) *Config {

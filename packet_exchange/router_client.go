@@ -129,7 +129,7 @@ func (rc *RouterClient) Run(ctx context.Context) {
 			}
 		}
 
-		log.WithError(err).Errorf("router client stopped unexpected, reconnect in %v", reconnectInterval)
+		log.WithError(err).WithField("reconnect", reconnectInterval).Errorf("router client stopped unexpected")
 		routersDisconnectedGauge.Add(1)
 		wait := true
 		retry := time.After(nextReconnectInterval())

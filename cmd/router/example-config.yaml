@@ -4,8 +4,9 @@ log:
 
 router:
   forwarder:
-    host: 127.0.0.1
-    port: 3200
+    endpoint:
+      host: 127.0.0.1
+      port: 3200
 
   integration:
     marshaler: protobuf
@@ -25,3 +26,10 @@ router:
           username: ""
           password: ""
           clean_session: true
+
+metrics:
+    prometheus:
+        host: 0.0.0.0
+        port: 8081
+        path: /metrics
+    

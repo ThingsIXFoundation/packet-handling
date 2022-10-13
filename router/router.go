@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync/atomic"
 	"time"
 
 	"github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/integration"
@@ -128,6 +129,10 @@ func (r *Router) JoinFilter(ctx context.Context, req *router.JoinFilterRequest) 
 	panic("not implemented") // TODO: Implement
 }
 
+var (
+	connectedForwarders int32
+)
+
 // Called by the forwarder to start bi-directional communication stream on which
 // events from gateways are send through the forwarder to this router or in
 // reverse from the integrations connected to this router to the forwarder and
@@ -148,6 +153,9 @@ func (r *Router) Events(forwarder router.RouterV1_EventsServer) error {
 		fwdlog = fwdlog.WithField("addr", p.Addr)
 	}
 	fwdlog.Info("forwarder connected")
+
+	connectedForwardersGauge.Set(float64(atomic.AddInt32(&connectedForwarders, 1)))
+	defer func() { connectedForwardersGauge.Set(float64(atomic.AddInt32(&connectedForwarders, -1))) }()
 
 	// turn forwarder into a readable event channel on which events from the
 	// forwarder can be read. It is closed when the connection closes. It is
@@ -276,12 +284,16 @@ func (r *Router) handleUplink(log *logrus.Entry, gatewayNetworkID lorawan.EUI64,
 		log.WithError(err).WithFields(logrus.Fields{
 			"event_type": integration.EventUp,
 		}).Error("forwarded uplink event to integrations failed, drop uplink")
+
+		uplinksCounter.WithLabelValues(gatewayNetworkID.String(), "failed").Inc()
 		return
 	}
 
 	log.WithFields(logrus.Fields{
 		"event_type": integration.EventUp,
 	}).Info("forwarded uplink event to integration")
+
+	uplinksCounter.WithLabelValues(gatewayNetworkID.String(), "success").Inc()
 }
 
 func (r *Router) handleDownlinkTxAck(log *logrus.Entry, gatewayNetworkID lorawan.EUI64, event *router.GatewayToRouterEvent_DownlinkTXAckEvent) {
@@ -313,8 +325,11 @@ func (r *Router) handleDownlinkTxAck(log *logrus.Entry, gatewayNetworkID lorawan
 
 	if err := integration.GetIntegration().PublishEvent(gatewayNetworkID, integration.EventAck, downlinkId, ack); err != nil {
 		log.WithError(err).WithField("event_type", integration.EventAck).Error("unable to send downlink ACK to integration")
+		downlinksCounter.WithLabelValues(gatewayNetworkID.String(), "failed").Inc()
 		return
 	}
 
 	log.Info("send gateway downlink ACK to integration")
+
+	downlinksCounter.WithLabelValues(gatewayNetworkID.String(), "success").Inc()
 }

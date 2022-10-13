@@ -2,54 +2,48 @@ package router
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"sync"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 )
 
 var (
-// uplinksCounter = prometheus.NewCounter(prometheus.CounterOpts{
-// 	Namespace: "packet_exchange",
-// 	Name:      "packet_exchange_uplink_frames_recv",
-// 	Help:      "received uplink frames from all gateways",
-// })
+	connectedForwardersGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: "forwarders",
+		Name:      "connected",
+		Help:      "number of connected forwarders",
+	})
 
-//	uplinksFailedCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-//		Namespace: "packet_exchange",
-//		Name:      "uplink_frames_failed",
-//		Help:      "received uplink frames that could not be processed, group by gateway network id",
-//	}, []string{"gw_network_id"})
+	downlinksCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "data",
+		Name:      "downlinks",
+		Help:      "processed downlinks count",
+	}, []string{"gw_network_id", "status"})
+
+	uplinksCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "data",
+		Name:      "uplinks",
+		Help:      "processed uplinks count",
+	}, []string{"gw_network_id", "status"})
 )
 
 func init() {
-	// prometheus.MustRegister(uplinksCounter, uplinksFailedCounter)
+	prometheus.MustRegister(connectedForwardersGauge, downlinksCounter, uplinksCounter)
 }
 
 func publicPrometheusMetrics(ctx context.Context, cfg *Config) {
 	var (
-		host        = "0.0.0.0"
-		port uint16 = 8080
-		path        = "/metrics"
+		addr = cfg.MetricsPrometheusAddress()
+		path = cfg.MetricsPrometheusPath()
 	)
 
-	if cfg.Metrics.Host != "" {
-		host = cfg.Metrics.Host
-	}
-	if cfg.Metrics.Port != 0 {
-		port = cfg.Metrics.Port
-	}
-	if cfg.Metrics.Path != "" {
-		path = cfg.Metrics.Path
-	}
-
-	addr := fmt.Sprintf("%s:%d", host, port)
 	logrus.WithFields(logrus.Fields{
 		"addr": addr,
-		"path": cfg.Metrics.Path,
-	}).Info("expose prometheus metrics")
+		"path": path,
+	}).Info("serve prometheus metrics")
 
 	var (
 		mux        = http.NewServeMux()

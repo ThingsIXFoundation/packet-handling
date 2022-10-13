@@ -33,7 +33,7 @@ func Run(cmd *cobra.Command, args []string) {
 	}()
 
 	// enable prometheus endpoint if configured
-	if cfg.Metrics != nil {
+	if cfg.PrometheusEnabled() {
 		wg.Add(1)
 		go func() {
 			publicPrometheusMetrics(ctx, cfg)

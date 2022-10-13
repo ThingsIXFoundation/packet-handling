@@ -42,6 +42,7 @@ routes:
 
 # enable prometheus metrics endpoint
 metrics:
-    host: 0.0.0.0
-    port: 8888
-    path: /metrics
+    prometheus:
+        host: 0.0.0.0
+        port: 8888
+        path: /metrics

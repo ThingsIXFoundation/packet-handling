@@ -84,15 +84,13 @@ func NewExchange(cfg *Config) (*Exchange, error) {
 }
 
 func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
-	uplinksCounter.Inc()
-
 	gatewayLocalID := hex.EncodeToString(frame.GetRxInfo().GetGatewayId())
 	log := logrus.WithField("gw_local_id", gatewayLocalID)
 
 	// ensure that received frame is from a trusted gateway if not drop it
 	gw, ok := e.trustedGateways.ByLocalIDBytes(frame.RxInfo.GatewayId)
 	if !ok {
-		uplinksFailedCounter.WithLabelValues(gw.NetworkID.String()).Inc()
+		uplinksCounter.WithLabelValues(gw.NetworkID.String(), "failed").Inc()
 		log.Warn("uplink from unknown gateway, drop packet")
 		return
 	}
@@ -113,7 +111,7 @@ func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
 	// representation (exchange <-> router) so it can be broadcasted onto the network
 	frame, err := localUplinkFrameToNetwork(gw, frame)
 	if err != nil {
-		uplinksFailedCounter.WithLabelValues(gw.NetworkID.String()).Inc()
+		uplinksCounter.WithLabelValues(gw.NetworkID.String(), "failed").Inc()
 		log.WithError(err).Error("update uplink frame to network format failed, drop packet")
 		return
 	}
@@ -121,7 +119,7 @@ func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
 	// decode it into a lorawan packet to determine what needs to be done
 	var phy lorawan.PHYPayload
 	if err := phy.UnmarshalBinary(frame.PhyPayload); err != nil {
-		uplinksFailedCounter.WithLabelValues(gw.NetworkID.String()).Inc()
+		uplinksCounter.WithLabelValues(gw.NetworkID.String(), "failed").Inc()
 		log.WithError(err).Error("could not decode lorawan packet, drop packet")
 		return
 	}
@@ -131,7 +129,7 @@ func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
 		// Filter by NetID
 		mac, ok := phy.MACPayload.(*lorawan.MACPayload)
 		if !ok {
-			uplinksFailedCounter.WithLabelValues(gw.NetworkID.String()).Inc()
+			uplinksCounter.WithLabelValues(gw.NetworkID.String(), "failed").Inc()
 			log.Error("invalid packet: data-up but no mac-payload, drop packet")
 			return
 		}
@@ -175,8 +173,10 @@ func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
 			},
 			receivedFrom: gw,
 		}) {
-			uplinksFailedCounter.WithLabelValues(gw.NetworkID.String()).Inc()
+			uplinksCounter.WithLabelValues(gw.NetworkID.String(), "failed").Inc()
 			log.Warn("unable to broadcast uplink to routing table, drop packet")
+		} else {
+			uplinksCounter.WithLabelValues(gw.NetworkID.String(), "success").Inc()
 		}
 	case lorawan.JoinRequest, lorawan.RejoinRequest:
 		// Filter by Xor8 filter on joinEUI
@@ -217,8 +217,10 @@ func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
 				jr.JoinEUI, &event,
 			},
 		}) {
-			uplinksFailedCounter.WithLabelValues(gw.NetworkID.String()).Inc()
+			uplinksCounter.WithLabelValues(gw.NetworkID.String(), "failed").Inc()
 			log.Warn("unable to broadcast uplink to routing table, drop packet")
+		} else {
+			uplinksCounter.WithLabelValues(gw.NetworkID.String(), "success").Inc()
 		}
 	}
 }
@@ -226,7 +228,6 @@ func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
 func (e *Exchange) gatewayStats(stats gw.GatewayStats) {
 	gw, ok := e.trustedGateways.ByLocalIDBytes(stats.GetGatewayId())
 	if !ok {
-		downlinkTxAckFailedCounter.WithLabelValues(fmt.Sprintf("%x", stats.GetGatewayId())).Inc()
 		logrus.Warn("gateway stats from unknown gateway, drop stats")
 		return
 	}
@@ -252,8 +253,7 @@ func (e *Exchange) gatewayStats(stats gw.GatewayStats) {
 			fmt.Sprintf("%d", lora.GetSpreadingFactor()),
 			lora.GetCodeRate()).Set(float64(m.GetCount()))
 	}
-	gatewayRxReceivedGauge.WithLabelValues(gatewayNetworkID).Set(float64(stats.RxPacketsReceived))
-	gatewayRxReceivedOKGauge.WithLabelValues(gatewayNetworkID).Set(float64(stats.RxPacketsReceivedOk))
+	gatewayRxReceivedGauge.WithLabelValues(gatewayNetworkID, "success").Set(float64(stats.RxPacketsReceived))
 	gatewayTxEmittedGauge.WithLabelValues(gatewayNetworkID).Set(float64(stats.TxPacketsEmitted))
 	for f, n := range stats.TxPacketsPerFrequency {
 		gatewayTxPacketsPerFrequencyGauge.WithLabelValues(gatewayNetworkID, fmt.Sprintf("%d", f)).Set(float64(n))
@@ -337,8 +337,6 @@ func (e *Exchange) subscribeEvent(event events.Subscribe) {
 }
 
 func (e *Exchange) handleDownlinkFrame(router *Router, event *router.DownlinkFrameEvent) {
-	downlinksCounter.Inc()
-
 	var (
 		frame        = event.GetDownlinkFrame()
 		gwNetworkId  = GatewayIDBytesToLoraEUID(frame.GetGatewayId())
@@ -347,7 +345,7 @@ func (e *Exchange) handleDownlinkFrame(router *Router, event *router.DownlinkFra
 	)
 
 	if !sinkOk {
-		downlinksFailedCounter.WithLabelValues(gwNetworkId.String()).Inc()
+		downlinksCounter.WithLabelValues(gwNetworkId.String(), "failed").Inc()
 		log.WithFields(logrus.Fields{
 			"payload": base64.RawStdEncoding.EncodeToString(frame.GetPhyPayload()),
 			// "source_router_id": router.ID,
@@ -362,17 +360,16 @@ func (e *Exchange) handleDownlinkFrame(router *Router, event *router.DownlinkFra
 
 	// order backend to send the downlink to the gateway so it can be broadcasted
 	if err := e.backend.SendDownlinkFrame(*frame); err != nil {
-		downlinksFailedCounter.WithLabelValues(gwNetworkId.String()).Inc()
+		downlinksCounter.WithLabelValues(gwNetworkId.String(), "failed").Inc()
 		log.WithError(err).Error("drop downlink: unable to send to gateway")
 		return
 	} else {
+		downlinksCounter.WithLabelValues(gwNetworkId.String(), "ok").Inc()
 		log.Info("downlink sent to backend")
 	}
 }
 
 func (e *Exchange) downlinkTxAck(txack gw.DownlinkTXAck) {
-	downlinkTxAckCounter.Inc()
-
 	var (
 		log = logrus.WithFields(logrus.Fields{
 			"gw_local_id": hex.EncodeToString(txack.GatewayId),
@@ -383,7 +380,7 @@ func (e *Exchange) downlinkTxAck(txack gw.DownlinkTXAck) {
 	// ensure that received frame is from a trusted gateway if not drop it
 	gw, ok := e.trustedGateways.ByLocalIDBytes(txack.GetGatewayId())
 	if !ok {
-		downlinkTxAckFailedCounter.WithLabelValues(fmt.Sprintf("%x", txack.GetGatewayId())).Inc()
+		downlinkTxAckCounter.WithLabelValues(fmt.Sprintf("%x", txack.GetGatewayId(), "failed")).Inc()
 		log.Warn("downlink tx ack from unknown gateway, drop packet")
 		return
 	}
@@ -391,6 +388,7 @@ func (e *Exchange) downlinkTxAck(txack gw.DownlinkTXAck) {
 
 	txack, err := localDownlinkTxAckToNetwork(gw, txack)
 	if err != nil {
+		downlinkTxAckCounter.WithLabelValues(fmt.Sprintf("%x", txack.GetGatewayId(), "failed")).Inc()
 		logrus.WithError(err).Errorf("could update txack to network format")
 		return
 	}
@@ -422,7 +420,10 @@ func (e *Exchange) downlinkTxAck(txack gw.DownlinkTXAck) {
 			event:      &event,
 		},
 	}) {
+		downlinkTxAckCounter.WithLabelValues(fmt.Sprintf("%x", txack.GetGatewayId(), "failed")).Inc()
 		log.Warn("unable to broadcast downlink ACK to routing table, drop packet")
+	} else {
+		downlinkTxAckCounter.WithLabelValues(fmt.Sprintf("%x", txack.GetGatewayId(), "success")).Inc()
 	}
 }
 
