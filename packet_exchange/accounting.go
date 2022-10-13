@@ -28,7 +28,7 @@ func NewNoAccountingStrategy() *NoAccounting {
 }
 
 func (a NoAccounting) Allow(user common.Address, airtime time.Duration) bool {
-	logrus.Debug("accounting disabled")
+	logrus.Debug("allow all for no-accounting")
 	return true
 }
 

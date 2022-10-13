@@ -443,7 +443,7 @@ func (e *Exchange) Run(ctx context.Context) {
 				if frame := in.event.GetDownlinkFrameEvent(); frame != nil {
 					e.handleDownlinkFrame(in.source, frame)
 				} else if airtimePayment := in.event.GetAirtimePaymentEvent(); airtimePayment != nil {
-					logrus.Warn("NOT IMPLEMENTED: received airtime payment") // TODO
+					e.accounting.AddPayment(airtimePayment)
 				} else {
 					logrus.WithFields(logrus.Fields{
 						"source": in.source.Endpoint,
