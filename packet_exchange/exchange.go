@@ -87,7 +87,7 @@ func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
 	uplinksCounter.Inc()
 
 	gatewayLocalID := hex.EncodeToString(frame.GetRxInfo().GetGatewayId())
-	log := logrus.WithField("gw-local-id", gatewayLocalID)
+	log := logrus.WithField("gw_local_id", gatewayLocalID)
 
 	// ensure that received frame is from a trusted gateway if not drop it
 	gw, ok := e.trustedGateways.ByLocalIDBytes(frame.RxInfo.GatewayId)
@@ -98,7 +98,7 @@ func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
 	}
 
 	// log frame details
-	log = log.WithField("gw-network-id", gw.NetworkID)
+	log = log.WithField("gw_network_id", gw.NetworkID)
 	log.WithFields(logrus.Fields{
 		"rssi":     frame.GetRxInfo().GetRssi(),
 		"snr":      frame.GetRxInfo().GetLoraSnr(),
@@ -234,8 +234,8 @@ func (e *Exchange) gatewayStats(stats gw.GatewayStats) {
 	var (
 		id, _ = uuid.FromBytes(stats.StatsId)
 		log   = logrus.WithFields(logrus.Fields{
-			"gw-network-id": gw.NetworkID,
-			"gw-local-id":   gw.LocalID,
+			"gw_network_id": gw.NetworkID,
+			"gw_local_id":   gw.LocalID,
 			"id":            id,
 		})
 		gatewayNetworkID = gw.NetworkID.String()
@@ -284,7 +284,7 @@ func init() {
 // subscribeEvent is called by the chirstack backend, currently only when a gateway
 // is online this callback is called.
 func (e *Exchange) subscribeEvent(event events.Subscribe) {
-	log := logrus.WithField("gw-local-id", hex.EncodeToString(event.GatewayID[:]))
+	log := logrus.WithField("gw_local_id", hex.EncodeToString(event.GatewayID[:]))
 	// ensure that received frame is from a trusted gateway if not drop it
 	gw, ok := e.trustedGateways.ByLocalIDBytes(event.GatewayID[:])
 	if !ok {
@@ -292,7 +292,7 @@ func (e *Exchange) subscribeEvent(event events.Subscribe) {
 		return
 	}
 
-	log = log.WithField("gw-network-id", gw.NetworkID)
+	log = log.WithField("gw_network_id", gw.NetworkID)
 	emitEvents := false
 
 	if event.Subscribe {
@@ -342,7 +342,7 @@ func (e *Exchange) handleDownlinkFrame(router *Router, event *router.DownlinkFra
 	var (
 		frame        = event.GetDownlinkFrame()
 		gwNetworkId  = GatewayIDBytesToLoraEUID(frame.GetGatewayId())
-		log          = logrus.WithField("gw-network-id", gwNetworkId)
+		log          = logrus.WithField("gw_network_id", gwNetworkId)
 		sink, sinkOk = e.trustedGateways.byNetworkID[gwNetworkId]
 	)
 
@@ -350,12 +350,12 @@ func (e *Exchange) handleDownlinkFrame(router *Router, event *router.DownlinkFra
 		downlinksFailedCounter.WithLabelValues(gwNetworkId.String()).Inc()
 		log.WithFields(logrus.Fields{
 			"payload": base64.RawStdEncoding.EncodeToString(frame.GetPhyPayload()),
-			// "source-router-id": router.ID,
+			// "source_router_id": router.ID,
 		}).Warn("drop downlink frame - target gateway not found")
 		return
 	}
 
-	log = log.WithField("gw-local-id", sink.LocalID)
+	log = log.WithField("gw_local_id", sink.LocalID)
 
 	// convert the network downlink frame into a local frame
 	frame = networkDownlinkFrameToLocal(sink, frame)
@@ -375,7 +375,7 @@ func (e *Exchange) downlinkTxAck(txack gw.DownlinkTXAck) {
 
 	var (
 		log = logrus.WithFields(logrus.Fields{
-			"gw-local-id": hex.EncodeToString(txack.GatewayId),
+			"gw_local_id": hex.EncodeToString(txack.GatewayId),
 		})
 	)
 	log.Info("received downlink tx ack from gateway")
@@ -387,7 +387,7 @@ func (e *Exchange) downlinkTxAck(txack gw.DownlinkTXAck) {
 		log.Warn("downlink tx ack from unknown gateway, drop packet")
 		return
 	}
-	log = log.WithField("gw-network-id", gw.NetworkID)
+	log = log.WithField("gw_network_id", gw.NetworkID)
 
 	txack, err := localDownlinkTxAckToNetwork(gw, txack)
 	if err != nil {

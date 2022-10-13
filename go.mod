@@ -91,7 +91,6 @@ require (
 
 require (
 	github.com/FastFilter/xorfilter v0.1.2
-	github.com/deckarep/golang-set/v2 v2.1.0
 	github.com/ethereum/go-ethereum v1.10.21
 	github.com/spf13/cobra v1.5.0
 	golang.org/x/sys v0.0.0-20220804214406-8e32c043e418 // indirect

@@ -3,9 +3,6 @@ package gateway
 import (
 	"crypto/ecdsa"
 	"crypto/sha256"
-	"encoding/hex"
-	"fmt"
-	"strings"
 
 	"github.com/brocaar/lorawan"
 	"github.com/ethereum/go-ethereum/common"
@@ -13,8 +10,8 @@ import (
 )
 
 type Gateway struct {
-	LocalGatewayID           GatewayID
-	NetworkGatewayID         GatewayID
+	LocalGatewayID           lorawan.EUI64
+	NetworkGatewayID         lorawan.EUI64
 	PrivateKey               *ecdsa.PrivateKey
 	PublicKey                *ecdsa.PublicKey
 	PublicKeyBytes           []byte
@@ -24,7 +21,7 @@ type Gateway struct {
 
 func NewGateway(localGatewayID lorawan.EUI64, priv *ecdsa.PrivateKey) (*Gateway, error) {
 	return &Gateway{
-		LocalGatewayID:           GatewayID(localGatewayID),
+		LocalGatewayID:           localGatewayID,
 		NetworkGatewayID:         CalculateNetworkGatewayID(priv),
 		PrivateKey:               priv,
 		PublicKey:                &priv.PublicKey,
@@ -75,37 +72,4 @@ func CalculatePublicKeyBytes(pub *ecdsa.PublicKey) []byte {
 
 func (gw *Gateway) Address() string {
 	return crypto.PubkeyToAddress(*gw.PublicKey).String()
-}
-
-type GatewayID lorawan.EUI64
-
-func NewGatewayID(gatewayIDbytes []byte) (GatewayID, error) {
-	if len(gatewayIDbytes) != 8 {
-		return GatewayID{}, fmt.Errorf("invalid gateway-id length: %d", len(gatewayIDbytes))
-	}
-
-	var gatewayID GatewayID
-	copy(gatewayID[:], gatewayIDbytes)
-
-	return gatewayID, nil
-}
-
-func NewGatewayIDFromString(gatewayIDStr string) (GatewayID, error) {
-	gatewayIDStr = strings.ReplaceAll(gatewayIDStr, ":", "")
-	gatewayIDStr = strings.ReplaceAll(gatewayIDStr, " ", "")
-	gatewayIDbytes, err := hex.DecodeString(gatewayIDStr)
-	if err != nil {
-		return GatewayID{}, err
-	}
-
-	return NewGatewayID(gatewayIDbytes)
-
-}
-
-func (gid GatewayID) String() string {
-	return hex.EncodeToString(gid[:])
-}
-
-func (gid GatewayID) Bytes() []byte {
-	return gid[:]
 }

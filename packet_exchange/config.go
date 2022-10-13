@@ -8,9 +8,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/mitchellh/mapstructure"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 )
 
 type ExchangeAccountingConfig map[string]interface{}
@@ -113,6 +116,50 @@ type Config struct {
 	}
 }
 
+func mustLoadConfig(args []string) *Config {
+	if len(args) == 1 {
+		viper.SetConfigFile(args[0])
+	}
+
+	if err := viper.ReadInConfig(); err != nil {
+		logrus.WithError(err).Fatal("unable to read config")
+	}
+
+	var cfg Config
+	if err := viper.Unmarshal(&cfg, viper.DecodeHook(mapstructure.ComposeDecodeHookFunc(
+		mapstructure.StringToSliceHookFunc(","),
+		utils.StringToEthereumAddressHook(),
+		utils.IntToBigIntHook(),
+		utils.HexStringToBigIntHook(),
+		utils.StringToHashHook(),
+		utils.StringToDuration(),
+		utils.StringToLogrusLevel(),
+		decodeTrustedGatewayHook,
+		decodeExchangeGatewayBackend,
+		decodeExchangeAccountingStrategy,
+	))); err != nil {
+		logrus.WithError(err).Fatal("unable to load configuration")
+	}
+
+	logrus.SetLevel(cfg.Log.Level)
+	logrus.SetFormatter(&logrus.TextFormatter{FullTimestamp: cfg.Log.Timestamp})
+
+	// if accounting is not specified use the default no accounting
+	if cfg.PacketExchange.Accounting == nil {
+		cfg.PacketExchange.Accounting = &ExchangeAccountingConfig{
+			"type": NoAccountingType,
+		}
+	}
+
+	// set the Default flag on the defaultRouters to distinct them from routes
+	// loaded from ThingsIX
+	for _, r := range cfg.Routes.Default {
+		r.Default = true
+	}
+
+	return &cfg
+}
+
 func decodeExchangeAccountingStrategy(f reflect.Type, t reflect.Type, data interface{}) (interface{}, error) {
 	if f.Kind() != reflect.Map || t != reflect.TypeOf(ExchangeAccountingConfig{}) {
 		return data, nil
@@ -137,6 +184,7 @@ func decodeExchangeAccountingStrategy(f reflect.Type, t reflect.Type, data inter
 	}
 	return nil, fmt.Errorf("unsupported accounting '%s'", fields["type"])
 }
+
 func decodeExchangeGatewayBackend(f reflect.Type, t reflect.Type, data interface{}) (interface{}, error) {
 	if f.Kind() != reflect.Map || t != reflect.TypeOf(ExchangeGatewayBackendConfig{}) {
 		return data, nil

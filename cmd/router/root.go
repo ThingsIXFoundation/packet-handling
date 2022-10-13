@@ -34,10 +34,10 @@ func initConfig() {
 		home, err := os.UserHomeDir()
 		cobra.CheckErr(err)
 
-		// Search config in home directory with name ".packet-exchange" (without extension).
+		// Search config in home directory with name ".router" (without extension).
 		viper.AddConfigPath(home)
 		viper.SetConfigType("yaml")
-		viper.SetConfigName(".packet-exchange")
+		viper.SetConfigName(".router")
 	}
 
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))

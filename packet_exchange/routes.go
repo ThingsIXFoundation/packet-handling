@@ -364,7 +364,7 @@ func obtainThingsIXRoutesFunc(cfg *Config) (RoutesUpdaterFunc, error) {
 				}
 				routers[i] = NewRouter(id, r.Endpoint, false, netids, r.Manager, accounter)
 			}
-			logrus.WithField("#-routers", len(routers)).Info("fetched routing table from ThingsIX API")
+			logrus.WithField("#routers", len(routers)).Info("fetched routing table from ThingsIX API")
 			return routers, nil
 		}, nil
 	}

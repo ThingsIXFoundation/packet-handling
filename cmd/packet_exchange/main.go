@@ -13,5 +13,6 @@ var rootCmd = &cobra.Command{
 registered ThingsIX routers. It accepts packets from trusted gateways and
 forwards these to routers and delivers packets from these routers back to
 the gateway.`,
-	Run: packetexchange.Run,
+	Args: cobra.RangeArgs(0, 1),
+	Run:  packetexchange.Run,
 }

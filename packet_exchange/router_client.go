@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/status"
 )
 
@@ -165,7 +166,7 @@ func logRouterDialDetails(router *Router) {
 		log = log.WithField("owner", router.Owner)
 	}
 
-	log.Info("connect to router")
+	log.Info("connect router")
 }
 
 func (rc *RouterClient) run(ctx context.Context) error {
@@ -173,16 +174,25 @@ func (rc *RouterClient) run(ctx context.Context) error {
 		log                 = logrus.WithField("router", rc.router)
 		pendingDownlinkAcks = make(map[[32]byte]time.Time)
 		dialCtx, cancel     = context.WithTimeout(ctx, 15*time.Second)
+		kacp                = keepalive.ClientParameters{
+			Time:                20 * time.Second, // send pings every 20 seconds if there is no activity
+			Timeout:             5 * time.Second,  // wait 5 seconds for ping ack before considering the connection dead
+			PermitWithoutStream: true,             // send pings even without active streams
+		}
 	)
 	defer cancel()
 	logRouterDialDetails(rc.router)
 
 	// connect to the router
-	conn, err := grpc.DialContext(dialCtx, rc.router.Endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.DialContext(dialCtx, rc.router.Endpoint,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithKeepaliveParams(kacp))
+
 	if err != nil {
 		return fmt.Errorf("unable to dial router: %w", err)
 	}
 	defer conn.Close()
+	log.Info("router connected")
 
 	client := router.NewRouterV1Client(conn)
 	eventStream, err := client.Events(ctx)
@@ -244,7 +254,7 @@ func (rc *RouterClient) run(ctx context.Context) error {
 					if rc.router.InterestedIn(ev.uplink.device) {
 						log.WithFields(logrus.Fields{
 							"devaddr":       ev.uplink.device,
-							"gw-network-id": ev.receivedFrom.NetworkID,
+							"gw_network_id": ev.receivedFrom.NetworkID,
 							"gw-local-id":   ev.receivedFrom.LocalID,
 							"uplink_id":     uuid.FromBytesOrNil(ev.uplink.event.GetUplinkFrameEvent().UplinkFrame.GetRxInfo().GetUplinkId()),
 						}).Info("forward uplink packet")
@@ -266,8 +276,9 @@ func (rc *RouterClient) run(ctx context.Context) error {
 					if rc.router.AcceptsJoin(ev.join.joinEUI) {
 						log.WithFields(logrus.Fields{
 							"joinEUI":       ev.join.joinEUI,
-							"gw-network-id": ev.receivedFrom.NetworkID,
+							"gw_network_id": ev.receivedFrom.NetworkID,
 							"gw-local-id":   ev.receivedFrom.LocalID,
+							"uplink_id":     uuid.FromBytesOrNil(ev.join.event.GetUplinkFrameEvent().UplinkFrame.GetRxInfo().GetUplinkId()),
 						}).Info("forward join to router")
 						if err := eventStream.Send(ev.join.event); err != nil {
 							return fmt.Errorf("unable to send event to router: %w", err)
@@ -281,7 +292,7 @@ func (rc *RouterClient) run(ctx context.Context) error {
 						delete(pendingDownlinkAcks, downlinkID)
 						log.WithFields(logrus.Fields{
 							"downlink_id":   fmt.Sprintf("%x", downlinkID[:8]),
-							"gw-network-id": ev.receivedFrom.NetworkID,
+							"gw_network_id": ev.receivedFrom.NetworkID,
 							"gw-local-id":   ev.receivedFrom.LocalID,
 						}).Info("forward downlink ACK to router")
 						if err := eventStream.Send(ev.downlinkAck.event); err != nil {
@@ -297,7 +308,7 @@ func (rc *RouterClient) run(ctx context.Context) error {
 			}
 		case event, ok := <-fromRouter:
 			if !ok {
-				return fmt.Errorf("connection with router closed or failed")
+				return fmt.Errorf("connection with router lost")
 			}
 
 			log.Info("received event from router")
@@ -376,20 +387,17 @@ func routerEventsChan(events router.RouterV1_EventsClient) <-chan *router.Router
 		defer close(receivedRouterEvents)
 		for {
 			in, err := events.Recv()
-			if err != nil {
-				statusCode := status.Code(err)
-				if statusCode == codes.Canceled {
-					return
-				}
-				if statusCode != codes.OK && statusCode != codes.Unknown {
-					continue
-				}
-				if err != nil {
-					logrus.WithError(err).Warn("unable to receive events from router")
-					continue
-				}
+			statusCode := status.Code(err)
+			switch statusCode {
+			case codes.OK:
+				receivedRouterEvents <- in
+			case codes.Canceled, codes.Unavailable, codes.Unknown:
+				return
+			default:
+				logrus.WithError(err).WithFields(logrus.Fields{
+					"status": statusCode.String(),
+				}).Error("unable to receive router message")
 			}
-			receivedRouterEvents <- in
 		}
 	}()
 	return receivedRouterEvents
