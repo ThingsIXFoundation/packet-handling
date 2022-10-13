@@ -17,10 +17,6 @@ func localDownlinkTxAckToNetwork(gw *Gateway, txack gw.DownlinkTXAck) (gw.Downli
 	return txack, nil
 }
 
-func IsMaybeMapperPacket(payload *lorawan.MACPayload) bool {
-	return payload.FHDR.DevAddr[0] == 0x02
-}
-
 func GatewayIDBytesToLoraEUID(id []byte) lorawan.EUI64 {
 	var lid lorawan.EUI64
 	copy(lid[:], id)

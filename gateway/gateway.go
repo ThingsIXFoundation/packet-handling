@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/sha256"
 
+	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/brocaar/lorawan"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -32,7 +33,7 @@ func NewGateway(localGatewayID lorawan.EUI64, priv *ecdsa.PrivateKey) (*Gateway,
 }
 
 func GenerateNewGateway(localGatewayIDBytes []byte) (*Gateway, error) {
-	localGatewayID, err := NewGatewayID(localGatewayIDBytes)
+	localGatewayID, err := utils.BytesToGatewayID(localGatewayIDBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -52,12 +53,12 @@ func GenerateNewGateway(localGatewayIDBytes []byte) (*Gateway, error) {
 	}, nil
 }
 
-func CalculateNetworkGatewayID(priv *ecdsa.PrivateKey) GatewayID {
+func CalculateNetworkGatewayID(priv *ecdsa.PrivateKey) lorawan.EUI64 {
 	pub := priv.PublicKey
 	pubBytes := CalculateCompressedPublicKeyBytes(&pub)
 	h := sha256.Sum256(pubBytes)
 
-	gatewayID, _ := NewGatewayID(h[0:8])
+	gatewayID, _ := utils.BytesToGatewayID(h[0:8])
 
 	return gatewayID
 }

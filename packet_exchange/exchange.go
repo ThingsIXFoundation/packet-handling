@@ -31,6 +31,8 @@ type Exchange struct {
 	// routes holds the required information to exchange data with
 	// external ThingsIX routers
 	routingTable *RoutingTable
+
+	mapperForwarder *MapperForwarder
 }
 
 // NewExchange instantiates a new packet exchange where gateways and
@@ -73,6 +75,10 @@ func NewExchange(cfg *Config) (*Exchange, error) {
 		},
 	}
 
+	if exchange.mapperForwarder, err = NewMapperForwarder(exchange); err != nil {
+		return nil, err
+	}
+
 	// backend uses callbacks to inform the exchange of events such as received uplink frames
 	backend.SetUplinkFrameFunc(exchange.uplinkFrameCallback)
 	backend.SetDownlinkTxAckFunc(exchange.downlinkTxAck)
@@ -81,6 +87,38 @@ func NewExchange(cfg *Config) (*Exchange, error) {
 	backend.SetRawPacketForwarderEventFunc(nil) // TODO:??
 
 	return exchange, nil
+}
+
+// Run the exchange until the given ctx expires.
+func (e *Exchange) Run(ctx context.Context) {
+	// start chirpstack backend to start communication between gateways and exchange
+	e.backend.Start()
+
+	// startup integration between exchange and the routers on the network
+	go e.routingTable.Run(ctx)
+
+	// wait for messages from the network and dispatch them to the chirpstack backend
+	for {
+		select {
+		case in, ok := <-e.routingTable.networkEvents: // incoming event from the network
+			if ok {
+				if frame := in.event.GetDownlinkFrameEvent(); frame != nil {
+					e.handleDownlinkFrame(frame)
+				} else if airtimePayment := in.event.GetAirtimePaymentEvent(); airtimePayment != nil {
+					e.accounting.AddPayment(airtimePayment)
+				} else {
+					logrus.WithFields(logrus.Fields{
+						"source": in.source.Endpoint,
+						"event":  fmt.Sprintf("%T", in.event),
+					}).Error("received unsupported network event")
+				}
+			}
+		case <-ctx.Done():
+			e.backend.Stop()
+			logrus.Info("packet exchange stopped")
+			return
+		}
+	}
 }
 
 func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
@@ -336,7 +374,7 @@ func (e *Exchange) subscribeEvent(event events.Subscribe) {
 	}
 }
 
-func (e *Exchange) handleDownlinkFrame(router *Router, event *router.DownlinkFrameEvent) {
+func (e *Exchange) handleDownlinkFrame(event *router.DownlinkFrameEvent) {
 	var (
 		frame        = event.GetDownlinkFrame()
 		gwNetworkId  = GatewayIDBytesToLoraEUID(frame.GetGatewayId())
@@ -348,7 +386,6 @@ func (e *Exchange) handleDownlinkFrame(router *Router, event *router.DownlinkFra
 		downlinksCounter.WithLabelValues(gwNetworkId.String(), "failed").Inc()
 		log.WithFields(logrus.Fields{
 			"payload": base64.RawStdEncoding.EncodeToString(frame.GetPhyPayload()),
-			// "source_router_id": router.ID,
 		}).Warn("drop downlink frame - target gateway not found")
 		return
 	}
@@ -424,37 +461,5 @@ func (e *Exchange) downlinkTxAck(txack gw.DownlinkTXAck) {
 		log.Warn("unable to broadcast downlink ACK to routing table, drop packet")
 	} else {
 		downlinkTxAckCounter.WithLabelValues(fmt.Sprintf("%x", txack.GetGatewayId()), "success").Inc()
-	}
-}
-
-// Run the exchange until the given ctx expires.
-func (e *Exchange) Run(ctx context.Context) {
-	// start chirpstack backend to start communication between gateways and exchange
-	e.backend.Start()
-
-	// startup integration between exchange and the routers on the network
-	go e.routingTable.Run(ctx)
-
-	// wait for messages from the network and dispatch them to the chirpstack backend
-	for {
-		select {
-		case in, ok := <-e.routingTable.networkEvents: // incoming event from the network
-			if ok {
-				if frame := in.event.GetDownlinkFrameEvent(); frame != nil {
-					e.handleDownlinkFrame(in.source, frame)
-				} else if airtimePayment := in.event.GetAirtimePaymentEvent(); airtimePayment != nil {
-					e.accounting.AddPayment(airtimePayment)
-				} else {
-					logrus.WithFields(logrus.Fields{
-						"source": in.source.Endpoint,
-						"event":  fmt.Sprintf("%T", in.event),
-					}).Error("received unsupported network event")
-				}
-			}
-		case <-ctx.Done():
-			e.backend.Stop()
-			logrus.Info("packet exchange stopped")
-			return
-		}
 	}
 }
