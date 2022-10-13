@@ -380,7 +380,7 @@ func (e *Exchange) downlinkTxAck(txack gw.DownlinkTXAck) {
 	// ensure that received frame is from a trusted gateway if not drop it
 	gw, ok := e.trustedGateways.ByLocalIDBytes(txack.GetGatewayId())
 	if !ok {
-		downlinkTxAckCounter.WithLabelValues(fmt.Sprintf("%x", txack.GetGatewayId(), "failed")).Inc()
+		downlinkTxAckCounter.WithLabelValues(fmt.Sprintf("%x", txack.GetGatewayId()), "failed").Inc()
 		log.Warn("downlink tx ack from unknown gateway, drop packet")
 		return
 	}
@@ -388,7 +388,7 @@ func (e *Exchange) downlinkTxAck(txack gw.DownlinkTXAck) {
 
 	txack, err := localDownlinkTxAckToNetwork(gw, txack)
 	if err != nil {
-		downlinkTxAckCounter.WithLabelValues(fmt.Sprintf("%x", txack.GetGatewayId(), "failed")).Inc()
+		downlinkTxAckCounter.WithLabelValues(fmt.Sprintf("%x", txack.GetGatewayId()), "failed").Inc()
 		logrus.WithError(err).Errorf("could update txack to network format")
 		return
 	}
@@ -420,10 +420,10 @@ func (e *Exchange) downlinkTxAck(txack gw.DownlinkTXAck) {
 			event:      &event,
 		},
 	}) {
-		downlinkTxAckCounter.WithLabelValues(fmt.Sprintf("%x", txack.GetGatewayId(), "failed")).Inc()
+		downlinkTxAckCounter.WithLabelValues(fmt.Sprintf("%x", txack.GetGatewayId()), "failed").Inc()
 		log.Warn("unable to broadcast downlink ACK to routing table, drop packet")
 	} else {
-		downlinkTxAckCounter.WithLabelValues(fmt.Sprintf("%x", txack.GetGatewayId(), "success")).Inc()
+		downlinkTxAckCounter.WithLabelValues(fmt.Sprintf("%x", txack.GetGatewayId()), "success").Inc()
 	}
 }
 
