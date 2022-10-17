@@ -299,9 +299,9 @@ func buildRoutingTable(cfg *Config) (*RoutingTable, error) {
 	return &RoutingTable{
 		routesFetcher:           routes,
 		routesUpdateInterval:    time.Second, // first time try to fetch routing information allmost immediatly
-		routesUpdateIntervalCfg: cfg.Routes.UpdateInterval,
+		routesUpdateIntervalCfg: cfg.Routers.UpdateInterval,
 		routesTableBroadcaster:  broadcast.New[[]*Router](1),
-		defaultRoutes:           cfg.Routes.Default,
+		defaultRoutes:           cfg.Routers.Default,
 		networkEvents:           make(chan *NetworkEvent, 1024),
 		gatewayEvents:           broadcast.New[*GatewayEvent](1024).Run(),
 	}, nil
@@ -310,16 +310,16 @@ func buildRoutingTable(cfg *Config) (*RoutingTable, error) {
 func obtainThingsIXRoutesFunc(cfg *Config) (RoutesUpdaterFunc, error) {
 	accounter := cfg.PacketExchange.Accounting.Accounter()
 
-	if cfg.Routes.SmartContract != nil && cfg.Routes.SmartContract.Address != (common.Address{}) {
+	if cfg.Routers.SmartContract != nil && cfg.Routers.SmartContract.Address != (common.Address{}) {
 		return func() ([]*Router, error) {
 			// TODO: add routers from ThingsIX smart contract to routes array
 			return nil, fmt.Errorf("refresh from smart contract not implemented")
 		}, nil
 	}
 
-	if cfg.Routes.ThingsIXApi != nil && cfg.Routes.ThingsIXApi.Endpoint != nil {
+	if cfg.Routers.ThingsIXApi != nil && cfg.Routers.ThingsIXApi.Endpoint != nil {
 		return func() ([]*Router, error) {
-			resp, err := http.Get(*cfg.Routes.ThingsIXApi.Endpoint)
+			resp, err := http.Get(*cfg.Routers.ThingsIXApi.Endpoint)
 			if err != nil {
 				return nil, err
 			}
@@ -339,8 +339,8 @@ func obtainThingsIXRoutesFunc(cfg *Config) (RoutesUpdaterFunc, error) {
 			if err := json.NewDecoder(resp.Body).Decode(&snapshot); err != nil {
 				return nil, err
 			}
-			if snapshot.ChainID != cfg.Routes.ChainID {
-				return nil, fmt.Errorf("invalid routes snapshot, got %d, want %d", snapshot.ChainID, cfg.Routes.ChainID)
+			if snapshot.ChainID != cfg.Routers.ChainID {
+				return nil, fmt.Errorf("invalid routes snapshot, got %d, want %d", snapshot.ChainID, cfg.Routers.ChainID)
 			}
 
 			// convert from snapshot to internal format

@@ -19,7 +19,7 @@ packet_exchange:
           private_key: 22cb0649f72fb2adb5160028751a336883c395cd9652cb36f00007e523d29e6b     # gateway private key as assigned by the owner, gateway network id is derived from this
           owner: 0xE10A9A4263eE02062f1248Ff79090cAF48176E01                                 # gateway owner
           
-routes:
+routers:
     # default routers, usefull for personal routers that are not registered
     # but will receive all data
     default:

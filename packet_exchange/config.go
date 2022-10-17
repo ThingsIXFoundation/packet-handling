@@ -93,7 +93,7 @@ type Config struct {
 		// TrustedGateways is the list of gateways that are allowed to connect
 		TrustedGateways []*Gateway `mapstructure:"gateways"`
 	} `mapstructure:"packet_exchange"`
-	Routes struct {
+	Routers struct {
 		// Default routers that will receive all gateway data unfiltered
 		Default []*Router
 		// Interval indicates how often the routes are refreshed
@@ -183,7 +183,7 @@ func mustLoadConfig(args []string) *Config {
 
 	// set the Default flag on the defaultRouters to distinct them from routes
 	// loaded from ThingsIX
-	for _, r := range cfg.Routes.Default {
+	for _, r := range cfg.Routers.Default {
 		r.Default = true
 	}
 
