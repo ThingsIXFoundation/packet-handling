@@ -13,5 +13,7 @@
 go.work
 **/__debug_bin
 *.code-workspace
-/cmd/forwarder
-/cmd/router
+/cmd/forwarder/forwarder
+/cmd/router/router
+/cmd/packet_exchange/packet_exchange
+

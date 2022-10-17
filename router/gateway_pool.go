@@ -1,37 +1,39 @@
 package router
 
 import (
-	"bytes"
 	"fmt"
 	"sync"
 
-	"github.com/ThingsIXFoundation/packet-handling/gateway"
+	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/ThingsIXFoundation/router-api/go/router"
 	"github.com/brocaar/chirpstack-api/go/v3/gw"
+	"github.com/brocaar/lorawan"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/gofrs/uuid"
 	"github.com/sirupsen/logrus"
 )
 
 type forwarderManagedGateway struct {
-	forwarderID uint64
-	gatewayID   gateway.GatewayID
+	forwarderID uuid.UUID
+	gatewayID   lorawan.EUI64
 	forwarder   chan<- *router.RouterToGatewayEvent
 }
 
 type GatewayPool struct {
 	gatewaysMu sync.Mutex
-	gateways   map[gateway.GatewayID]*forwarderManagedGateway
+	gateways   map[lorawan.EUI64]*forwarderManagedGateway
 }
 
 func NewGatewayPool() (*GatewayPool, error) {
 	return &GatewayPool{
 		gatewaysMu: sync.Mutex{},
-		gateways:   make(map[gateway.GatewayID]*forwarderManagedGateway),
+		gateways:   make(map[lorawan.EUI64]*forwarderManagedGateway),
 	}, nil
 }
 
 // SetOnline must be called when the forwarder has a gateway connected and is
 // able to deliver packets to it.
-func (gp *GatewayPool) SetOnline(forwarderID uint64, gatewayID gateway.GatewayID, forwarderEventSender chan<- *router.RouterToGatewayEvent) {
+func (gp *GatewayPool) SetOnline(forwarderID uuid.UUID, gatewayID lorawan.EUI64, gatewayOwner common.Address, forwarderEventSender chan<- *router.RouterToGatewayEvent) {
 	gp.gatewaysMu.Lock()
 	defer gp.gatewaysMu.Unlock()
 
@@ -43,12 +45,13 @@ func (gp *GatewayPool) SetOnline(forwarderID uint64, gatewayID gateway.GatewayID
 
 	logrus.WithFields(logrus.Fields{
 		"forwarder": forwarderID,
-		"gateway":   gatewayID}).Debug("gateway online")
+		"gateway":   gatewayID,
+		"owner":     gatewayOwner}).Info("gateway online")
 }
 
 // SetOffline must be called when a forwarder detects one of its gateways is
 // offline so it won't be able to deliver packages to it.
-func (gp *GatewayPool) SetOffline(forwarderID uint64, gatewayID gateway.GatewayID) {
+func (gp *GatewayPool) SetOffline(forwarderID uuid.UUID, gatewayID lorawan.EUI64) {
 	gp.gatewaysMu.Lock()
 	defer gp.gatewaysMu.Unlock()
 
@@ -61,7 +64,7 @@ func (gp *GatewayPool) SetOffline(forwarderID uint64, gatewayID gateway.GatewayI
 
 // AllOffline must be called whan a forwarder goes offline and all its gateways
 // are therefore immediatly offline.
-func (gp *GatewayPool) AllOffline(forwarderID uint64) {
+func (gp *GatewayPool) AllOffline(forwarderID uuid.UUID) {
 	gp.gatewaysMu.Lock()
 	defer gp.gatewaysMu.Unlock()
 
@@ -86,24 +89,28 @@ func (gp *GatewayPool) DownlinkFrame(frame gw.DownlinkFrame) {
 			},
 		},
 	}
-	gp.send(frame.GatewayId, event)
+	gp.sendDownlink(frame.GatewayId, event)
 }
 
-func (gp *GatewayPool) send(addressedGatewayID []byte, event *router.RouterToGatewayEvent) {
+func (gp *GatewayPool) sendDownlink(addressedGatewayID []byte, event *router.RouterToGatewayEvent) {
 	gp.gatewaysMu.Lock()
 	defer gp.gatewaysMu.Unlock()
 
-	logrus.Debug("hier")
-
-	// send packet to matched forwarders
-	for gatewayID, gateway := range gp.gateways {
-
-		if bytes.Equal(gatewayID[:], addressedGatewayID[:]) {
-			gateway.forwarder <- event
-			logrus.WithFields(logrus.Fields{
-				"gatewayID": gatewayID,
-				"eventType": fmt.Sprintf("%T", event.GetEvent()),
-			}).Debug("send event to forwarder")
+	if gwId, err := utils.BytesToGatewayID(addressedGatewayID); err == nil {
+		// send packet to forwarders that have this gateway attached
+		for gatewayID, gateway := range gp.gateways {
+			if gatewayID == gwId {
+				gateway.forwarder <- event
+				logrus.WithFields(logrus.Fields{
+					"gw_network_id": gatewayID,
+					"event_type":    fmt.Sprintf("%T", event.GetEvent()),
+					"forwarder_id":  gateway.forwarderID,
+				}).Info("sent downlink to forwarder")
+			}
 		}
+	} else {
+		logrus.WithError(err).
+			WithField("addressed_gw_id", fmt.Sprintf("%x", addressedGatewayID)).
+			Error("invalid gateway id")
 	}
 }

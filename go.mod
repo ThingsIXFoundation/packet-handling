@@ -3,8 +3,9 @@ module github.com/ThingsIXFoundation/packet-handling
 go 1.18
 
 require (
+	github.com/ThingsIXFoundation/bitoffset v0.0.0-20220901094204-e13ace111f87
 	github.com/ThingsIXFoundation/coverage-api/go v0.0.0-20220803123334-7bbcb33bb9d9
-	github.com/ThingsIXFoundation/router-api/go v0.0.0-20220811134609-fe6b1039fe4b
+	github.com/ThingsIXFoundation/router-api/go v0.0.0-20221003103949-a0f155c71f3c
 	github.com/apex/log v1.1.0
 	github.com/brocaar/chirpstack-api/go/v3 v3.12.5
 	github.com/brocaar/lorawan v0.0.0-20220715134808-3b283dda1534
@@ -16,6 +17,7 @@ require (
 	github.com/goreleaser/goreleaser v0.106.0
 	github.com/goreleaser/nfpm v0.11.0
 	github.com/gorilla/websocket v1.5.0
+	github.com/mitchellh/mapstructure v1.5.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.13.0
@@ -30,7 +32,6 @@ require (
 
 require (
 	github.com/Masterminds/semver v1.4.2 // indirect
-	github.com/ThingsIXFoundation/bitoffset v0.0.0-20220901094204-e13ace111f87 // indirect
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d // indirect
 	github.com/aws/aws-sdk-go v1.27.0 // indirect
@@ -60,7 +61,6 @@ require (
 	github.com/mattn/go-zglob v0.0.0-20180803001819-2ea3427bfa53 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
-	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.2 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect

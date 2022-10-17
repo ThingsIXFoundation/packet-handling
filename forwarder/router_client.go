@@ -113,15 +113,14 @@ func (rc *RouterClient) DeliverDataUp(gw *gateway.Gateway, frame gw.UplinkFrame)
 
 	event := router.GatewayToRouterEvent{
 		GatewayInformation: &router.GatewayInformation{
-			Id:        gw.NetworkGatewayID.Bytes(),
 			PublicKey: gw.CompressedPublicKeyBytes,
-			Owner:     gw.Owner.Hex(),
+			Owner:     gw.Owner.Bytes(),
 		},
 		Event: &router.GatewayToRouterEvent_UplinkFrameEvent{
 			UplinkFrameEvent: &router.UplinkFrameEvent{
 				UplinkFrame: &frame,
 				AirtimeReceipt: &router.AirtimeReceipt{
-					Owner:   gw.Owner.Hex(),
+					Owner:   gw.Owner.Bytes(),
 					Airtime: uint32(airtime.Milliseconds()),
 				},
 			},
@@ -141,9 +140,8 @@ func (rc *RouterClient) DeliverJoin(gw *gateway.Gateway, frame gw.UplinkFrame) {
 func (rc *RouterClient) DeliverGatewayStatus(gw *gateway.Gateway, online bool) {
 	event := router.GatewayToRouterEvent{
 		GatewayInformation: &router.GatewayInformation{
-			Id:        gw.NetworkGatewayID.Bytes(),
 			PublicKey: gw.CompressedPublicKeyBytes,
-			Owner:     gw.Owner.Hex(),
+			Owner:     gw.Owner.Bytes(),
 		},
 		Event: &router.GatewayToRouterEvent_StatusEvent{
 			StatusEvent: &router.StatusEvent{
