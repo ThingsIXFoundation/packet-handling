@@ -67,7 +67,7 @@ func NewExchange(cfg *Config) (*Exchange, error) {
 	// instantiate exchange
 	exchange := &Exchange{
 		backend:      backend,
-		accounting:   cfg.PacketExchange.Accounting.Accounter(),
+		accounting:   cfg.PacketExchange.Accounting.Strategy(),
 		routingTable: routingTable,
 		trustedGateways: GatewaySet{
 			byLocalID:   trustedGatewaysByLocalID,

@@ -15,7 +15,7 @@ import (
 func Run(cmd *cobra.Command, args []string) {
 	var (
 		ctx, shutdown = context.WithCancel(context.Background())
-		cfg           = mustLoadConfig(args)
+		cfg           = mustLoadConfig()
 		wg            sync.WaitGroup
 		sign          = make(chan os.Signal, 1)
 		exchange, err = NewExchange(cfg)

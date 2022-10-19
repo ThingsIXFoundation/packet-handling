@@ -308,9 +308,9 @@ func buildRoutingTable(cfg *Config) (*RoutingTable, error) {
 }
 
 func obtainThingsIXRoutesFunc(cfg *Config) (RoutesUpdaterFunc, error) {
-	accounter := cfg.PacketExchange.Accounting.Accounter()
+	accounter := cfg.PacketExchange.Accounting.Strategy()
 
-	if cfg.Routers.SmartContract != nil && cfg.Routers.SmartContract.Address != (common.Address{}) {
+	if cfg.Routers.RegistryContract != nil && *cfg.Routers.RegistryContract != (common.Address{}) {
 		return func() ([]*Router, error) {
 			// TODO: add routers from ThingsIX smart contract to routes array
 			return nil, fmt.Errorf("refresh from smart contract not implemented")
@@ -339,8 +339,8 @@ func obtainThingsIXRoutesFunc(cfg *Config) (RoutesUpdaterFunc, error) {
 			if err := json.NewDecoder(resp.Body).Decode(&snapshot); err != nil {
 				return nil, err
 			}
-			if snapshot.ChainID != cfg.Routers.ChainID {
-				return nil, fmt.Errorf("invalid routes snapshot, got %d, want %d", snapshot.ChainID, cfg.Routers.ChainID)
+			if snapshot.ChainID != cfg.BlockChain.ChainID {
+				return nil, fmt.Errorf("invalid routes snapshot, got %d, want %d", snapshot.ChainID, cfg.BlockChain.ChainID)
 			}
 
 			// convert from snapshot to internal format

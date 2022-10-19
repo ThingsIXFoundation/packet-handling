@@ -17,7 +17,7 @@ import (
 	"github.com/gofrs/uuid"
 	"github.com/golang/protobuf/proto"
 	"github.com/sirupsen/logrus"
-	"github.com/uber/h3-go"
+	"github.com/uber/h3-go/v4"
 )
 
 type MapperForwarder struct {
@@ -31,10 +31,7 @@ func NewMapperForwarder(exchange *Exchange) (*MapperForwarder, error) {
 
 func IsMaybeMapperPacket(payload *lorawan.MACPayload) bool {
 	logrus.Infof("dev_addr=%s", hex.EncodeToString(payload.FHDR.DevAddr[:]))
-	if payload.FHDR.DevAddr[0] == 0x02 {
-		return true
-	}
-	return false
+	return payload.FHDR.DevAddr[0] == 0x02
 }
 
 func (mc *MapperForwarder) HandleMapperPacket(frame gw.UplinkFrame, mac *lorawan.MACPayload) {
@@ -75,8 +72,8 @@ func (mc *MapperForwarder) HandleMapperPacket(frame gw.UplinkFrame, mac *lorawan
 	lat, lon := dp.LatLon()
 	logrus.Infof("packet was mapped at: %f, %f", float64(lat)/1000000, float64(lon)/1000000)
 
-	region := h3.FromGeo(dp.LatLonGeoCoordinate(), 3)
-	logrus.Infof("packet is for region: %s", h3.ToString(region))
+	region := h3.LatLngToCell(dp.LatLonGeoCoordinate(), 3)
+	logrus.Infof("packet is for region: %s", region)
 
 	dpr := &mapper.DiscoveryPacketReceipt{
 		Frequency:        frame.TxInfo.Frequency,
@@ -162,6 +159,6 @@ func (mc *MapperForwarder) HandleMapperPacket(frame gw.UplinkFrame, mac *lorawan
 	}()
 }
 
-func (m *MapperForwarder) mapperClientForRegion(region h3.H3Index) (*CoverageClient, error) {
+func (m *MapperForwarder) mapperClientForRegion(region h3.Cell) (*CoverageClient, error) {
 	return NewCoverageClient()
 }

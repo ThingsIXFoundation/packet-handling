@@ -16,28 +16,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-type ExchangeAccountingConfig map[string]interface{}
-
-type AccountingType string
-
-func (b ExchangeAccountingConfig) Type() AccountingType {
-	fields := map[string]interface{}(b)
-	return AccountingType(fields["type"].(string))
-}
-
-func (b ExchangeAccountingConfig) Accounter() Accounter {
-	switch b.Type() {
-	case NoAccountingType:
-		return NewNoAccountingStrategy()
-	default:
-		return NewNoAccountingStrategy()
-	}
-}
-
-const (
-	NoAccountingType AccountingType = "no_accounting"
-)
-
 type ExchangeGatewayBackendConfig map[string]interface{}
 
 type BackendType string
@@ -75,11 +53,30 @@ func (b ExchangeGatewayBackendConfig) SemtechUDPConfig() (*semtechBackendConfig,
 	return &cfg, nil
 }
 
+type AccountingStrategy struct{}
+
+func (strat *AccountingStrategy) Strategy() Accounter {
+	if strat == nil { // user has not configured accounting, disable it
+		return NewNoAccountingStrategy()
+	}
+	return NewNoAccountingStrategy() // TODO: support other accounting in the future
+}
+
 type Config struct {
 	Log struct {
 		Level     logrus.Level
 		Timestamp bool
 	}
+
+	BlockChain struct {
+		Endpoint      string
+		ChainID       uint64
+		Confirmations uint64
+	} `mapstructure:"blockchain"`
+
+	Gateways struct {
+	}
+
 	PacketExchange struct {
 		// Backend represents a backend configuration as suported by the Chirpstack project.
 		// Unfornutaly chirpstack uses inline struct definitions making it impossible for us
@@ -88,27 +85,29 @@ type Config struct {
 
 		// Optional account strategy configuration, if not specified no account is used meaning
 		// that all packets are exchanged between gateway and routers.
-		Accounting *ExchangeAccountingConfig
+		Accounting *AccountingStrategy
 
 		// TrustedGateways is the list of gateways that are allowed to connect
 		TrustedGateways []*Gateway `mapstructure:"gateways"`
 	} `mapstructure:"packet_exchange"`
+
 	Routers struct {
 		// Default routers that will receive all gateway data unfiltered
 		Default []*Router
 		// Interval indicates how often the routes are refreshed
 		UpdateInterval time.Duration `mapstructure:"update_interval"`
-		ChainID        uint64        `mapstructure:"chain_id"`
-		ThingsIXApi    *struct {
+
+		// ThingsIXApi indicates when non-nil that router information must be
+		// fetched from the ThingsIX API
+		ThingsIXApi *struct {
 			Endpoint *string
 		} `mapstructure:"thingsix_api"`
-		// SmartContract retrieves routing information direct from the ThingsIX router contract
-		SmartContract *struct {
-			Confirmations uint64
-			Address       common.Address
-			Endpoint      *string
-		} `mapstructure:"smart_contract"`
+
+		// RegistryContract indicates when non-nil that router information must
+		// be fetched from the registry smart contract (required blockchain cfg)
+		RegistryContract *common.Address `mapstructure:"registry"`
 	}
+
 	Metrics *struct {
 		Prometheus *struct {
 			Host string
@@ -146,9 +145,15 @@ func (cfg Config) MetricsPrometheusPath() string {
 	return path
 }
 
-func mustLoadConfig(args []string) *Config {
-	if len(args) == 1 {
-		viper.SetConfigFile(args[0])
+func mustLoadConfig() *Config {
+	viper.SetConfigName("forwarder")        // name of config file (without extension)
+	viper.SetConfigType("yaml")             // REQUIRED if the config file does not have the extension in the name
+	viper.AddConfigPath("/etc/thingsix/")   // path to look for the config file in
+	viper.AddConfigPath("$HOME/.forwarder") // call multiple times to add many search paths
+	viper.AddConfigPath(".")
+
+	if configFile := viper.GetString("config"); configFile != "" {
+		viper.SetConfigFile(configFile)
 	}
 
 	if err := viper.ReadInConfig(); err != nil {
@@ -166,20 +171,12 @@ func mustLoadConfig(args []string) *Config {
 		utils.StringToLogrusLevel(),
 		decodeTrustedGatewayHook,
 		decodeExchangeGatewayBackend,
-		decodeExchangeAccountingStrategy,
 	))); err != nil {
 		logrus.WithError(err).Fatal("unable to load configuration")
 	}
 
 	logrus.SetLevel(cfg.Log.Level)
 	logrus.SetFormatter(&logrus.TextFormatter{FullTimestamp: cfg.Log.Timestamp})
-
-	// if accounting is not specified use the default no accounting
-	if cfg.PacketExchange.Accounting == nil {
-		cfg.PacketExchange.Accounting = &ExchangeAccountingConfig{
-			"type": NoAccountingType,
-		}
-	}
 
 	// set the Default flag on the defaultRouters to distinct them from routes
 	// loaded from ThingsIX
@@ -188,31 +185,6 @@ func mustLoadConfig(args []string) *Config {
 	}
 
 	return &cfg
-}
-
-func decodeExchangeAccountingStrategy(f reflect.Type, t reflect.Type, data interface{}) (interface{}, error) {
-	if f.Kind() != reflect.Map || t != reflect.TypeOf(ExchangeAccountingConfig{}) {
-		return data, nil
-	}
-
-	fields := data.(map[string]interface{})
-	if typ, ok := fields["type"].(string); ok {
-		switch strings.ToLower(typ) {
-		case string(NoAccountingType):
-			if len(fields) != 1 {
-				return nil, fmt.Errorf("invalid backend accounting configuration")
-			}
-			return fields, nil
-		}
-	} else {
-		// use default no accounting if accounting is not configured
-		if len(fields) != 0 {
-			return nil, fmt.Errorf("invalid backend accounting configuration")
-		}
-		fields["type"] = NoAccountingType
-		return fields, nil
-	}
-	return nil, fmt.Errorf("unsupported accounting '%s'", fields["type"])
 }
 
 func decodeExchangeGatewayBackend(f reflect.Type, t reflect.Type, data interface{}) (interface{}, error) {
