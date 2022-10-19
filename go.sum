@@ -47,6 +47,10 @@ github.com/ThingsIXFoundation/bitoffset v0.0.0-20220901094204-e13ace111f87 h1:wm
 github.com/ThingsIXFoundation/bitoffset v0.0.0-20220901094204-e13ace111f87/go.mod h1:r6KO5Gspfei9BMgBUgdJoKFWiar847wKgZcu5SnJ7As=
 github.com/ThingsIXFoundation/coverage-api/go v0.0.0-20220803123334-7bbcb33bb9d9 h1:cRhq7ZCxA1DXvq5oIGH7p6gstJMtQdYO3ms4+rZZaqI=
 github.com/ThingsIXFoundation/coverage-api/go v0.0.0-20220803123334-7bbcb33bb9d9/go.mod h1:o+wQi2u/QhFgo77Ny+90yupDIxydUNqm11KGfpZWJVI=
+github.com/ThingsIXFoundation/definitions-go v0.0.0-20220903183434-4db64df12150 h1:nLusp+scBD+xf3Kt3LeyOrI8k501zb0Gk7UuL5aaV20=
+github.com/ThingsIXFoundation/definitions-go v0.0.0-20220903183434-4db64df12150/go.mod h1:+gT93lCWY4skjvUbG7zWSsHp03ZLVx+c7d1tC8P+SQ4=
+github.com/ThingsIXFoundation/definitions-go v0.0.0-20221019100243-e4db1da7c91b h1:67IAgPkbR5CTrImAmEdDRwAobBN5DVuCaH9hitpMPvg=
+github.com/ThingsIXFoundation/definitions-go v0.0.0-20221019100243-e4db1da7c91b/go.mod h1:+gT93lCWY4skjvUbG7zWSsHp03ZLVx+c7d1tC8P+SQ4=
 github.com/ThingsIXFoundation/gateway-registry-go v0.0.0-20220902125634-f57b1b495aa3 h1:GTr5DBrROFWbQOwwGz3LCNK0kT2RIHTLw+Hti6VLD5g=
 github.com/ThingsIXFoundation/gateway-registry-go v0.0.0-20220902125634-f57b1b495aa3/go.mod h1:/d0dfBbjyrZL1DU+Ct4ORT/dFBT7b+N9cH97r3M+wxo=
 github.com/ThingsIXFoundation/router-api/go v0.0.0-20221003103949-a0f155c71f3c h1:nUQcse/QeDREN7Sbt47QQokvKPZIQ7ICxa5JiZ45I3s=

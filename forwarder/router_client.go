@@ -1,4 +1,4 @@
-package packetexchange
+package forwarder
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ThingsIXFoundation/packet-handling/packet_exchange/broadcast"
+	"github.com/ThingsIXFoundation/packet-handling/forwarder/broadcast"
 	"github.com/ThingsIXFoundation/router-api/go/router"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gofrs/uuid"
@@ -256,8 +256,8 @@ func (rc *RouterClient) run(ctx context.Context) error {
 					if rc.router.InterestedIn(ev.uplink.device) {
 						log.WithFields(logrus.Fields{
 							"devaddr":       ev.uplink.device,
-							"gw_network_id": ev.receivedFrom.NetworkID,
-							"gw-local-id":   ev.receivedFrom.LocalID,
+							"gw_network_id": ev.receivedFrom.NetworkGatewayID,
+							"gw-local-id":   ev.receivedFrom.LocalGatewayID,
 							"uplink_id":     uuid.FromBytesOrNil(ev.uplink.event.GetUplinkFrameEvent().UplinkFrame.GetRxInfo().GetUplinkId()),
 						}).Info("forward uplink packet")
 
@@ -278,8 +278,8 @@ func (rc *RouterClient) run(ctx context.Context) error {
 					if rc.router.AcceptsJoin(ev.join.joinEUI) {
 						log.WithFields(logrus.Fields{
 							"joinEUI":       ev.join.joinEUI,
-							"gw_network_id": ev.receivedFrom.NetworkID,
-							"gw-local-id":   ev.receivedFrom.LocalID,
+							"gw_network_id": ev.receivedFrom.NetworkGatewayID,
+							"gw-local-id":   ev.receivedFrom.LocalGatewayID,
 							"uplink_id":     uuid.FromBytesOrNil(ev.join.event.GetUplinkFrameEvent().UplinkFrame.GetRxInfo().GetUplinkId()),
 						}).Info("forward join to router")
 						if err := eventStream.Send(ev.join.event); err != nil {
@@ -294,8 +294,8 @@ func (rc *RouterClient) run(ctx context.Context) error {
 						delete(pendingDownlinkAcks, downlinkID)
 						log.WithFields(logrus.Fields{
 							"downlink_id":   fmt.Sprintf("%x", downlinkID[:8]),
-							"gw_network_id": ev.receivedFrom.NetworkID,
-							"gw-local-id":   ev.receivedFrom.LocalID,
+							"gw_network_id": ev.receivedFrom.NetworkGatewayID,
+							"gw-local-id":   ev.receivedFrom.LocalGatewayID,
 						}).Info("forward downlink ACK to router")
 						if err := eventStream.Send(ev.downlinkAck.event); err != nil {
 							return fmt.Errorf("unable to send event to router: %w", err)

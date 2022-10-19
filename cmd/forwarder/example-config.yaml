@@ -20,15 +20,9 @@ packet_exchange:
     
     accounting: # forwarder doesn't yet support accounting
     
-    # list of gateways that are allowed to use this packet exchange
-    gateways:
-        - local_id: 0016c001f1500812                                                        # id as the gateway internally uses
-          private_key: 22cb0649f72fb2adb5160028751a336883c395cd9652cb36f00007e523d29e6b     # gateway private key as assigned by the owner, gateway network id is derived from this
-          owner: 0xE10A9A4263eE02062f1248Ff79090cAF48176E01                                 # gateway owner
-
 gateways:
-    thingsix_gateway_registry: 0xA68f199c095a6e675f462DE92012F673842C636f
-    yaml_store: /tmp/gateways.store
+    gateway_registry: 0xDAA93030749C7fE99B0A26Ac8074D49143A47C4e
+    yaml_store: /var/home/bas/dev/thingsix/packet-handling/cmd/forwarder/gateways.store
 
 routers:
     # default routers, usefull for personal routers that are not registered

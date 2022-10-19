@@ -1,34 +1,15 @@
-package packetexchange
+package forwarder
 
 import (
-	"crypto/ecdsa"
 	"encoding/hex"
 
 	"github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/backend/events"
+	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	"github.com/ThingsIXFoundation/router-api/go/router"
 	"github.com/brocaar/chirpstack-api/go/v3/gw"
 	"github.com/brocaar/lorawan"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/sirupsen/logrus"
 )
-
-// Gateway is loaded from configuration and represents a gateway that is allowed
-// to connect. The configuration holds the associated private key that is used to
-// derive the gateways network id. This network id identifiers the gateway in the
-// LoRa network.
-type Gateway struct {
-	// LocalID is the gateways local identifier as used by the LoRa concentrator
-	LocalID lorawan.EUI64 `mapstructure:"Local_id"`
-	// 	NetworkID is the network id as the gateway is known in the network server.
-	NetworkID lorawan.EUI64 `mapstructure:"-"`
-	// privateKey is the gateways private key as used for ThingsIX. Its network id
-	// is derived from the this key
-	privateKey *ecdsa.PrivateKey `mapstructure:"private_key"`
-	// CompressedPublicKeyBytes is derived from the private key
-	CompressedPublicKeyBytes []byte `mapstructure:"-"`
-	// Owner holds the gateway owners address
-	Owner common.Address
-}
 
 // Backend defines the interface that a backend must implement
 type Backend interface {
@@ -64,11 +45,11 @@ type Backend interface {
 }
 
 type GatewaySet struct {
-	byLocalID   map[lorawan.EUI64]*Gateway
-	byNetworkID map[lorawan.EUI64]*Gateway
+	byLocalID   map[lorawan.EUI64]*gateway.Gateway
+	byNetworkID map[lorawan.EUI64]*gateway.Gateway
 }
 
-func (gs GatewaySet) ByLocalIDBytes(id []byte) (*Gateway, bool) {
+func (gs GatewaySet) ByLocalIDBytes(id []byte) (*gateway.Gateway, bool) {
 	var lid lorawan.EUI64
 	if len(id) != len(lid) {
 		logrus.WithField("id", hex.EncodeToString(id)).Warn("search gateway by invalid id")
@@ -78,12 +59,12 @@ func (gs GatewaySet) ByLocalIDBytes(id []byte) (*Gateway, bool) {
 	return gs.ByLocalID(lid)
 }
 
-func (gs GatewaySet) ByLocalID(id lorawan.EUI64) (*Gateway, bool) {
+func (gs GatewaySet) ByLocalID(id lorawan.EUI64) (*gateway.Gateway, bool) {
 	gw, found := gs.byLocalID[id]
 	return gw, found
 }
 
-func (gs GatewaySet) ByNetworkIDBytes(id []byte) (*Gateway, bool) {
+func (gs GatewaySet) ByNetworkIDBytes(id []byte) (*gateway.Gateway, bool) {
 	var lid lorawan.EUI64
 	if len(id) != len(lid) {
 		logrus.WithField("id", hex.EncodeToString(id)).Warn("search gateway by invalid id")
@@ -93,7 +74,7 @@ func (gs GatewaySet) ByNetworkIDBytes(id []byte) (*Gateway, bool) {
 	return gs.ByLocalID(lid)
 }
 
-func (gs GatewaySet) ByNetworkID(id lorawan.EUI64) (*Gateway, bool) {
+func (gs GatewaySet) ByNetworkID(id lorawan.EUI64) (*gateway.Gateway, bool) {
 	gw, found := gs.byNetworkID[id]
 	return gw, found
 }
@@ -120,7 +101,7 @@ type GatewayEvent struct {
 		downlinkID []byte
 		event      *router.GatewayToRouterEvent
 	}
-	receivedFrom *Gateway
+	receivedFrom *gateway.Gateway
 }
 
 func (ge GatewayEvent) IsUplink() bool {

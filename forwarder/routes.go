@@ -1,4 +1,4 @@
-package packetexchange
+package forwarder
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/FastFilter/xorfilter"
-	"github.com/ThingsIXFoundation/packet-handling/packet_exchange/broadcast"
+	"github.com/ThingsIXFoundation/packet-handling/forwarder/broadcast"
 	"github.com/brocaar/lorawan"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/sirupsen/logrus"
