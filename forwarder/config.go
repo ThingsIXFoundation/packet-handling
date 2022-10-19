@@ -1,8 +1,6 @@
-package packetexchange
+package forwarder
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"reflect"
 	"strings"
@@ -10,7 +8,6 @@ import (
 
 	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/mitchellh/mapstructure"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -70,11 +67,13 @@ type Config struct {
 
 	BlockChain struct {
 		Endpoint      string
-		ChainID       uint64
+		ChainID       uint64 `mapstructure:"chain_id"`
 		Confirmations uint64
 	} `mapstructure:"blockchain"`
 
 	Gateways struct {
+		RegistryAddress *common.Address `mapstructure:"gateway_registry"`
+		YamlStorePath   *string         `mapstructure:"yaml_store"`
 	}
 
 	PacketExchange struct {
@@ -86,9 +85,6 @@ type Config struct {
 		// Optional account strategy configuration, if not specified no account is used meaning
 		// that all packets are exchanged between gateway and routers.
 		Accounting *AccountingStrategy
-
-		// TrustedGateways is the list of gateways that are allowed to connect
-		TrustedGateways []*Gateway `mapstructure:"gateways"`
 	} `mapstructure:"packet_exchange"`
 
 	Routers struct {
@@ -169,7 +165,6 @@ func mustLoadConfig() *Config {
 		utils.StringToHashHook(),
 		utils.StringToDuration(),
 		utils.StringToLogrusLevel(),
-		decodeTrustedGatewayHook,
 		decodeExchangeGatewayBackend,
 	))); err != nil {
 		logrus.WithError(err).Fatal("unable to load configuration")
@@ -202,55 +197,4 @@ func decodeExchangeGatewayBackend(f reflect.Type, t reflect.Type, data interface
 		}
 	}
 	return nil, fmt.Errorf("unsupported backend '%s'", fields["type"])
-}
-
-func decodeTrustedGatewayHook(f reflect.Type, t reflect.Type, data interface{}) (interface{}, error) {
-	if f.Kind() != reflect.Map || t != reflect.TypeOf(Gateway{}) {
-		return data, nil
-	}
-
-	var (
-		fields     = data.(map[string]interface{})
-		localID    = fields["local_id"]
-		privateKey = fields["private_key"]
-		gw         = Gateway{
-			Owner: common.HexToAddress(fields["owner"].(string)),
-		}
-	)
-
-	if localIDStr, ok := localID.(string); ok {
-		id, err := hex.DecodeString(localIDStr)
-		if err != nil {
-			return nil, fmt.Errorf("invalid trusted gateway local id")
-		}
-		if len(gw.LocalID) != len(id) {
-			return nil, fmt.Errorf("invalid trusted gateway local id")
-		}
-		copy(gw.LocalID[:], id)
-	} else {
-		return nil, fmt.Errorf("invalid trusted gateway local id")
-	}
-
-	if privateKeyStr, ok := privateKey.(string); ok {
-		key, err := crypto.HexToECDSA(privateKeyStr)
-		if err != nil {
-			return nil, fmt.Errorf("invalid trusted gateway private key")
-		}
-		gw.privateKey = key
-	} else {
-		return nil, fmt.Errorf("invalid trusted gateway private key")
-	}
-
-	var (
-		pub      = gw.privateKey.PublicKey
-		pubBytes = crypto.CompressPubkey(&pub)
-		// compressed ThingsIX public keys always start with 0x02.
-		// therefore don't use it and use bytes [1:] to derive the id
-		h = sha256.Sum256(pubBytes[1:])
-	)
-
-	gw.CompressedPublicKeyBytes = pubBytes
-	copy(gw.NetworkID[:], h[:8])
-
-	return &gw, nil
 }

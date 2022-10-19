@@ -37,6 +37,7 @@ require (
 
 require (
 	github.com/Masterminds/semver v1.4.2 // indirect
+	github.com/ThingsIXFoundation/definitions-go v0.0.0-20221019100243-e4db1da7c91b
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d // indirect
 	github.com/apex/log v1.1.0 // indirect

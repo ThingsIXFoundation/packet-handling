@@ -20,6 +20,18 @@ type Gateway struct {
 	Owner                    common.Address
 }
 
+// ID is the identifier as which the gateway is registered in the gateway registry.
+func (gw Gateway) ID() [32]byte {
+	var id [32]byte
+	copy(id[:], gw.CompressedPublicKeyBytes)
+	return id
+}
+
+// CompressedPubKeyBytes returns the compressed public key including 0x02 prefix
+func (gw Gateway) CompressedPubKeyBytes() []byte {
+	return append([]byte{0x2}, gw.CompressedPublicKeyBytes...)
+}
+
 func NewGateway(localGatewayID lorawan.EUI64, priv *ecdsa.PrivateKey) (*Gateway, error) {
 	return &Gateway{
 		LocalGatewayID:           localGatewayID,

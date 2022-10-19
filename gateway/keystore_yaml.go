@@ -33,8 +33,8 @@ type gatewayYAML struct {
 	PrivateKey string        `yaml:"private_key"`
 }
 
-func (store *GatewayYamlFileStore) Gateways() ([]*Gateway, error) {
-	return store.gateways, nil
+func (store *GatewayYamlFileStore) Gateways() []*Gateway {
+	return store.gateways
 }
 
 func (store *GatewayYamlFileStore) GatewayByThingsIxID(id [32]byte) (*Gateway, error) {
@@ -55,6 +55,15 @@ func (store *GatewayYamlFileStore) GatewayByLocalID(id lorawan.EUI64) (*Gateway,
 	return nil, ErrNotFound
 }
 
+func (store *GatewayYamlFileStore) GatewayByLocalIDBytes(id []byte) (*Gateway, error) {
+	if len(id) == 8 {
+		var gid lorawan.EUI64
+		copy(gid[:], id)
+		return store.GatewayByLocalID(gid)
+	}
+	return nil, ErrInvalidGatewayID
+}
+
 func (store *GatewayYamlFileStore) GatewayByNetworkID(id lorawan.EUI64) (*Gateway, error) {
 	for _, gw := range store.gateways {
 		if gw.NetworkGatewayID == id {
@@ -62,6 +71,15 @@ func (store *GatewayYamlFileStore) GatewayByNetworkID(id lorawan.EUI64) (*Gatewa
 		}
 	}
 	return nil, ErrNotFound
+}
+
+func (store *GatewayYamlFileStore) GatewayByNetworkIDBytes(id []byte) (*Gateway, error) {
+	if len(id) == 8 {
+		var gid lorawan.EUI64
+		copy(gid[:], id)
+		return store.GatewayByNetworkID(gid)
+	}
+	return nil, ErrInvalidGatewayID
 }
 
 func (store *GatewayYamlFileStore) AddGateway(localID lorawan.EUI64, key *ecdsa.PrivateKey) error {
@@ -98,7 +116,7 @@ func (store *GatewayYamlFileStore) load() error {
 	gatewaysFile, err := os.Open(store.Path)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("unable to open gateway store: %w", err)
+			return ErrStoreNotExists
 		}
 		return nil
 	}

@@ -1,4 +1,4 @@
-package packetexchange
+package forwarder
 
 import (
 	"context"
@@ -35,7 +35,7 @@ func IsMaybeMapperPacket(payload *lorawan.MACPayload) bool {
 }
 
 func (mc *MapperForwarder) HandleMapperPacket(frame gw.UplinkFrame, mac *lorawan.MACPayload) {
-	gateway, err := mc.gatewayStore.GatewayByNetworkID(frame.RxInfo.GatewayId)
+	gateway, err := mc.gatewayStore.GatewayByNetworkIDBytes(frame.RxInfo.GatewayId)
 	if err != nil || gateway == nil {
 		logrus.WithFields(logrus.Fields{
 			"local_gateway_id": hex.EncodeToString(frame.RxInfo.GatewayId),

@@ -96,11 +96,6 @@ func listGatewayStore(cmd *cobra.Command, args []string) {
 		logrus.WithError(err).Fatal("unable to open gateway store")
 	}
 
-	gateways, err := store.Gateways()
-	if err != nil {
-		logrus.WithError(err).Fatal("unable to retrieve gateways from store")
-	}
-
 	if rpcEndpoint != "" {
 		client, err := ethclient.Dial(rpcEndpoint)
 		if err != nil {
@@ -113,7 +108,7 @@ func listGatewayStore(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	printGatewaysAsTable(gateways, registry)
+	printGatewaysAsTable(store.Gateways(), registry)
 }
 
 func addGatewayToStore(cmd *cobra.Command, args []string) {
