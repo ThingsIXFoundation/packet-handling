@@ -131,8 +131,18 @@ func (cfg Config) MetricsPrometheusPath() string {
 }
 
 func mustLoadConfig(args []string) *Config {
-	if len(args) == 1 {
-		viper.SetConfigFile(args[0])
+	viper.SetConfigName("router")         // name of config file (without extension)
+	viper.SetConfigType("yaml")           // REQUIRED if the config file does not have the extension in the name
+	viper.AddConfigPath("/etc/thingsix/") // path to look for the config file in
+	viper.AddConfigPath("$HOME/.router")  // call multiple times to add many search paths
+	viper.AddConfigPath(".")
+
+	if configFile := viper.GetString("config"); configFile != "" {
+		viper.SetConfigFile(configFile)
+	}
+
+	if err := viper.ReadInConfig(); err != nil {
+		logrus.WithError(err).Fatal("unable to read config")
 	}
 
 	if err := viper.ReadInConfig(); err != nil {
