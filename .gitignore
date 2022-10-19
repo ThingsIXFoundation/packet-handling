@@ -15,5 +15,4 @@ go.work
 *.code-workspace
 /cmd/forwarder/forwarder
 /cmd/router/router
-/cmd/packet_exchange/packet_exchange
 
