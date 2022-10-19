@@ -32,19 +32,14 @@ func NewGateway(localGatewayID lorawan.EUI64, priv *ecdsa.PrivateKey) (*Gateway,
 	}, nil
 }
 
-func GenerateNewGateway(localGatewayIDBytes []byte) (*Gateway, error) {
-	localGatewayID, err := utils.BytesToGatewayID(localGatewayIDBytes)
-	if err != nil {
-		return nil, err
-	}
-
+func GenerateNewGateway(localID lorawan.EUI64) (*Gateway, error) {
 	priv, err := GeneratePrivateKey()
 	if err != nil {
 		return nil, err
 	}
 
 	return &Gateway{
-		LocalGatewayID:           localGatewayID,
+		LocalGatewayID:           localID,
 		NetworkGatewayID:         CalculateNetworkGatewayID(priv),
 		PrivateKey:               priv,
 		PublicKey:                &priv.PublicKey,

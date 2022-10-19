@@ -5,7 +5,7 @@ import (
 
 	"github.com/ThingsIXFoundation/bitoffset"
 	"github.com/brocaar/lorawan"
-	"github.com/uber/h3-go"
+	"github.com/uber/h3-go/v4"
 )
 
 type MapperPacket struct {
@@ -65,9 +65,9 @@ func (dp DiscoveryPacket) LatLonFloat() (float64, float64) {
 	return float64(lat) / 1000000, float64(lon) / 1000000
 }
 
-func (dp DiscoveryPacket) LatLonGeoCoordinate() h3.GeoCoord {
+func (dp DiscoveryPacket) LatLonGeoCoordinate() h3.LatLng {
 	latf, lonf := dp.LatLonFloat()
-	return h3.GeoCoord{Latitude: latf, Longitude: lonf}
+	return h3.NewLatLng(latf, lonf)
 }
 
 type DownlinkTransmitPacket struct {

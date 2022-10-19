@@ -2,6 +2,14 @@ log:
     level: info      # [trace,debug,info,warn,error,fatal,panic]
     timestamp: true  # boolean [true, false]
 
+blockchain:
+    # Polygon node RPC endpoint
+    endpoint: https://matic-testnet-archive-rpc.bwarelabs.com
+     # Polygon chain id, 80001 for testnet, 137 for production
+    chain_id: 80001
+    # Block confirmations, blocks are final after 128 confirmations
+    confirmations: 128
+
 packet_exchange:
     # supported backend where gateways connect to
     backend:
@@ -10,15 +18,18 @@ packet_exchange:
         skip_crc_check: false
         fake_rx_time: false
     
-    accounting:
-        type: no_accounting     # rewards strategy [no_accounting]
+    accounting: # forwarder doesn't yet support accounting
     
     # list of gateways that are allowed to use this packet exchange
     gateways:
         - local_id: 0016c001f1500812                                                        # id as the gateway internally uses
           private_key: 22cb0649f72fb2adb5160028751a336883c395cd9652cb36f00007e523d29e6b     # gateway private key as assigned by the owner, gateway network id is derived from this
           owner: 0xE10A9A4263eE02062f1248Ff79090cAF48176E01                                 # gateway owner
-          
+
+gateways:
+    thingsix_gateway_registry: 0xA68f199c095a6e675f462DE92012F673842C636f
+    yaml_store: /tmp/gateways.store
+
 routers:
     # default routers, usefull for personal routers that are not registered
     # but will receive all data
@@ -29,16 +40,11 @@ routers:
           
     # retrieve routes snapshot every update_interval
     update_interval: 15m
-    # Polygon chain id, 80001 for testnet, 137 for production
-    chain_id: 80001
+   
     # indicate that routes must be fetched from the ThingsIX router API
     thingsix_api:
         # location where to fetch routes snapshot from
         endpoint: http://168.119.163.23/routers/v1/snapshot
-    # smart_contract:
-    #     confirmations: 128
-    #     address: 0x
-    #     endpoint:
 
 # enable prometheus metrics endpoint
 metrics:
