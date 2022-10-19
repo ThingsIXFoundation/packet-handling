@@ -35,10 +35,6 @@ type Exchange struct {
 	mapperForwarder *MapperForwarder
 }
 
-func loadGatewaysFromStore() {
-
-}
-
 // NewExchange instantiates a new packet exchange where gateways and
 // routers can exchange packets.
 func NewExchange(cfg *Config) (*Exchange, error) {

@@ -7,8 +7,8 @@ import (
 	"net/http"
 
 	"github.com/ThingsIXFoundation/coverage-api/go/mapper"
-	"github.com/golang/protobuf/proto"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/proto"
 )
 
 type CoverageClient struct {

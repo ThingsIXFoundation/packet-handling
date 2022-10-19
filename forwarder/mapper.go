@@ -15,9 +15,9 @@ import (
 	"github.com/brocaar/lorawan"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gofrs/uuid"
-	"github.com/golang/protobuf/proto"
 	"github.com/sirupsen/logrus"
 	"github.com/uber/h3-go/v4"
+	"google.golang.org/protobuf/proto"
 )
 
 type MapperForwarder struct {

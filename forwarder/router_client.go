@@ -45,7 +45,7 @@ type RouterClient struct {
 	// receives router details
 	routerDetails <-chan *RouterDetails
 
-	mapperForwarder *MapperForwarder
+	// TODO: mapperForwarder *MapperForwarder
 }
 
 func NewRouterClient(ctx context.Context, router *Router,
