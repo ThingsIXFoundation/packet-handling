@@ -327,11 +327,11 @@ func obtainThingsIXRoutesFunc(cfg *Config) (RoutesUpdaterFunc, error) {
 
 			snapshot := struct {
 				BlockNumber uint64
-				ChainID     uint64
+				ChainID     uint64 `json:"chainId"`
 				Routers     []struct {
 					Endpoint string
 					ID       string
-					Manager  common.Address
+					Owner    common.Address
 					Networks []uint32
 				}
 			}{}
@@ -340,7 +340,7 @@ func obtainThingsIXRoutesFunc(cfg *Config) (RoutesUpdaterFunc, error) {
 				return nil, err
 			}
 			if snapshot.ChainID != cfg.BlockChain.ChainID {
-				return nil, fmt.Errorf("invalid routes snapshot, got %d, want %d", snapshot.ChainID, cfg.BlockChain.ChainID)
+				return nil, fmt.Errorf("router snapshot from wrong chain, got %d, want %d", snapshot.ChainID, cfg.BlockChain.ChainID)
 			}
 
 			// convert from snapshot to internal format
@@ -362,7 +362,7 @@ func obtainThingsIXRoutesFunc(cfg *Config) (RoutesUpdaterFunc, error) {
 					binary.LittleEndian.PutUint32(netid[:], id)
 					netids[i] = lorawan.NetID{netid[0], netid[1], netid[2]}
 				}
-				routers[i] = NewRouter(id, r.Endpoint, false, netids, r.Manager, accounter)
+				routers[i] = NewRouter(id, r.Endpoint, false, netids, r.Owner, accounter)
 			}
 			logrus.WithField("#routers", len(routers)).Info("fetched routing table from ThingsIX API")
 			return routers, nil
