@@ -79,8 +79,8 @@ func (rc *RouterClient) Run(ctx context.Context) {
 				return reconnectInterval
 			}
 			reconnectInterval = reconnectInterval * 2
-			if reconnectInterval > time.Minute {
-				reconnectInterval = time.Minute
+			if reconnectInterval > (5 * time.Minute) {
+				reconnectInterval = 5 * time.Minute
 			}
 			return reconnectInterval
 		}
@@ -119,14 +119,14 @@ func (rc *RouterClient) Run(ctx context.Context) {
 			// attempt was more than 1 minute ago this indicates the communication
 			// was good for at least a short period, reset reconnect interval so it
 			// will retry to connect immediately
-			if time.Since(lastConnectAttempt) > (2 * time.Minute) {
+			if time.Since(lastConnectAttempt) > time.Minute {
 				reconnectInterval = 0
 			}
 		default: // connection with router dropped for whatever reason last connect
 			// attempt was more than 1 minute ago this indicates the communication
 			// was good for at least a short period, reset reconnect interval so it
 			// will retry to connect immediately
-			if time.Since(lastConnectAttempt) > (2 * time.Minute) {
+			if time.Since(lastConnectAttempt) > time.Minute {
 				reconnectInterval = 0
 			}
 		}
@@ -175,7 +175,7 @@ func (rc *RouterClient) run(ctx context.Context) error {
 	var (
 		log                 = logrus.WithField("router", rc.router)
 		pendingDownlinkAcks = make(map[[32]byte]time.Time)
-		dialCtx, cancel     = context.WithTimeout(ctx, 15*time.Second)
+		dialCtx, cancel     = context.WithTimeout(ctx, 30*time.Second)
 		kacp                = keepalive.ClientParameters{
 			Time:                20 * time.Second, // send pings every 20 seconds if there is no activity
 			Timeout:             5 * time.Second,  // wait 5 seconds for ping ack before considering the connection dead
