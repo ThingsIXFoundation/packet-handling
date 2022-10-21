@@ -8,6 +8,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+func buildAccounter(cfg *Config) (Accounter, error) {
+	return NewNoAccountingStrategy(), nil // not yet supported
+}
+
 // Accounter is implemented by account strategies that determine if a
 // packet must be forwarded to a router or not because it hasn't paid
 // for the service gateways connected to the packet exchange provide.

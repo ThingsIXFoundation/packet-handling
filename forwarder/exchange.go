@@ -8,6 +8,7 @@ import (
 
 	"github.com/ThingsIXFoundation/packet-handling/airtime"
 	"github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/backend/events"
+	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/ThingsIXFoundation/router-api/go/router"
 	"github.com/brocaar/chirpstack-api/go/v3/gw"
 	"github.com/brocaar/lorawan"
@@ -25,9 +26,12 @@ type Exchange struct {
 	backend Backend
 	// accounter is used to determine if a packet must be routed between a
 	// gateway and router because the router owner has paid for it.
-	accounting Accounter
+	accounter Accounter
 	// set with gateways that are allowed to use this exchange
 	trustedGateways GatewaySet
+	// recordUnknownGateway is called each time a gateway connects that is not
+	// in the gateway store
+	recordUnknownGateway UnknownGatewayLoggerFunc
 	// routes holds the required information to exchange data with
 	// external ThingsIX routers
 	routingTable *RoutingTable
@@ -43,6 +47,8 @@ func NewExchange(cfg *Config) (*Exchange, error) {
 		logrus.WithError(err).Fatal("unable to load gateway store")
 	}
 
+	// filter out gateways that are not yet onboarded and/or have their details
+	// set.
 	trustedGatewaysByLocalID, trustedGatewaysByNetworkID, err := onboardedAndRegisteredGateways(cfg, store)
 	if err != nil {
 		return nil, err
@@ -55,13 +61,20 @@ func NewExchange(cfg *Config) (*Exchange, error) {
 	}
 
 	// instantiate backend that gateways use to send/recv packets to/from the exchange.
-	backend, err := buildBackend(cfg.PacketExchange.Backend)
+	backend, err := buildBackend(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	// accounter that accepts router payments and deterimes if a packet can be
+	// sold/forwarder to a router
+	accounter, err := buildAccounter(cfg)
 	if err != nil {
 		return nil, err
 	}
 
 	// retrieve routes to exchange packets with interested routes
-	routingTable, err := buildRoutingTable(cfg)
+	routingTable, err := buildRoutingTable(cfg, accounter)
 	if err != nil {
 		return nil, err
 	}
@@ -69,12 +82,13 @@ func NewExchange(cfg *Config) (*Exchange, error) {
 	// instantiate exchange
 	exchange := &Exchange{
 		backend:      backend,
-		accounting:   cfg.PacketExchange.Accounting.Strategy(),
+		accounter:    accounter,
 		routingTable: routingTable,
 		trustedGateways: GatewaySet{
 			byLocalID:   trustedGatewaysByLocalID,
 			byNetworkID: trustedGatewaysByNetworkID,
 		},
+		recordUnknownGateway: NewUnknownGatewayLogger(cfg),
 	}
 
 	if exchange.mapperForwarder, err = NewMapperForwarder(exchange); err != nil {
@@ -107,7 +121,7 @@ func (e *Exchange) Run(ctx context.Context) {
 				if frame := in.event.GetDownlinkFrameEvent(); frame != nil {
 					e.handleDownlinkFrame(frame)
 				} else if airtimePayment := in.event.GetAirtimePaymentEvent(); airtimePayment != nil {
-					e.accounting.AddPayment(airtimePayment)
+					e.accounter.AddPayment(airtimePayment)
 				} else {
 					logrus.WithFields(logrus.Fields{
 						"source": in.source.Endpoint,
@@ -124,7 +138,12 @@ func (e *Exchange) Run(ctx context.Context) {
 }
 
 func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
-	gatewayLocalID := hex.EncodeToString(frame.GetRxInfo().GetGatewayId())
+	gatewayLocalID, err := utils.BytesToGatewayID(frame.GetRxInfo().GetGatewayId())
+	if err != nil {
+		logrus.WithError(err).Warn("received uplink from gateway with invalid gateway ID")
+		return
+	}
+
 	log := logrus.WithField("gw_local_id", gatewayLocalID)
 
 	// ensure that received frame is from a trusted gateway if not drop it
@@ -132,6 +151,7 @@ func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
 	if !ok {
 		uplinksCounter.WithLabelValues(gw.NetworkGatewayID.String(), "failed").Inc()
 		log.Warn("uplink from unknown gateway, drop packet")
+		e.recordUnknownGateway(gatewayLocalID)
 		return
 	}
 
@@ -149,8 +169,7 @@ func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
 
 	// convert the frame from its local format (gateway <-> exchange) into its network
 	// representation (exchange <-> router) so it can be broadcasted onto the network
-	frame, err := localUplinkFrameToNetwork(gw, frame)
-	if err != nil {
+	if frame, err = localUplinkFrameToNetwork(gw, frame); err != nil {
 		uplinksCounter.WithLabelValues(gw.NetworkGatewayID.String(), "failed").Inc()
 		log.WithError(err).Error("update uplink frame to network format failed, drop packet")
 		return
@@ -325,10 +344,16 @@ func init() {
 // is online this callback is called.
 func (e *Exchange) subscribeEvent(event events.Subscribe) {
 	log := logrus.WithField("gw_local_id", hex.EncodeToString(event.GatewayID[:]))
+	localGatewayID, err := utils.BytesToGatewayID(event.GatewayID[:])
+	if err != nil {
+		log.Warn("event from gateway with invalid local id, drop event")
+		return
+	}
 	// ensure that received frame is from a trusted gateway if not drop it
 	gw, ok := e.trustedGateways.ByLocalIDBytes(event.GatewayID[:])
 	if !ok {
 		log.Warn("event from unknown gateway, drop event")
+		e.recordUnknownGateway(localGatewayID)
 		return
 	}
 
@@ -416,17 +441,24 @@ func (e *Exchange) downlinkTxAck(txack gw.DownlinkTXAck) {
 	)
 	log.Info("received downlink tx ack from gateway")
 
+	localGatewayID, err := utils.BytesToGatewayID(txack.GetGatewayId())
+	if err != nil {
+		log.Error("received downlink ACK with gateway local id, drop packet")
+		return
+	}
+
 	// ensure that received frame is from a trusted gateway if not drop it
-	gw, ok := e.trustedGateways.ByLocalIDBytes(txack.GetGatewayId())
+	gw, ok := e.trustedGateways.ByLocalID(localGatewayID)
 	if !ok {
 		downlinkTxAckCounter.WithLabelValues(fmt.Sprintf("%x", txack.GetGatewayId()), "failed").Inc()
 		log.Warn("downlink tx ack from unknown gateway, drop packet")
+		e.recordUnknownGateway(localGatewayID)
 		return
 	}
 	log = log.WithField("gw_network_id", gw.NetworkGatewayID)
 
-	txack, err := localDownlinkTxAckToNetwork(gw, txack)
-	if err != nil {
+	// convert txack to network format
+	if txack, err = localDownlinkTxAckToNetwork(gw, txack); err != nil {
 		downlinkTxAckCounter.WithLabelValues(fmt.Sprintf("%x", txack.GetGatewayId()), "failed").Inc()
 		logrus.WithError(err).Errorf("could update txack to network format")
 		return

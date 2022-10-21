@@ -3,10 +3,7 @@ package forwarder
 import (
 	"context"
 	"encoding/binary"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"sync"
 	"time"
 
@@ -290,8 +287,8 @@ func (r *RoutingTable) runDefaultRouting(ctx context.Context) {
 	logrus.Trace("default routers disconnected")
 }
 
-func buildRoutingTable(cfg *Config) (*RoutingTable, error) {
-	routes, err := obtainThingsIXRoutesFunc(cfg)
+func buildRoutingTable(cfg *Config, accounter Accounter) (*RoutingTable, error) {
+	routes, interval, err := obtainThingsIXRoutesFunc(cfg, accounter)
 	if err != nil {
 		return nil, fmt.Errorf("unable to determine method to fetch ThingsIX routes: %w", err)
 	}
@@ -299,79 +296,26 @@ func buildRoutingTable(cfg *Config) (*RoutingTable, error) {
 	return &RoutingTable{
 		routesFetcher:           routes,
 		routesUpdateInterval:    time.Second, // first time try to fetch routing information allmost immediatly
-		routesUpdateIntervalCfg: cfg.Routers.UpdateInterval,
+		routesUpdateIntervalCfg: interval,
 		routesTableBroadcaster:  broadcast.New[[]*Router](1),
-		defaultRoutes:           cfg.Routers.Default,
+		defaultRoutes:           cfg.Forwarder.Routers.Default,
 		networkEvents:           make(chan *NetworkEvent, 1024),
 		gatewayEvents:           broadcast.New[*GatewayEvent](1024).Run(),
 	}, nil
 }
 
-func obtainThingsIXRoutesFunc(cfg *Config) (RoutesUpdaterFunc, error) {
-	accounter := cfg.PacketExchange.Accounting.Strategy()
-
-	if cfg.Routers.RegistryContract != nil && *cfg.Routers.RegistryContract != (common.Address{}) {
-		return func() ([]*Router, error) {
-			// TODO: add routers from ThingsIX smart contract to routes array
-			return nil, fmt.Errorf("refresh from smart contract not implemented")
-		}, nil
+func obtainThingsIXRoutesFunc(cfg *Config, accounter Accounter) (RoutesUpdaterFunc, time.Duration, error) {
+	if cfg.Forwarder.Routers.OnChain != nil {
+		return fetchRoutersFromChain(cfg, accounter)
 	}
 
-	if cfg.Routers.ThingsIXApi != nil && cfg.Routers.ThingsIXApi.Endpoint != nil {
-		return func() ([]*Router, error) {
-			resp, err := http.Get(*cfg.Routers.ThingsIXApi.Endpoint)
-			if err != nil {
-				return nil, err
-			}
-			defer resp.Body.Close()
-
-			snapshot := struct {
-				BlockNumber uint64
-				ChainID     uint64 `json:"chainId"`
-				Routers     []struct {
-					Endpoint string
-					ID       string
-					Owner    common.Address
-					Networks []uint32
-				}
-			}{}
-
-			if err := json.NewDecoder(resp.Body).Decode(&snapshot); err != nil {
-				return nil, err
-			}
-			if snapshot.ChainID != cfg.BlockChain.ChainID {
-				return nil, fmt.Errorf("router snapshot from wrong chain, got %d, want %d", snapshot.ChainID, cfg.BlockChain.ChainID)
-			}
-
-			// convert from snapshot to internal format
-			routers := make([]*Router, len(snapshot.Routers))
-			for i, r := range snapshot.Routers {
-				var (
-					id     [32]byte
-					netids = make([]lorawan.NetID, len(r.Networks))
-				)
-				rID, err := hex.DecodeString(r.ID)
-				if err != nil {
-					logrus.WithError(err).Error("unable to decode router id")
-					continue
-				}
-
-				copy(id[:], rID)
-				for i, id := range r.Networks {
-					var netid [4]byte
-					binary.LittleEndian.PutUint32(netid[:], id)
-					netids[i] = lorawan.NetID{netid[0], netid[1], netid[2]}
-				}
-				routers[i] = NewRouter(id, r.Endpoint, false, netids, r.Owner, accounter)
-			}
-			logrus.WithField("#routers", len(routers)).Info("fetched routing table from ThingsIX API")
-			return routers, nil
-		}, nil
+	if cfg.Forwarder.Routers.ThingsIXApi != nil && cfg.Forwarder.Routers.ThingsIXApi.Endpoint != nil {
+		return fetchRoutersFromThingsIXAPI(cfg, accounter)
 	}
 
 	// no routes source configured, only use default routers
 	logrus.Warn("no ThingsIX routing table source configured, only use routers from configuration")
 	return func() ([]*Router, error) {
 		return nil, nil
-	}, nil
+	}, 24 * time.Hour, nil
 }
