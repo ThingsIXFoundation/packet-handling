@@ -78,6 +78,6 @@ func CalculatePublicKeyBytes(pub *ecdsa.PublicKey) []byte {
 	return crypto.FromECDSAPub(pub)
 }
 
-func (gw *Gateway) Address() string {
-	return crypto.PubkeyToAddress(*gw.PublicKey).String()
+func (gw *Gateway) Address() common.Address {
+	return crypto.PubkeyToAddress(*gw.PublicKey)
 }

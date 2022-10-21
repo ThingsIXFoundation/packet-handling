@@ -53,6 +53,10 @@ github.com/ThingsIXFoundation/gateway-registry-go v0.0.0-20220902125634-f57b1b49
 github.com/ThingsIXFoundation/gateway-registry-go v0.0.0-20220902125634-f57b1b495aa3/go.mod h1:/d0dfBbjyrZL1DU+Ct4ORT/dFBT7b+N9cH97r3M+wxo=
 github.com/ThingsIXFoundation/router-api/go v0.0.0-20221003103949-a0f155c71f3c h1:nUQcse/QeDREN7Sbt47QQokvKPZIQ7ICxa5JiZ45I3s=
 github.com/ThingsIXFoundation/router-api/go v0.0.0-20221003103949-a0f155c71f3c/go.mod h1:iRSTgTcT2QgBzDIA/FrutGtLRXh9EVuK155HdjYj7X8=
+github.com/ThingsIXFoundation/router-registry-go v0.0.0-20221020083550-8f710d5940ef h1:XtG8vc68zqQn8EsodYEsxM85beA5CrbLa49T9WwtI4A=
+github.com/ThingsIXFoundation/router-registry-go v0.0.0-20221020083550-8f710d5940ef/go.mod h1:JA8B+SBQEL1MAvHrbNw053bSzq++BBwW7QJ/s7BH018=
+github.com/ThingsIXFoundation/router-registry-go v0.0.0-20221021103808-024bae30a52b h1:giHPJSYuCVwIIyldH4Q46CLqDnCJKGCRwgt1SSnaqeg=
+github.com/ThingsIXFoundation/router-registry-go v0.0.0-20221021103808-024bae30a52b/go.mod h1:JA8B+SBQEL1MAvHrbNw053bSzq++BBwW7QJ/s7BH018=
 github.com/VictoriaMetrics/fastcache v1.6.0 h1:C/3Oi3EiBCqufydp1neRZkqcwmEiuRT9c3fqvvgKm5o=
 github.com/alecthomas/kingpin v2.2.6+incompatible/go.mod h1:59OFYbFVLKQKq+mqrL6Rw5bR0c3ACQaawgXx0QYndlE=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=

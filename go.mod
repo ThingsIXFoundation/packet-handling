@@ -35,6 +35,8 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
+require github.com/ThingsIXFoundation/router-registry-go v0.0.0-20221021103808-024bae30a52b // indirect
+
 require (
 	github.com/Masterminds/semver v1.4.2 // indirect
 	github.com/ThingsIXFoundation/definitions-go v0.0.0-20221019100243-e4db1da7c91b

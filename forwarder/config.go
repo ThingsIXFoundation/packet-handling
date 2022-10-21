@@ -1,9 +1,6 @@
 package forwarder
 
 import (
-	"fmt"
-	"reflect"
-	"strings"
 	"time"
 
 	"github.com/ThingsIXFoundation/packet-handling/utils"
@@ -13,102 +10,78 @@ import (
 	"github.com/spf13/viper"
 )
 
-type ExchangeGatewayBackendConfig map[string]interface{}
-
-type BackendType string
-
-const (
-	SemtechUDPBackendType    BackendType = "semtech_udp"
-	BasicStationBackendType  BackendType = "basic_station"
-	ConcentratorDBackendType BackendType = "concentratord"
-)
-
-func (b ExchangeGatewayBackendConfig) Type() BackendType {
-	fields := map[string]interface{}(b)
-	return BackendType(fields["type"].(string))
-}
-
-type semtechBackendConfig struct {
-	UDPBind      string
-	SkipCRCCheck bool
-	FakeRxTime   bool
-}
-
-func (b ExchangeGatewayBackendConfig) SemtechUDPConfig() (*semtechBackendConfig, error) {
-	var cfg semtechBackendConfig
-	if str, ok := b["udp_bind"].(string); ok {
-		cfg.UDPBind = str
-	} else {
-		return nil, fmt.Errorf("invalid udp_bind")
-	}
-	if b, ok := b["skip_crc_check"].(bool); ok {
-		cfg.SkipCRCCheck = b
-	}
-	if b, ok := b["fake_rx_time"].(bool); ok {
-		cfg.FakeRxTime = b
-	}
-	return &cfg, nil
-}
-
-type AccountingStrategy struct{}
-
-func (strat *AccountingStrategy) Strategy() Accounter {
-	if strat == nil { // user has not configured accounting, disable it
-		return NewNoAccountingStrategy()
-	}
-	return NewNoAccountingStrategy() // TODO: support other accounting in the future
-}
-
 type Config struct {
+	Forwarder struct {
+		// Backend represents a backend configuration as suported by the Chirpstack project.
+		// Unfornutaly chirpstack uses inline struct definitions making it impossible for us
+		// to reuse them and forceing use to make a mapping from our own config.
+		Backend struct {
+			SemtechUDP *struct {
+				UDPBind      *string `mapstructure:"udp_bind"`
+				SkipCRCCheck *bool   `mapstructure:"skip_crc_check"`
+				FakeRxTime   *bool   `mapstructure:"fake_rx_time"`
+			} `mapstructure:"semtech_udp"`
+
+			BasicStation  *struct{} `mapstructure:"basic_station"`
+			Concentratord *struct{} `mapstructure:"concentratord"`
+		}
+
+		Gateways struct {
+			Store struct {
+				YamlStorePath *string `mapstructure:"file"`
+			}
+
+			RecordUnknown *struct {
+				File string
+			} `mapstructure:"record_unknown"`
+			RegistryAddress *common.Address `mapstructure:"gateway_registry"`
+		}
+
+		Routers struct {
+			// Default routers that will receive all gateway data unfiltered
+			Default []*Router
+
+			OnChain *struct {
+				// RegistryContract indicates when non-nil that router information must
+				// be fetched from the registry smart contract (required blockchain cfg)
+				RegistryContract common.Address `mapstructure:"registry"`
+
+				// Interval indicates how often the routes are refreshed
+				UpdateInterval *time.Duration `mapstructure:"interval"`
+			} `mapstructure:"on_chain"`
+
+			// ThingsIXApi indicates when non-nil that router information must be
+			// fetched from the ThingsIX API
+			ThingsIXApi *struct {
+				Endpoint *string
+				// Interval indicates how often the routes are refreshed
+				UpdateInterval *time.Duration `mapstructure:"interval"`
+			} `mapstructure:"thingsix_api"`
+		}
+
+		// Optional account strategy configuration, if not specified no account is used meaning
+		// that all packets are exchanged between gateway and routers.
+		Accounting *struct {
+		}
+	}
+
 	Log struct {
 		Level     logrus.Level
 		Timestamp bool
 	}
 
 	BlockChain struct {
-		Endpoint      string
-		ChainID       uint64 `mapstructure:"chain_id"`
-		Confirmations uint64
-	} `mapstructure:"blockchain"`
-
-	Gateways struct {
-		RegistryAddress *common.Address `mapstructure:"gateway_registry"`
-		YamlStorePath   *string         `mapstructure:"yaml_store"`
-	}
-
-	PacketExchange struct {
-		// Backend represents a backend configuration as suported by the Chirpstack project.
-		// Unfornutaly chirpstack uses inline struct definitions making it impossible for us
-		// to reuse them and forceing use to make a mapping from our own config.
-		Backend ExchangeGatewayBackendConfig
-
-		// Optional account strategy configuration, if not specified no account is used meaning
-		// that all packets are exchanged between gateway and routers.
-		Accounting *AccountingStrategy
-	} `mapstructure:"packet_exchange"`
-
-	Routers struct {
-		// Default routers that will receive all gateway data unfiltered
-		Default []*Router
-		// Interval indicates how often the routes are refreshed
-		UpdateInterval time.Duration `mapstructure:"update_interval"`
-
-		// ThingsIXApi indicates when non-nil that router information must be
-		// fetched from the ThingsIX API
-		ThingsIXApi *struct {
-			Endpoint *string
-		} `mapstructure:"thingsix_api"`
-
-		// RegistryContract indicates when non-nil that router information must
-		// be fetched from the registry smart contract (required blockchain cfg)
-		RegistryContract *common.Address `mapstructure:"registry"`
+		Polygon *struct {
+			Endpoint      string
+			ChainID       uint64 `mapstructure:"chain_id"`
+			Confirmations uint64
+		}
 	}
 
 	Metrics *struct {
 		Prometheus *struct {
-			Host string
-			Port uint16
-			Path string
+			Address string
+			Path    string
 		}
 	}
 }
@@ -119,18 +92,10 @@ func (cfg Config) PrometheusEnabled() bool {
 }
 
 func (cfg Config) MetricsPrometheusAddress() string {
-	var (
-		host        = "localhost"
-		port uint16 = 8080
-	)
-
-	if cfg.Metrics.Prometheus.Host != "" {
-		host = cfg.Metrics.Prometheus.Host
+	if cfg.Metrics.Prometheus.Address != "" {
+		return cfg.Metrics.Prometheus.Address
 	}
-	if cfg.Metrics.Prometheus.Port != 0 {
-		port = cfg.Metrics.Prometheus.Port
-	}
-	return fmt.Sprintf("%s:%d", host, port)
+	return "localhost:8080"
 }
 
 func (cfg Config) MetricsPrometheusPath() string {
@@ -164,37 +129,23 @@ func mustLoadConfig() *Config {
 		utils.HexStringToBigIntHook(),
 		utils.StringToHashHook(),
 		utils.StringToDuration(),
-		utils.StringToLogrusLevel(),
-		decodeExchangeGatewayBackend,
-	))); err != nil {
+		utils.StringToLogrusLevel()))); err != nil {
 		logrus.WithError(err).Fatal("unable to load configuration")
 	}
 
 	logrus.SetLevel(cfg.Log.Level)
 	logrus.SetFormatter(&logrus.TextFormatter{FullTimestamp: cfg.Log.Timestamp})
 
+	// ensure user provided polygon blockchain config
+	if cfg.BlockChain.Polygon == nil {
+		logrus.Fatal("missing Polygon blockchain configuration")
+	}
+
 	// set the Default flag on the defaultRouters to distinct them from routes
 	// loaded from ThingsIX
-	for _, r := range cfg.Routers.Default {
+	for _, r := range cfg.Forwarder.Routers.Default {
 		r.Default = true
 	}
 
 	return &cfg
-}
-
-func decodeExchangeGatewayBackend(f reflect.Type, t reflect.Type, data interface{}) (interface{}, error) {
-	if f.Kind() != reflect.Map || t != reflect.TypeOf(ExchangeGatewayBackendConfig{}) {
-		return data, nil
-	}
-
-	fields := data.(map[string]interface{})
-	if typ, ok := fields["type"].(string); ok {
-		switch BackendType(strings.ToLower(typ)) {
-		case SemtechUDPBackendType:
-			return ExchangeGatewayBackendConfig(fields), nil
-		case BasicStationBackendType, ConcentratorDBackendType:
-			return nil, fmt.Errorf("backend '%s' not (yet) implemented", typ)
-		}
-	}
-	return nil, fmt.Errorf("unsupported backend '%s'", fields["type"])
 }

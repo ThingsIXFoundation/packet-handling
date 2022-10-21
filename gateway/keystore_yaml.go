@@ -83,10 +83,13 @@ func (store *GatewayYamlFileStore) GatewayByNetworkIDBytes(id []byte) (*Gateway,
 }
 
 func (store *GatewayYamlFileStore) AddGateway(localID lorawan.EUI64, key *ecdsa.PrivateKey) error {
-	if _, err := store.GatewayByLocalID(localID); err != ErrNotFound {
-		if err == nil {
-			return ErrAlreadyExists
-		}
+	_, err := store.GatewayByLocalID(localID)
+	switch {
+	case errors.Is(err, ErrNotFound):
+		break
+	case err == nil:
+		return ErrAlreadyExists
+	default:
 		return err
 	}
 
