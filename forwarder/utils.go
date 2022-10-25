@@ -81,16 +81,7 @@ func loadGatewayStore(cfg *Config) (gateway.GatewayStore, error) {
 	return store, err
 }
 
-func onboardedAndRegisteredGateways(cfg *Config, store gateway.GatewayStore) (map[lorawan.EUI64]*gateway.Gateway, map[lorawan.EUI64]*gateway.Gateway, error) {
-	if cfg.Forwarder.Gateways.RegistryAddress == nil {
-		return nil, nil, fmt.Errorf("missing gateway registry address in configuration")
-	}
-
-	var (
-		trustedGatewaysByLocalID   = make(map[lorawan.EUI64]*gateway.Gateway)
-		trustedGatewaysByNetworkID = make(map[lorawan.EUI64]*gateway.Gateway)
-	)
-
+func acceptOnlyOnboardedAndRegistryGateways(cfg *Config, gateways []*gateway.Gateway) (map[lorawan.EUI64]*gateway.Gateway, map[lorawan.EUI64]*gateway.Gateway, error) {
 	client, err := ethclient.Dial(cfg.BlockChain.Polygon.Endpoint)
 	if err != nil {
 		logrus.WithError(err).Error("unable to dial blockchain RPC node")
@@ -102,11 +93,15 @@ func onboardedAndRegisteredGateways(cfg *Config, store gateway.GatewayStore) (ma
 		return nil, nil, fmt.Errorf("unable to instantiate gateway registry bindings")
 	}
 
-	for _, gateway := range store.Gateways() {
+	var (
+		trustedGatewaysByLocalID   = make(map[lorawan.EUI64]*gateway.Gateway)
+		trustedGatewaysByNetworkID = make(map[lorawan.EUI64]*gateway.Gateway)
+	)
+
+	for _, gateway := range gateways {
 		// forwarder only forwards data for gateways that are onboarded and
 		// their details such as location are set in the registry. If not print
 		// a warning and ignore the gateway.
-
 		rgw, err := registry.Gateways(nil, gateway.ID())
 		if err != nil {
 			logrus.WithError(err).Error("unable to retrieve gateway details from registry")
@@ -121,11 +116,11 @@ func onboardedAndRegisteredGateways(cfg *Config, store gateway.GatewayStore) (ma
 				"local-id":     gateway.LocalGatewayID,
 				"network-id":   gateway.NetworkGatewayID,
 				"location":     fmt.Sprintf("%x", rgw.Location),
-				"altitude":     rgw.Altitude / 3,
+				"altitude":     rgw.Altitude * 3,
 				"antenna-gain": fmt.Sprintf("%.1f", (float32(rgw.AntennaGain) / 10.0)),
 				"owner":        gateway.Owner,
 				"freq-plan":    definitions.FrequencyPlan(rgw.FrequencyPlan),
-			}).Info("loaded gateway from store")
+			}).Debug("loaded gateway from store")
 		} else {
 			l := logrus.WithFields(logrus.Fields{
 				"id":         fmt.Sprintf("%x", gateway.ID()),
@@ -140,7 +135,31 @@ func onboardedAndRegisteredGateways(cfg *Config, store gateway.GatewayStore) (ma
 		}
 	}
 
-	return trustedGatewaysByLocalID, trustedGatewaysByNetworkID, nil
+	return trustedGatewaysByLocalID, trustedGatewaysByNetworkID, err
+}
+
+func onboardedAndRegisteredGateways(cfg *Config, store gateway.GatewayStore) (map[lorawan.EUI64]*gateway.Gateway, map[lorawan.EUI64]*gateway.Gateway, error) {
+	// If gateway registry is not configured accept data from all gateways from the store.
+	// This is temporary until gateway onboards are made possible and ThingsIX moves from
+	// data-only to a network with rewards.
+	acceptOnlyRegisteredGateways := cfg.Forwarder.Gateways.RegistryAddress != nil
+
+	if !acceptOnlyRegisteredGateways {
+		logrus.Warn("accept all gateways in gateway store, including non-registered gateways")
+		var (
+			trustedGatewaysByLocalID   = make(map[lorawan.EUI64]*gateway.Gateway)
+			trustedGatewaysByNetworkID = make(map[lorawan.EUI64]*gateway.Gateway)
+		)
+
+		for _, gateway := range store.Gateways() {
+			trustedGatewaysByLocalID[gateway.LocalGatewayID] = gateway
+			trustedGatewaysByNetworkID[gateway.NetworkGatewayID] = gateway
+		}
+
+		return trustedGatewaysByLocalID, trustedGatewaysByNetworkID, nil
+	}
+
+	return acceptOnlyOnboardedAndRegistryGateways(cfg, store.Gateways())
 }
 
 func fetchRoutersFromChain(cfg *Config, accounter Accounter) (RoutesUpdaterFunc, time.Duration, error) {

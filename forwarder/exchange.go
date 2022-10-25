@@ -28,7 +28,7 @@ type Exchange struct {
 	// gateway and router because the router owner has paid for it.
 	accounter Accounter
 	// set with gateways that are allowed to use this exchange
-	trustedGateways GatewaySet
+	trustedGateways *GatewaySet
 	// recordUnknownGateway is called each time a gateway connects that is not
 	// in the gateway store
 	recordUnknownGateway UnknownGatewayLoggerFunc
@@ -81,13 +81,10 @@ func NewExchange(cfg *Config) (*Exchange, error) {
 
 	// instantiate exchange
 	exchange := &Exchange{
-		backend:      backend,
-		accounter:    accounter,
-		routingTable: routingTable,
-		trustedGateways: GatewaySet{
-			byLocalID:   trustedGatewaysByLocalID,
-			byNetworkID: trustedGatewaysByNetworkID,
-		},
+		backend:              backend,
+		accounter:            accounter,
+		routingTable:         routingTable,
+		trustedGateways:      NewGatewaySet(cfg, store, trustedGatewaysByLocalID, trustedGatewaysByNetworkID),
 		recordUnknownGateway: NewUnknownGatewayLogger(cfg),
 	}
 
@@ -112,6 +109,11 @@ func (e *Exchange) Run(ctx context.Context) {
 
 	// startup integration between exchange and the routers on the network
 	go e.routingTable.Run(ctx)
+
+	// the exchange only operates on gateways that are onboarded on ThingsIX. Refresh
+	// polls checks periodically if there are gateways onboarded/offboarded and refreshes
+	// the trusted gateway set.
+	go e.trustedGateways.Refresh(ctx)
 
 	// wait for messages from the network and dispatch them to the chirpstack backend
 	for {
@@ -341,7 +343,7 @@ func init() {
 }
 
 // subscribeEvent is called by the chirstack backend, currently only when a gateway
-// is online this callback is called.
+// is online this callback is called.ys
 func (e *Exchange) subscribeEvent(event events.Subscribe) {
 	log := logrus.WithField("gw_local_id", hex.EncodeToString(event.GatewayID[:]))
 	localGatewayID, err := utils.BytesToGatewayID(event.GatewayID[:])

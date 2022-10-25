@@ -28,6 +28,14 @@ forwarder:
         # their details set are ignored.
         gateway_registry: 0xDAA93030749C7fE99B0A26Ac8074D49143A47C4e
 
+        # ThingsIX gateway registry refresh interval
+        #
+        # Only for gateways from the store that are onboarded and have their
+        # details set in the gateway registry data is routed to its final destination.
+        # Check the registry every `refresh` interval for onboarded/offboarded gateways.
+        # must be at least 1m, default is 5m
+        refresh: 5m
+
         # Gateway store
         #
         # Gateway

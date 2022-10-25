@@ -2,13 +2,16 @@ package forwarder
 
 import (
 	"encoding/hex"
+	"sync"
 
+	"context"
 	"github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/backend/events"
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	"github.com/ThingsIXFoundation/router-api/go/router"
 	"github.com/brocaar/chirpstack-api/go/v3/gw"
 	"github.com/brocaar/lorawan"
 	"github.com/sirupsen/logrus"
+	"time"
 )
 
 // Backend defines the interface that a backend must implement
@@ -45,11 +48,68 @@ type Backend interface {
 }
 
 type GatewaySet struct {
+	config *Config
+	store  gateway.GatewayStore
+
+	mu          sync.RWMutex
 	byLocalID   map[lorawan.EUI64]*gateway.Gateway
 	byNetworkID map[lorawan.EUI64]*gateway.Gateway
 }
 
-func (gs GatewaySet) ByLocalIDBytes(id []byte) (*gateway.Gateway, bool) {
+func NewGatewaySet(cfg *Config, store gateway.GatewayStore, local map[lorawan.EUI64]*gateway.Gateway, network map[lorawan.EUI64]*gateway.Gateway) *GatewaySet {
+	return &GatewaySet{
+		config:      cfg,
+		store:       store,
+		byLocalID:   local,
+		byNetworkID: network,
+	}
+}
+
+/**
+ * Refresh polls until the given ctx expires periodically (interval is configurable)
+ * the gateway registry and refreshes its internal gateway sets with gateways that
+ * are onboarded and have their details set.
+ */
+func (gs *GatewaySet) Refresh(ctx context.Context) {
+	var (
+		refresh  = 5 * time.Minute  // check refresh interval gateway registry for updates
+		interval = time.Duration(0) // run instant first time
+	)
+	if gs.config.Forwarder.Gateways.Refresh != nil && *gs.config.Forwarder.Gateways.Refresh < time.Minute {
+		refresh = time.Minute
+	} else if gs.config.Forwarder.Gateways.Refresh != nil {
+		refresh = *gs.config.Forwarder.Gateways.Refresh
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"address": gs.config.Forwarder.Gateways.RegistryAddress,
+		"refresh": refresh,
+	}).Info("gateway registry")
+
+	for {
+		select {
+		case <-time.After(interval):
+			local, network, err := onboardedAndRegisteredGateways(gs.config, gs.store)
+			if err == nil {
+				gs.mu.Lock()
+				gs.byLocalID = local
+				gs.byNetworkID = network
+				gs.mu.Unlock()
+				logrus.WithField("#-gateways", len(local)).Info("refreshed gateways with registry")
+			} else {
+				logrus.WithError(err).Error("unable to refresh gateway store")
+			}
+			interval = refresh
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (gs *GatewaySet) ByLocalIDBytes(id []byte) (*gateway.Gateway, bool) {
+	gs.mu.RLock()
+	defer gs.mu.RUnlock()
+
 	var lid lorawan.EUI64
 	if len(id) != len(lid) {
 		logrus.WithField("id", hex.EncodeToString(id)).Warn("search gateway by invalid id")
@@ -59,12 +119,18 @@ func (gs GatewaySet) ByLocalIDBytes(id []byte) (*gateway.Gateway, bool) {
 	return gs.ByLocalID(lid)
 }
 
-func (gs GatewaySet) ByLocalID(id lorawan.EUI64) (*gateway.Gateway, bool) {
+func (gs *GatewaySet) ByLocalID(id lorawan.EUI64) (*gateway.Gateway, bool) {
+	gs.mu.RLock()
+	defer gs.mu.RUnlock()
+
 	gw, found := gs.byLocalID[id]
 	return gw, found
 }
 
-func (gs GatewaySet) ByNetworkIDBytes(id []byte) (*gateway.Gateway, bool) {
+func (gs *GatewaySet) ByNetworkIDBytes(id []byte) (*gateway.Gateway, bool) {
+	gs.mu.RLock()
+	defer gs.mu.RUnlock()
+
 	var lid lorawan.EUI64
 	if len(id) != len(lid) {
 		logrus.WithField("id", hex.EncodeToString(id)).Warn("search gateway by invalid id")
@@ -74,7 +140,10 @@ func (gs GatewaySet) ByNetworkIDBytes(id []byte) (*gateway.Gateway, bool) {
 	return gs.ByLocalID(lid)
 }
 
-func (gs GatewaySet) ByNetworkID(id lorawan.EUI64) (*gateway.Gateway, bool) {
+func (gs *GatewaySet) ByNetworkID(id lorawan.EUI64) (*gateway.Gateway, bool) {
+	gs.mu.RLock()
+	defer gs.mu.RUnlock()
+
 	gw, found := gs.byNetworkID[id]
 	return gw, found
 }

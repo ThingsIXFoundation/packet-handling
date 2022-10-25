@@ -163,6 +163,7 @@ func logRouterDialDetails(router *Router) {
 		"router":   router,
 		"endpoint": router.Endpoint,
 		"default":  router.Default,
+		"routes":   router.NetIDs,
 	})
 	if !router.Default {
 		log = log.WithField("owner", router.Owner)

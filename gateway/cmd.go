@@ -32,7 +32,7 @@ var (
 
 	listGatewayCmd = &cobra.Command{
 		Use:   "list <gateway-store-file>",
-		Short: "Add gateway to gateway store",
+		Short: "List gateway in gateway store",
 		Args:  cobra.ExactArgs(1),
 		Run:   listGatewayStore,
 	}

@@ -36,6 +36,7 @@ type Config struct {
 				File string
 			} `mapstructure:"record_unknown"`
 			RegistryAddress *common.Address `mapstructure:"gateway_registry"`
+			Refresh         *time.Duration
 		}
 
 		Routers struct {
@@ -118,7 +119,6 @@ func mustLoadConfig() *Config {
 	viper.AddConfigPath(".")
 
 	if configFile := viper.GetString("config"); configFile != "" {
-		logrus.Infof("set config file: %s", configFile)
 		viper.SetConfigFile(configFile)
 	}
 

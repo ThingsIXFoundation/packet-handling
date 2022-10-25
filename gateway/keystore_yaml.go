@@ -116,17 +116,18 @@ func (store *GatewayYamlFileStore) AddGateway(localID lorawan.EUI64, key *ecdsa.
 }
 
 func (store *GatewayYamlFileStore) load() error {
-	gatewaysFile, err := os.Open(store.Path)
+	unknownGatewayListRaw, err := os.ReadFile(store.Path)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			return ErrStoreNotExists
 		}
-		return nil
+		if len(unknownGatewayListRaw) == 0 {
+			return nil
+		}
 	}
-	defer gatewaysFile.Close()
 
 	var gateways []gatewayYAML
-	if err := yaml.NewDecoder(gatewaysFile).Decode(&gateways); err != nil {
+	if err := yaml.Unmarshal(unknownGatewayListRaw, &gateways); err != nil {
 		return fmt.Errorf("unable to load gateway store: %w", err)
 	}
 
