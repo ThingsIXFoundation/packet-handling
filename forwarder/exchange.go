@@ -149,7 +149,7 @@ func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
 	// ensure that received frame is from a trusted gateway if not drop it
 	gw, ok := e.trustedGateways.ByLocalIDBytes(frame.RxInfo.GatewayId)
 	if !ok {
-		uplinksCounter.WithLabelValues(gw.NetworkGatewayID.String(), "failed").Inc()
+		uplinksCounter.WithLabelValues(lorawan.EUI64{}.String(), "failed").Inc()
 		log.Warn("uplink from unknown gateway, drop packet")
 		e.recordUnknownGateway(gatewayLocalID)
 		return

@@ -1,6 +1,7 @@
 package forwarder
 
 import (
+	"os"
 	"time"
 
 	"github.com/ThingsIXFoundation/packet-handling/utils"
@@ -107,13 +108,17 @@ func (cfg Config) MetricsPrometheusPath() string {
 }
 
 func mustLoadConfig() *Config {
-	viper.SetConfigName("forwarder")        // name of config file (without extension)
-	viper.SetConfigType("yaml")             // REQUIRED if the config file does not have the extension in the name
-	viper.AddConfigPath("/etc/thingsix/")   // path to look for the config file in
-	viper.AddConfigPath("$HOME/.forwarder") // call multiple times to add many search paths
+	viper.SetConfigName("forwarder") // name of config file (without extension)
+	viper.SetConfigType("yaml")      // REQUIRED if the config file does not have the extension in the name
+
+	if home, err := os.UserHomeDir(); err == nil {
+		viper.AddConfigPath(home) // call multiple times to add many search paths
+	}
+	viper.AddConfigPath("/etc/thingsix/") // path to look for the config file in
 	viper.AddConfigPath(".")
 
 	if configFile := viper.GetString("config"); configFile != "" {
+		logrus.Infof("set config file: %s", configFile)
 		viper.SetConfigFile(configFile)
 	}
 
