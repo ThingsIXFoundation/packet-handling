@@ -3,7 +3,6 @@ package forwarder
 import (
 	"context"
 	"net/http"
-	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -86,6 +85,7 @@ var (
 	}, []string{"gw_network_id"})
 )
 
+// init registers Prometheus couters/gauges
 func init() {
 	prometheus.MustRegister(uplinksCounter, downlinksCounter, downlinkTxAckCounter,
 		routersConnectedGauge, routersDisconnectedGauge,
@@ -97,7 +97,9 @@ func init() {
 	)
 }
 
-func publicPrometheusMetrics(ctx context.Context, cfg *Config) {
+// runPrometheusHTTPEndpoint opens a Prometheus metrics endpoint on the
+// configured location until the given ctx expires.
+func runPrometheusHTTPEndpoint(ctx context.Context, cfg *Config) {
 	var (
 		addr = cfg.MetricsPrometheusAddress()
 		path = cfg.MetricsPrometheusPath()
@@ -114,21 +116,21 @@ func publicPrometheusMetrics(ctx context.Context, cfg *Config) {
 			Addr:    addr,
 			Handler: mux,
 		}
-		httpServerDone sync.WaitGroup
+		done = make(chan struct{})
 	)
 
 	mux.Handle(path, promhttp.Handler())
 
-	httpServerDone.Add(1)
 	go func() {
+		defer close(done)
 		if err := httpServer.ListenAndServe(); err != http.ErrServerClosed {
 			logrus.WithError(err).Error("prometheus http server stopped unexpected")
+		} else {
+			logrus.Info("prometheus metrics stopped")
 		}
-		httpServerDone.Done()
 	}()
 
 	<-ctx.Done()
 	httpServer.Shutdown(context.Background())
-	httpServerDone.Wait()
-	logrus.Info("prometheus metrics stopped")
+	<-done
 }

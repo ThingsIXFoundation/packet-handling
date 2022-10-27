@@ -19,8 +19,8 @@ import (
 
 // Exchange has several tasks:
 // - it provides a backend on which trusted gateways can connect
-// - it connects to external routers that are onboarded on ThingsIX
-// - it routes packets from gateways to routers and vise versa.
+// - it connects to ThingsIX routers
+// - it keeps a routing table to exchange data between gateways and routers
 type Exchange struct {
 	// chirpstack backend that handles interaction with connected gateways
 	backend Backend
@@ -47,33 +47,27 @@ func NewExchange(cfg *Config) (*Exchange, error) {
 		logrus.WithError(err).Fatal("unable to load gateway store")
 	}
 
-	// filter out gateways that are not yet onboarded and/or have their details
-	// set.
+	// filter out gateways that are not yet onboarded and/or have their details set.
 	trustedGatewaysByLocalID, trustedGatewaysByNetworkID, err := onboardedAndRegisteredGateways(cfg, store)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(trustedGatewaysByLocalID) == 0 {
-		logrus.Warn("no gateways loaded")
-	} else {
-		logrus.WithField("#-gateways", len(trustedGatewaysByLocalID)).Info("loaded gateway store")
-	}
+	logrus.WithField("#-gateways", len(trustedGatewaysByLocalID)).Info("loaded gateway store")
 
-	// instantiate backend that gateways use to send/recv packets to/from the exchange.
+	// create gateway backend
 	backend, err := buildBackend(cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	// accounter that accepts router payments and deterimes if a packet can be
-	// sold/forwarder to a router
+	// build data accounter
 	accounter, err := buildAccounter(cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	// retrieve routes to exchange packets with interested routes
+	// build routing table to determine where data must be forwarded to
 	routingTable, err := buildRoutingTable(cfg, accounter)
 	if err != nil {
 		return nil, err
@@ -92,7 +86,7 @@ func NewExchange(cfg *Config) (*Exchange, error) {
 		return nil, err
 	}
 
-	// backend uses callbacks to inform the exchange of events such as received uplink frames
+	// backend uses callbacks to inform the exchange of events
 	backend.SetUplinkFrameFunc(exchange.uplinkFrameCallback)
 	backend.SetDownlinkTxAckFunc(exchange.downlinkTxAck)
 	backend.SetGatewayStatsFunc(exchange.gatewayStats)
@@ -104,10 +98,10 @@ func NewExchange(cfg *Config) (*Exchange, error) {
 
 // Run the exchange until the given ctx expires.
 func (e *Exchange) Run(ctx context.Context) {
-	// start chirpstack backend to start communication between gateways and exchange
+	// start backend and accept gateways
 	e.backend.Start()
 
-	// startup integration between exchange and the routers on the network
+	// update the routing table periodically
 	go e.routingTable.Run(ctx)
 
 	// the exchange only operates on gateways that are onboarded on ThingsIX. Refresh

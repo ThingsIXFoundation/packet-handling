@@ -11,6 +11,10 @@ import (
 
 type UnknownGatewayLoggerFunc func(localGatewayID lorawan.EUI64)
 
+// NewUnknownGatewayLogger returns a callback that can be used to record gateways their
+// local id to a source defined in the given cfg. This is used to record unknown gateways
+// that connected to the backend. These can be verified later and if required imported
+// into the gateway store and registered on ThingsIX.
 func NewUnknownGatewayLogger(cfg *Config) UnknownGatewayLoggerFunc {
 	if cfg.Forwarder.Gateways.RecordUnknown != nil && cfg.Forwarder.Gateways.RecordUnknown.File != "" {
 		return recordUnkownGatewaysToFile(cfg)

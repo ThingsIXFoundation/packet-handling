@@ -25,23 +25,21 @@ import (
 )
 
 // localUplinkFrameToNetwork converts the given frame that was received from a gateway
-// into a frame that can be send anto the network on behalf of the given gw.
+// into a frame that can be send onto the network on behalf of the given gw.
 func localUplinkFrameToNetwork(gw *gateway.Gateway, frame gw.UplinkFrame) (gw.UplinkFrame, error) {
 	copy(frame.RxInfo.GatewayId, gw.NetworkGatewayID[:])
 	return frame, nil
 }
 
+// localDownlinkTxAckToNetwork converts the given txack that was received from a gateway
+// into a txack that can be send onto the network on behalf of the given gw.
 func localDownlinkTxAckToNetwork(gw *gateway.Gateway, txack gw.DownlinkTXAck) (gw.DownlinkTXAck, error) {
 	txack.GatewayId = gw.NetworkGatewayID[:]
 	return txack, nil
 }
 
-func GatewayIDBytesToLoraEUID(id []byte) lorawan.EUI64 {
-	var lid lorawan.EUI64
-	copy(lid[:], id)
-	return lid
-}
-
+// networkDownlinkFrameToLocal converts the given frame received from gw into
+// a frame that can be forwarded onto the network.
 func networkDownlinkFrameToLocal(gw *gateway.Gateway, frame *gw.DownlinkFrame) *gw.DownlinkFrame {
 	frame.GatewayId = gw.LocalGatewayID[:]
 	if frame.TxInfo != nil {
@@ -53,9 +51,17 @@ func networkDownlinkFrameToLocal(gw *gateway.Gateway, frame *gw.DownlinkFrame) *
 	return frame
 }
 
-func loadGatewayStore(cfg *Config) (gateway.GatewayStore, error) {
+// GatewayIDBytesToLoraEUID decodes the given id  bytes into a gateway id.
+func GatewayIDBytesToLoraEUID(id []byte) lorawan.EUI64 {
+	var lid lorawan.EUI64
+	copy(lid[:], id)
+	return lid
+}
+
+// loadGatewayStore returns a gateway store that was configured in the given cfg.
+func loadGatewayStore(cfg *Config) (gateway.Store, error) {
 	var (
-		store gateway.GatewayStore
+		store gateway.Store
 		err   error
 	)
 
@@ -81,7 +87,7 @@ func loadGatewayStore(cfg *Config) (gateway.GatewayStore, error) {
 	return store, err
 }
 
-func acceptOnlyOnboardedAndRegistryGateways(cfg *Config, gateways []*gateway.Gateway) (map[lorawan.EUI64]*gateway.Gateway, map[lorawan.EUI64]*gateway.Gateway, error) {
+func acceptOnlyOnboardedAndRegistryGateways(cfg *Config, store gateway.Store) (map[lorawan.EUI64]*gateway.Gateway, map[lorawan.EUI64]*gateway.Gateway, error) {
 	client, err := ethclient.Dial(cfg.BlockChain.Polygon.Endpoint)
 	if err != nil {
 		logrus.WithError(err).Error("unable to dial blockchain RPC node")
@@ -98,7 +104,7 @@ func acceptOnlyOnboardedAndRegistryGateways(cfg *Config, gateways []*gateway.Gat
 		trustedGatewaysByNetworkID = make(map[lorawan.EUI64]*gateway.Gateway)
 	)
 
-	for _, gateway := range gateways {
+	for _, gateway := range store.Gateways() {
 		// forwarder only forwards data for gateways that are onboarded and
 		// their details such as location are set in the registry. If not print
 		// a warning and ignore the gateway.
@@ -138,7 +144,7 @@ func acceptOnlyOnboardedAndRegistryGateways(cfg *Config, gateways []*gateway.Gat
 	return trustedGatewaysByLocalID, trustedGatewaysByNetworkID, err
 }
 
-func onboardedAndRegisteredGateways(cfg *Config, store gateway.GatewayStore) (map[lorawan.EUI64]*gateway.Gateway, map[lorawan.EUI64]*gateway.Gateway, error) {
+func onboardedAndRegisteredGateways(cfg *Config, store gateway.Store) (map[lorawan.EUI64]*gateway.Gateway, map[lorawan.EUI64]*gateway.Gateway, error) {
 	// If gateway registry is not configured accept data from all gateways from the store.
 	// This is temporary until gateway onboards are made possible and ThingsIX moves from
 	// data-only to a network with rewards.
@@ -159,7 +165,7 @@ func onboardedAndRegisteredGateways(cfg *Config, store gateway.GatewayStore) (ma
 		return trustedGatewaysByLocalID, trustedGatewaysByNetworkID, nil
 	}
 
-	return acceptOnlyOnboardedAndRegistryGateways(cfg, store.Gateways())
+	return acceptOnlyOnboardedAndRegistryGateways(cfg, store)
 }
 
 func fetchRoutersFromChain(cfg *Config, accounter Accounter) (RoutesUpdaterFunc, time.Duration, error) {

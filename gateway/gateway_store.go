@@ -6,7 +6,8 @@ import (
 	"github.com/brocaar/lorawan"
 )
 
-type GatewayStore interface {
+// Store defines a gateway store.
+type Store interface {
 	Gateways() []*Gateway
 	GatewayByLocalID(id lorawan.EUI64) (*Gateway, error)
 	GatewayByLocalIDBytes(id []byte) (*Gateway, error)

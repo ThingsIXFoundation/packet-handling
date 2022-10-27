@@ -30,7 +30,10 @@ type RouterClient struct {
 	// a router that is dropped from the routing table. New clients are
 	// started by the RoutingTable.
 	routeTableBroadcaster *broadcast.Broadcaster[[]*Router]
-	routerInfo            chan []*Router
+
+	// routerInfo is a stream of router information that is received from
+	// the routing table through the routeTableBroadcaster.
+	routerInfo chan []*Router
 
 	// routerEvents is used by this client to send messages received from
 	// the router it is connected to, to the packet exchange that can
@@ -46,9 +49,12 @@ type RouterClient struct {
 	routerDetails <-chan *RouterDetails
 
 	// TODO: mapperForwarder *MapperForwarder
+
 }
 
-func NewRouterClient(ctx context.Context, router *Router,
+// NewRouterClient create a new client that connects to a remote routers and
+// handles communication with that router.
+func NewRouterClient(router *Router,
 	routeTableBroadcaster *broadcast.Broadcaster[[]*Router],
 	routerEvents chan *NetworkEvent, gatewayEvents *broadcast.Broadcaster[*GatewayEvent],
 	routerDetails <-chan *RouterDetails) *RouterClient {

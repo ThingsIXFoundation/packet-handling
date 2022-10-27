@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// Backend defines the interface that a backend must implement
+// Backend defines the interface that a backend must implement.
 type Backend interface {
 	// Stop closes the backend.
 	Stop() error
@@ -47,16 +47,21 @@ type Backend interface {
 	RawPacketForwarderCommand(gw.RawPacketForwarderCommand) error
 }
 
+// GatewaySet sync a gateway store periodically with the gateway registry and
+// keeps track of gateways in the store that are onboarded and have their details
+// set in the ThingsIX gateway registry.
+//
+// It also maps from gateways their local id to the ThingsIX network id.
 type GatewaySet struct {
 	config *Config
-	store  gateway.GatewayStore
+	store  gateway.Store
 
 	mu          sync.RWMutex
 	byLocalID   map[lorawan.EUI64]*gateway.Gateway
 	byNetworkID map[lorawan.EUI64]*gateway.Gateway
 }
 
-func NewGatewaySet(cfg *Config, store gateway.GatewayStore, local map[lorawan.EUI64]*gateway.Gateway, network map[lorawan.EUI64]*gateway.Gateway) *GatewaySet {
+func NewGatewaySet(cfg *Config, store gateway.Store, local map[lorawan.EUI64]*gateway.Gateway, network map[lorawan.EUI64]*gateway.Gateway) *GatewaySet {
 	return &GatewaySet{
 		config:      cfg,
 		store:       store,
@@ -162,6 +167,9 @@ type NetworkEvent struct {
 	event  *router.RouterToGatewayEvent
 }
 
+// GatewayEvent is the decoded event received from a gateway through the backend.
+// It contains the raw payload together with some helper function to determine
+// what kind of event was received.
 type GatewayEvent struct {
 	join *struct {
 		joinEUI lorawan.EUI64
@@ -181,18 +189,22 @@ type GatewayEvent struct {
 	receivedFrom *gateway.Gateway
 }
 
+// IsUplink returns an indication if the event is an uplink event.
 func (ge GatewayEvent) IsUplink() bool {
 	return ge.uplink != nil
 }
 
+// IsJoin returns an indication if the vent is a join event.
 func (ge GatewayEvent) IsJoin() bool {
 	return ge.join != nil
 }
 
+// IsOnlineOfflineEvent is an indication if a gateway went offline or became online.
 func (ge GatewayEvent) IsOnlineOfflineEvent() bool {
 	return ge.subOnlineOfflineEvent != nil
 }
 
+// IsDownlinkAck returns an indication if the vent is a downlink ACK.
 func (ge GatewayEvent) IsDownlinkAck() bool {
 	return ge.downlinkAck != nil
 }

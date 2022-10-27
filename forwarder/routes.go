@@ -147,11 +147,12 @@ type RoutingTable struct {
 // is fetched and nieuw router clients are started for fresh registered routers or
 // clients are stopped/updated when they are either removed or updated.
 func (r *RoutingTable) Run(ctx context.Context) {
-	// start the broadcaster for clients to listen on router table updates
+	// router clients will subscribe to the routing table broadcaster. Data and
+	// events for router clients are broadcasted over this event channel.
 	r.routesTableBroadcaster.Run()
 
-	// start a listener that starts new router clients for routes that are
-	// added to the routing table.
+	// wait for routing table updates and forward them to the router clients or
+	// start/stop clients in case of new routers/deleted routers.
 	go r.keepRouteTableUpToDate(ctx)
 
 	// run router clients to default configured routers
@@ -160,8 +161,8 @@ func (r *RoutingTable) Run(ctx context.Context) {
 	for {
 		select {
 		case <-time.After(r.routesUpdateInterval):
-			// assume update fails and retry it in 1 minute
-			r.routesUpdateInterval = time.Minute
+			// assume failure and retry it in a couple of minutes
+			r.routesUpdateInterval = 2 * time.Minute
 
 			// fetch the latest known set of routers from ThingsIX
 			routers, err := r.routesFetcher()
@@ -174,11 +175,11 @@ func (r *RoutingTable) Run(ctx context.Context) {
 			if r.routesTableBroadcaster.TryBroadcast(routers) {
 				// successfull, refresh on configured update interval
 				r.routesUpdateInterval = r.routesUpdateIntervalCfg
-			} else {
-				logrus.Warn("unable to refresh routing table")
+				continue
 			}
+			logrus.Warn("unable to refresh routing table")
 		case <-ctx.Done():
-			logrus.Info("networking routing stopped")
+			logrus.Info("routing table stopped")
 			return
 		}
 	}
@@ -192,8 +193,7 @@ func (r *RoutingTable) keepRouteTableUpToDate(ctx context.Context) {
 			details chan *RouterDetails
 		})
 	)
-	// routes table broadcaster emits the latest retrieved routes
-	// periodically.
+	// routes table broadcaster emits the latest retrieved routes periodically.
 	r.routesTableBroadcaster.Subscribe(newRoutes)
 	defer r.routesTableBroadcaster.Unsubscribe(newRoutes)
 
@@ -209,8 +209,7 @@ func (r *RoutingTable) keepRouteTableUpToDate(ctx context.Context) {
 				deletedRoutesCount  = 0
 			)
 
-			// determine which existing routes are not in the new routing table
-			// and stop the associated clients
+			// stop which routers are deleted and stop the client
 			for id, client := range existingRouters {
 				deleted := true
 				for _, r := range routers {
@@ -227,6 +226,7 @@ func (r *RoutingTable) keepRouteTableUpToDate(ctx context.Context) {
 			}
 
 			for _, router := range routers {
+				// send route details to client for existing routers
 				if client, ok := existingRouters[router.ThingsIXID]; ok {
 					// existing route, send route details update to client, in case
 					// the client is dialing the router this can temporarly block
@@ -245,7 +245,7 @@ func (r *RoutingTable) keepRouteTableUpToDate(ctx context.Context) {
 						clientCtx, clientCancel = context.WithCancel(ctx)
 						details                 = make(chan *RouterDetails)
 					)
-					go NewRouterClient(clientCtx, router, r.routesTableBroadcaster, r.networkEvents, r.gatewayEvents, details).Run(ctx)
+					go NewRouterClient(router, r.routesTableBroadcaster, r.networkEvents, r.gatewayEvents, details).Run(clientCtx)
 					existingRouters[router.ThingsIXID] = &struct {
 						stop    context.CancelFunc
 						details chan *RouterDetails
@@ -277,7 +277,7 @@ func (r *RoutingTable) runDefaultRouting(ctx context.Context) {
 		go func() {
 			// run router client until ctx expires
 			ignore := make(chan *RouterDetails) // default routes are never updated
-			NewRouterClient(ctx, cpy, r.routesTableBroadcaster, r.networkEvents, r.gatewayEvents, ignore).Run(ctx)
+			NewRouterClient(cpy, r.routesTableBroadcaster, r.networkEvents, r.gatewayEvents, ignore).Run(ctx)
 			allStopped.Done()
 		}()
 	}
@@ -287,6 +287,7 @@ func (r *RoutingTable) runDefaultRouting(ctx context.Context) {
 	logrus.Trace("default routers disconnected")
 }
 
+// buildRoutingTable constructs a new routing table
 func buildRoutingTable(cfg *Config, accounter Accounter) (*RoutingTable, error) {
 	routes, interval, err := obtainThingsIXRoutesFunc(cfg, accounter)
 	if err != nil {
@@ -295,7 +296,7 @@ func buildRoutingTable(cfg *Config, accounter Accounter) (*RoutingTable, error) 
 
 	return &RoutingTable{
 		routesFetcher:           routes,
-		routesUpdateInterval:    time.Second, // first time try to fetch routing information allmost immediatly
+		routesUpdateInterval:    time.Millisecond, // first time try to fetch routing information immediately
 		routesUpdateIntervalCfg: interval,
 		routesTableBroadcaster:  broadcast.New[[]*Router](1),
 		defaultRoutes:           cfg.Forwarder.Routers.Default,
@@ -304,6 +305,8 @@ func buildRoutingTable(cfg *Config, accounter Accounter) (*RoutingTable, error) 
 	}, nil
 }
 
+// obtainThingsIXRoutesFunc returns a func that can be used to retrieve the latest set
+// of ThingsIX routers from a source that is configured in the given cfg.
 func obtainThingsIXRoutesFunc(cfg *Config, accounter Accounter) (RoutesUpdaterFunc, time.Duration, error) {
 	if cfg.Forwarder.Routers.OnChain != nil {
 		return fetchRoutersFromChain(cfg, accounter)
@@ -314,7 +317,7 @@ func obtainThingsIXRoutesFunc(cfg *Config, accounter Accounter) (RoutesUpdaterFu
 	}
 
 	// no routes source configured, only use default routers
-	logrus.Warn("no ThingsIX routing table source configured, only use routers from configuration")
+	logrus.Warn("no ThingsIX routing table source configured, only use default routers from configuration")
 	return func() ([]*Router, error) {
 		return nil, nil
 	}, 24 * time.Hour, nil

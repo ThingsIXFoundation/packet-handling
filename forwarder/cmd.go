@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Run the packet exchange
+// Run the packet exchange.
 func Run(cmd *cobra.Command, args []string) {
 	var (
 		ctx, shutdown = context.WithCancel(context.Background())
@@ -36,7 +36,7 @@ func Run(cmd *cobra.Command, args []string) {
 	if cfg.PrometheusEnabled() {
 		wg.Add(1)
 		go func() {
-			publicPrometheusMetrics(ctx, cfg)
+			runPrometheusHTTPEndpoint(ctx, cfg)
 			wg.Done()
 		}()
 	}

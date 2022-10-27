@@ -8,6 +8,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// buildBackend returns the forwarder Chirpstack backend that was configured
+// in the given cfg. Or an error in case of missing configuration or invalid
+// configuration.
 func buildBackend(cfg *Config) (Backend, error) {
 	switch {
 	case cfg.Forwarder.Backend.SemtechUDP != nil:
@@ -21,12 +24,14 @@ func buildBackend(cfg *Config) (Backend, error) {
 	}
 }
 
+// buildSemtechUDPBackend return the Chirpstack UDP backend implementation
+// based on the given cfg.
 func buildSemtechUDPBackend(cfg *Config) (*semtechudp.Backend, error) {
 	var (
 		chirpCfg     chirpconfig.Config
-		udpBind      = "0.0.0.0:1680"
-		fakeRxTime   = false
-		skipCRCCheck = false
+		udpBind      = "0.0.0.0:1680" // default
+		fakeRxTime   = false          // default
+		skipCRCCheck = false          // default
 	)
 
 	if cfg.Forwarder.Backend.SemtechUDP.UDPBind != nil {

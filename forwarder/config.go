@@ -13,9 +13,8 @@ import (
 
 type Config struct {
 	Forwarder struct {
-		// Backend represents a backend configuration as suported by the Chirpstack project.
-		// Unfornutaly chirpstack uses inline struct definitions making it impossible for us
-		// to reuse them and forceing use to make a mapping from our own config.
+		// Backend holdsconfiguration related to the forwarders gateway
+		// endpoint and supported protocol.
 		Backend struct {
 			SemtechUDP *struct {
 				UDPBind      *string `mapstructure:"udp_bind"`
@@ -27,22 +26,43 @@ type Config struct {
 			Concentratord *struct{} `mapstructure:"concentratord"`
 		}
 
+		// Gateways holds configuration related to gateways.
 		Gateways struct {
+			// Store describes how gateways are stored/loaded in the forwarder.
 			Store struct {
+				// YamlStorePath indicates that gateways are stored in a
+				// YAML based file store located on the local file system.
+				// Only data for gateways in the store is forwarded.
 				YamlStorePath *string `mapstructure:"file"`
 			}
 
+			// RecordUnknown records gateways that connect to the forwarder but
+			// are not in the forwarders gateway store. Recorded gateways can
+			// be imported later if required.
 			RecordUnknown *struct {
+				// File points to a file on the local file system where
+				// unknown gateways that connect are recorded.
 				File string
 			} `mapstructure:"record_unknown"`
+			// RegistryAddress holds the address where the gateway registry is
+			// deployed on chain. It is used to retrieve gateway details to
+			// determine which gateways in the store are onboarded on ThingsIX
+			// and have their details. Once token support is integrated to ThingsIX
+			// only data for these gateways will be forwarded.
 			RegistryAddress *common.Address `mapstructure:"gateway_registry"`
-			Refresh         *time.Duration
+
+			// Refresh indicates the interval in which the gateway registry is
+			// used to check if gateways from the forwarders store are onboarded
+			// have their gateways set.
+			Refresh *time.Duration
 		}
 
 		Routers struct {
 			// Default routers that will receive all gateway data unfiltered
 			Default []*Router
 
+			// OnChain idicates that ThingsIX routers are loaded from the router
+			// registry as deployed on the blockchain.
 			OnChain *struct {
 				// RegistryContract indicates when non-nil that router information must
 				// be fetched from the registry smart contract (required blockchain cfg)
@@ -63,8 +83,7 @@ type Config struct {
 
 		// Optional account strategy configuration, if not specified no account is used meaning
 		// that all packets are exchanged between gateway and routers.
-		Accounting *struct {
-		}
+		Accounting *struct{}
 	}
 
 	Log struct {

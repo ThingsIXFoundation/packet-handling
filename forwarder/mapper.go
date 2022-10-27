@@ -21,7 +21,7 @@ import (
 )
 
 type MapperForwarder struct {
-	gatewayStore gateway.GatewayStore
+	gatewayStore gateway.Store
 	exchange     *Exchange
 }
 
