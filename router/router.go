@@ -2,22 +2,24 @@ package router
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io"
 	"net"
 	"sync/atomic"
+	"time"
 
 	"github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/integration"
-	"github.com/ThingsIXFoundation/packet-handling/gateway"
+	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/ThingsIXFoundation/router-api/go/router"
-	"github.com/apex/log"
 	"github.com/brocaar/chirpstack-api/go/v3/gw"
 	"github.com/brocaar/lorawan"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/gofrs/uuid"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 )
 
 // Router accepts connections from forwarders and can exchange message between
@@ -27,6 +29,9 @@ import (
 type Router struct {
 	router.UnimplementedRouterV1Server
 
+	// router configuration
+	config RouterConfig
+
 	// integrations layer that handles received packages from gateways through
 	// their forwarder or can send packages back to gateways when required
 	integration integration.Integration
@@ -34,38 +39,64 @@ type Router struct {
 	// gatways keeps track which gateways are online and are connected through
 	// which forwarder
 	gateways *GatewayPool
-
-	// atomic counter that is incremented each time a forwarder connects and used
-	// internally to give each forwarder an unique id. This id is used when the
-	// forwarder disconnects to remove all online gateways from the gateways
-	// pool that are connected though the disconnected forwarder.
-	forwarderID uint64
 }
 
 var _ router.RouterV1Server = (*Router)(nil)
 
-func NewRouter(int integration.Integration) (*Router, error) {
-	r := Router{integration: int}
-	gp, err := NewGatewayPool()
+func NewRouter(cfg *Config, in integration.Integration) (*Router, error) {
+	pool, err := NewGatewayPool()
 	if err != nil {
 		return nil, err
 	}
-	r.gateways = gp
 
-	r.integration.SetDownlinkFrameFunc(r.gateways.DownlinkFrame)
-	// TODO: additional callbacks
-	return &r, nil
+	r := &Router{
+		integration: in,
+		gateways:    pool,
+		config:      cfg.Router,
+	}
+
+	// callbacks called by the integration layer
+	in.SetDownlinkFrameFunc(pool.DownlinkFrame)
+	in.SetGatewayConfigurationFunc(r.GatewayConfigurationHandler)
+	in.SetRawPacketForwarderCommandFunc(r.RawPacketForwarderCommandHandler)
+	in.SetGatewayCommandExecRequestFunc(r.GatewayCommandExecHandler)
+
+	return r, nil
 }
 
-func (r *Router) Run(ctx context.Context, endpoint string) error {
-	lis, err := net.Listen("tcp", endpoint)
+func (r *Router) GatewayConfigurationHandler(conf gw.GatewayConfiguration) {
+	logrus.Infof("got gateway configuration handle call: %x", conf.GetGatewayId())
+}
+
+func (r *Router) RawPacketForwarderCommandHandler(cmd gw.RawPacketForwarderCommand) {
+	logrus.Infof("got raw packet forwarder command handle call: %x", cmd.GetGatewayId())
+}
+
+func (r *Router) GatewayCommandExecHandler(cmdExec gw.GatewayCommandExecRequest) {
+	logrus.Infof("got gateway command exec handle call: %x", cmdExec.GetGatewayId())
+}
+
+func (r *Router) Run(ctx context.Context) error {
+	logrus.WithField("addr", r.config.ForwarderListenerAddress()).Info("open forwarder listener")
+	lis, err := net.Listen("tcp", r.config.ForwarderListenerAddress())
 	if err != nil {
 		return fmt.Errorf("unable to bind to endpoint: %w", err)
 	}
 	defer lis.Close()
 
 	var (
-		opts           = []grpc.ServerOption{}
+		kaep = keepalive.EnforcementPolicy{
+			MinTime:             15 * time.Second, // If a client pings more than once every 15 seconds, terminate the connection
+			PermitWithoutStream: true,             // Allow pings even when there are no active streams
+		}
+		kasp = keepalive.ServerParameters{
+			Time:    20 * time.Second, // Ping the client if it is idle for 5 seconds to ensure the connection is still active
+			Timeout: 5 * time.Second,  // Wait 5 seconds for the ping ack before assuming the connection is dead
+		}
+		opts = []grpc.ServerOption{
+			grpc.KeepaliveEnforcementPolicy(kaep),
+			grpc.KeepaliveParams(kasp),
+		}
 		grpcSrv        = grpc.NewServer(opts...)
 		grpcSrvStopped = make(chan struct{})
 	)
@@ -73,11 +104,11 @@ func (r *Router) Run(ctx context.Context, endpoint string) error {
 	router.RegisterRouterV1Server(grpcSrv, r)
 
 	go func() {
+		defer close(grpcSrvStopped)
 		if err := grpcSrv.Serve(lis); err != nil {
 			logrus.WithError(err).Fatal("unable to start gRPC interface")
 		}
 		logrus.Info("operator service stopped")
-		close(grpcSrvStopped)
 	}()
 
 	// wait until the context expires and stop the service
@@ -98,86 +129,92 @@ func (r *Router) JoinFilter(ctx context.Context, req *router.JoinFilterRequest) 
 	panic("not implemented") // TODO: Implement
 }
 
+var (
+	connectedForwarders int32
+)
+
 // Called by the forwarder to start bi-directional communication stream on which
 // events from gateways are send through the forwarder to this router or in
 // reverse from the integrations connected to this router to the forwarder and
 // eventually to its gateways that the event is targeted for.
 func (r *Router) Events(forwarder router.RouterV1_EventsServer) error {
 	// generate unique identifier for connected forwarder
-	forwarderID := atomic.AddUint64(&r.forwarderID, 1)
+	var (
+		forwarderID, err = uuid.NewV4()
+		fwdlog           = logrus.WithField("forwarder_id", forwarderID)
+	)
+	if err != nil {
+		logrus.WithError(err).Error("unable to generate forwarder id")
+		return status.Error(codes.Internal, "interal error")
+	}
 
 	// report that forwarder connected
 	if p, ok := peer.FromContext(forwarder.Context()); ok {
-		logrus.WithFields(logrus.Fields{
-			"forwarder": p.Addr,
-			"ID":        forwarderID}).Info("forwarder connected")
-	} else {
-		logrus.WithField("ID", forwarderID).Info("forwarder connected")
+		fwdlog = fwdlog.WithField("addr", p.Addr)
 	}
+	fwdlog.Info("forwarder connected")
+
+	connectedForwardersGauge.Set(float64(atomic.AddInt32(&connectedForwarders, 1)))
+	defer func() { connectedForwardersGauge.Set(float64(atomic.AddInt32(&connectedForwarders, -1))) }()
 
 	// turn forwarder into a readable event channel on which events from the
-	// forwarder can be read. It is closed when the forwarder connection is
-	// closed.
-	forwarderEventsReceiver := r.forwarderEventStream(forwarder)
+	// forwarder can be read. It is closed when the connection closes. It is
+	// closed in a background routine that forwarderEventStream starts.
+	forwarderEvents := r.forwarderEventStream(forwarderID, forwarder)
 
-	// channel that the integration layer uses to forward messages to gateways
-	// that are managed by this forwarder.
+	// open a channel to send events received from the integrations layer to
+	// the forwarder and its gateways.
 	integrationEvents := make(chan *router.RouterToGatewayEvent, 256)
 	defer close(integrationEvents)
 
 	for {
-		logrus.Debug("waiting for event")
+		fwdlog.Debug("process events")
 		select {
-		// events received from the forwarder that must be forwarded to the integrations
-		case in, ok := <-forwarderEventsReceiver:
+		case fwdEvent, ok := <-forwarderEvents: // wait for forwarder events
 			if !ok {
-				// unable to retrieve events from forwarder, probably disconnected
-				logrus.WithField("ID", forwarderID).Info("forwarder disconnected")
 				r.gateways.AllOffline(forwarderID)
+				fwdlog.Info("forwarder disconnected")
 				return nil
 			}
 
 			var (
-				info           = in.GetGatewayInformation()
-				pubKey         = info.GetPublicKey()
-				gatewayIDbytes = info.GetId() // TODO: as GatewayID
-				owner          = info.GetOwner()
-				event          = in.GetEvent()
+				info                  = fwdEvent.GetGatewayInformation()
+				pubKey                = info.GetPublicKey()
+				gatewayNetworkID, err = utils.GatewayPublicKeyToID(pubKey)
+				gatewayOwner          = common.BytesToAddress(info.GetOwner())
+				event                 = fwdEvent.GetEvent()
 			)
 
-			gatewayID, err := gateway.NewGatewayID(gatewayIDbytes)
 			if err != nil {
-				return err
+				fwdlog.WithError(err).Warn("unable to decode gateway ID from forwarder event")
+				continue
 			}
-
-			logrus.WithFields(logrus.Fields{
-				"pubKey":  fmt.Sprintf("%x", pubKey),
-				"owner":   fmt.Sprintf("%x", owner),
-				"ID":      forwarderID,
-				"gateway": gatewayID,
-			}).Debug("received event from forwarder")
+			log := fwdlog.WithFields(logrus.Fields{
+				"gw_network_id": gatewayNetworkID,
+				"gw_owner":      gatewayOwner,
+			})
 
 			if uplink, ok := event.(*router.GatewayToRouterEvent_UplinkFrameEvent); ok {
-				r.handleUplink(uplink)
+				r.handleUplink(log, gatewayNetworkID, uplink)
 			} else if downlinkAck, ok := event.(*router.GatewayToRouterEvent_DownlinkTXAckEvent); ok {
-				r.handleDownlinkTxAck(downlinkAck)
+				r.handleDownlinkTxAck(log, gatewayNetworkID, downlinkAck)
 			} else if status, ok := event.(*router.GatewayToRouterEvent_StatusEvent); ok {
-				r.handleStatus(forwarderID, gatewayID, status, integrationEvents)
+				r.handleStatus(log, forwarderID, gatewayNetworkID, gatewayOwner, status, integrationEvents)
+			} else {
+				log.Warn("received unsupported forwarder event")
 			}
-		// events from the integrations layer that must be send to a gateway through
-		// the connected forwarder
-		case ev, ok := <-integrationEvents:
+		case ev, ok := <-integrationEvents: // wait for integration events
 			if !ok {
 				// TODO: determine if disconnecting is the right thing to do if the integrations layer stopped
-				logrus.Info("integration events stream closed")
-				logrus.WithField("ID", forwarderID).Info("forwarder disconnected")
+				fwdlog.Info("integration events stream closed, disconnect forwarder")
 				r.gateways.AllOffline(forwarderID)
-				return nil
+				return status.Error(codes.Unavailable, "integration stopped")
 			}
 			if err := forwarder.Send(ev); err != nil {
-				logrus.WithError(err).WithField("event", ev.GetEvent()).Warn("unable to send event to forwarder")
+				fwdlog.WithError(err).WithField("event", ev.GetEvent()).Warn("unable to send event to forwarder")
+				return status.Error(status.Code(err), "unable to send event to forwarder")
 			} else {
-				logrus.WithField("event", ev.GetEvent()).Info("send event to forwarder")
+				fwdlog.Info("event sent to forwarder")
 			}
 		}
 	}
@@ -185,66 +222,97 @@ func (r *Router) Events(forwarder router.RouterV1_EventsServer) error {
 
 // forwarderEventerRWChan turns the given events readable into a readable go
 // channel with a reader and writer.
-func (r *Router) forwarderEventStream(events router.RouterV1_EventsServer) <-chan *router.GatewayToRouterEvent {
-	receivedForwarderEvents := make(chan *router.GatewayToRouterEvent, 4096)
+func (r *Router) forwarderEventStream(id uuid.UUID, events router.RouterV1_EventsServer) <-chan *router.GatewayToRouterEvent {
+	var (
+		log                     = logrus.WithField("forwarder_id", id)
+		receivedForwarderEvents = make(chan *router.GatewayToRouterEvent, 4096)
+	)
+
 	go func() {
 		defer close(receivedForwarderEvents)
 		for {
 			in, err := events.Recv()
-			if errors.Is(err, io.EOF) {
-				logrus.Info("router disconnected")
+			switch status.Code(err) {
+			case codes.OK:
+				// got event from forwarder
+				receivedForwarderEvents <- in
+			case codes.Canceled:
+				// forwarder disconnected, logged somewhere else
 				return
+			default:
+				log.WithError(err).Error("received error from forwarder")
 			}
-			if err != nil {
-				logrus.WithError(err).Warn("unable to receive events from router")
-				return
-			}
-			receivedForwarderEvents <- in
 		}
 	}()
 	return receivedForwarderEvents
 }
 
-func (r *Router) handleStatus(forwarderID uint64, gatewayID gateway.GatewayID, status *router.GatewayToRouterEvent_StatusEvent, integrationEvents chan<- *router.RouterToGatewayEvent) {
+func (r *Router) handleStatus(log *logrus.Entry, forwarderID uuid.UUID, gatewayID lorawan.EUI64, gatewayOwner common.Address, status *router.GatewayToRouterEvent_StatusEvent, integrationEvents chan<- *router.RouterToGatewayEvent) {
 	// forwarders send periodically (~30s) an indication if a gateway is still
 	// online or when a gateway goes offline
 	online := status.StatusEvent.GetOnline()
 	if online {
-		r.gateways.SetOnline(forwarderID, gatewayID, integrationEvents)
+		r.gateways.SetOnline(forwarderID, gatewayID, gatewayOwner, integrationEvents)
 	} else {
 		r.gateways.SetOffline(forwarderID, gatewayID)
 	}
-
-	r.integration.SetGatewaySubscription(online, lorawan.EUI64(gatewayID))
+	log.WithField("online", online).Debug("gateway status")
+	r.integration.SetGatewaySubscription(online, gatewayID)
 }
 
-func (r *Router) handleUplink(event *router.GatewayToRouterEvent_UplinkFrameEvent) {
-	// TODO: Wrap in go routine?
-	frame := event.UplinkFrameEvent.GetUplinkFrame()
+func (r *Router) handleUplink(log *logrus.Entry, gatewayNetworkID lorawan.EUI64, event *router.GatewayToRouterEvent_UplinkFrameEvent) {
+	var (
+		frame                          = event.UplinkFrameEvent.GetUplinkFrame()
+		gatewayNetworkIDFromFrame, err = utils.BytesToGatewayID(frame.GetRxInfo().GetGatewayId())
+		uplinkID                       = uuid.FromBytesOrNil(frame.GetRxInfo().GetUplinkId())
+	)
+	log = log.WithFields(logrus.Fields{
+		"uplink_id": uplinkID,
+	})
 
-	var gatewayId lorawan.EUI64
-	copy(gatewayId[:], frame.GetRxInfo().GetGatewayId())
-	uplinkId := uuid.FromBytesOrNil(frame.GetRxInfo().GetUplinkId())
-
-	if err := r.integration.PublishEvent(gatewayId, integration.EventUp, uplinkId, frame); err != nil {
-		log.WithError(err).WithFields(log.Fields{
-			"gateway_id": gatewayId,
-			"event_type": integration.EventUp,
-			"uplink_id":  uplinkId,
-		}).Error("publish event error")
-	}
-}
-
-func (r *Router) handleDownlinkTxAck(event *router.GatewayToRouterEvent_DownlinkTXAckEvent) {
-	// TODO: Wrap in go routine?
-	ack := event.DownlinkTXAckEvent.GetDownlinkTXAck()
-
-	gatewayID, err := gateway.NewGatewayID(ack.GetGatewayId())
 	if err != nil {
-		logrus.WithError(err).Error("received invalid gatewayID, dropping downlink-tx-ack")
+		log.WithError(err).Error("unable to decode gateway network id from uplink frame, drop uplink")
+		return
 	}
 
-	downlinkId := uuid.FromBytesOrNil(ack.GetDownlinkId())
+	if gatewayNetworkID != gatewayNetworkIDFromFrame {
+		log.WithField("frame_gw_network-id", gatewayNetworkIDFromFrame).Error("received uplink with gateway info id != frame gateway id, drop uplink")
+		return
+	}
+
+	if err := r.integration.PublishEvent(gatewayNetworkID, integration.EventUp, uplinkID, frame); err != nil {
+		log.WithError(err).WithFields(logrus.Fields{
+			"event_type": integration.EventUp,
+		}).Error("forwarded uplink event to integrations failed, drop uplink")
+
+		uplinksCounter.WithLabelValues(gatewayNetworkID.String(), "failed").Inc()
+		return
+	}
+
+	log.WithFields(logrus.Fields{
+		"event_type": integration.EventUp,
+	}).Info("forwarded uplink event to integration")
+
+	uplinksCounter.WithLabelValues(gatewayNetworkID.String(), "success").Inc()
+}
+
+func (r *Router) handleDownlinkTxAck(log *logrus.Entry, gatewayNetworkID lorawan.EUI64, event *router.GatewayToRouterEvent_DownlinkTXAckEvent) {
+	var (
+		ack                            = event.DownlinkTXAckEvent.GetDownlinkTXAck()
+		gatewayNetworkIDFromFrame, err = utils.BytesToGatewayID(ack.GetGatewayId())
+		downlinkId                     = uuid.FromBytesOrNil(ack.GetDownlinkId())
+	)
+	log = log.WithField("downlink_id", downlinkId)
+
+	if err != nil {
+		log.WithError(err).Error("invalid gatewayID, drop downlink-tx-ack")
+		return
+	}
+	if gatewayNetworkID != gatewayNetworkIDFromFrame {
+		log.WithField("frame_gw_network-id", gatewayNetworkIDFromFrame).
+			Error("received downlink ack with gateway info id != frame gateway id, drop downlink-tx-ack")
+		return
+	}
 
 	// for backwards compatibility
 	for _, err := range ack.Items {
@@ -252,15 +320,16 @@ func (r *Router) handleDownlinkTxAck(event *router.GatewayToRouterEvent_Downlink
 			ack.Error = ""
 			break
 		}
-
 		ack.Error = err.String()
 	}
 
-	if err := integration.GetIntegration().PublishEvent(lorawan.EUI64(gatewayID), integration.EventAck, downlinkId, ack); err != nil {
-		log.WithError(err).WithFields(log.Fields{
-			"gateway_id":  gatewayID,
-			"event_type":  integration.EventAck,
-			"downlink_id": downlinkId,
-		}).Error("publish event error")
+	if err := integration.GetIntegration().PublishEvent(gatewayNetworkID, integration.EventAck, downlinkId, ack); err != nil {
+		log.WithError(err).WithField("event_type", integration.EventAck).Error("unable to send downlink ACK to integration")
+		downlinksCounter.WithLabelValues(gatewayNetworkID.String(), "failed").Inc()
+		return
 	}
+
+	log.Info("send gateway downlink ACK to integration")
+
+	downlinksCounter.WithLabelValues(gatewayNetworkID.String(), "success").Inc()
 }

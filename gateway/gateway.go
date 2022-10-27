@@ -3,29 +3,36 @@ package gateway
 import (
 	"crypto/ecdsa"
 	"crypto/sha256"
-	"encoding/hex"
-	"fmt"
-	"strings"
 
+	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/brocaar/lorawan"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
 type Gateway struct {
-	LocalGatewayID           GatewayID
-	NetworkGatewayID         GatewayID
+	LocalGatewayID           lorawan.EUI64
+	NetworkGatewayID         lorawan.EUI64
 	PrivateKey               *ecdsa.PrivateKey
 	PublicKey                *ecdsa.PublicKey
 	PublicKeyBytes           []byte
 	CompressedPublicKeyBytes []byte
-	Owner                    string
+	Owner                    common.Address
 }
 
-func NewGateway(localGatewayIDBytes []byte, priv *ecdsa.PrivateKey) (*Gateway, error) {
-	localGatewayID, err := NewGatewayID(localGatewayIDBytes)
-	if err != nil {
-		return nil, err
-	}
+// ID is the identifier as which the gateway is registered in the gateway registry.
+func (gw Gateway) ID() [32]byte {
+	var id [32]byte
+	copy(id[:], gw.CompressedPublicKeyBytes)
+	return id
+}
+
+// CompressedPubKeyBytes returns the compressed public key including 0x02 prefix
+func (gw Gateway) CompressedPubKeyBytes() []byte {
+	return append([]byte{0x2}, gw.CompressedPublicKeyBytes...)
+}
+
+func NewGateway(localGatewayID lorawan.EUI64, priv *ecdsa.PrivateKey) (*Gateway, error) {
 	return &Gateway{
 		LocalGatewayID:           localGatewayID,
 		NetworkGatewayID:         CalculateNetworkGatewayID(priv),
@@ -33,37 +40,32 @@ func NewGateway(localGatewayIDBytes []byte, priv *ecdsa.PrivateKey) (*Gateway, e
 		PublicKey:                &priv.PublicKey,
 		CompressedPublicKeyBytes: CalculateCompressedPublicKeyBytes(&priv.PublicKey),
 		PublicKeyBytes:           CalculatePublicKeyBytes(&priv.PublicKey),
-		Owner:                    "", // TODO
+		Owner:                    common.Address{}, // TODO
 	}, nil
 }
 
-func GenerateNewGateway(localGatewayIDBytes []byte) (*Gateway, error) {
-	localGatewayID, err := NewGatewayID(localGatewayIDBytes)
-	if err != nil {
-		return nil, err
-	}
-
+func GenerateNewGateway(localID lorawan.EUI64) (*Gateway, error) {
 	priv, err := GeneratePrivateKey()
 	if err != nil {
 		return nil, err
 	}
 
 	return &Gateway{
-		LocalGatewayID:           localGatewayID,
+		LocalGatewayID:           localID,
 		NetworkGatewayID:         CalculateNetworkGatewayID(priv),
 		PrivateKey:               priv,
 		PublicKey:                &priv.PublicKey,
 		CompressedPublicKeyBytes: CalculateCompressedPublicKeyBytes(&priv.PublicKey),
-		Owner:                    "", // TODO
+		Owner:                    common.Address{}, // TODO
 	}, nil
 }
 
-func CalculateNetworkGatewayID(priv *ecdsa.PrivateKey) GatewayID {
+func CalculateNetworkGatewayID(priv *ecdsa.PrivateKey) lorawan.EUI64 {
 	pub := priv.PublicKey
 	pubBytes := CalculateCompressedPublicKeyBytes(&pub)
 	h := sha256.Sum256(pubBytes)
 
-	gatewayID, _ := NewGatewayID(h[0:8])
+	gatewayID, _ := utils.BytesToGatewayID(h[0:8])
 
 	return gatewayID
 }
@@ -76,39 +78,6 @@ func CalculatePublicKeyBytes(pub *ecdsa.PublicKey) []byte {
 	return crypto.FromECDSAPub(pub)
 }
 
-func (gw *Gateway) Address() string {
-	return crypto.PubkeyToAddress(*gw.PublicKey).String()
-}
-
-type GatewayID lorawan.EUI64
-
-func NewGatewayID(gatewayIDbytes []byte) (GatewayID, error) {
-	if len(gatewayIDbytes) != 8 {
-		return GatewayID{}, fmt.Errorf("invalid gateway-id length: %d", len(gatewayIDbytes))
-	}
-
-	var gatewayID GatewayID
-	copy(gatewayID[:], gatewayIDbytes)
-
-	return gatewayID, nil
-}
-
-func NewGatewayIDFromString(gatewayIDStr string) (GatewayID, error) {
-	gatewayIDStr = strings.ReplaceAll(gatewayIDStr, ":", "")
-	gatewayIDStr = strings.ReplaceAll(gatewayIDStr, " ", "")
-	gatewayIDbytes, err := hex.DecodeString(gatewayIDStr)
-	if err != nil {
-		return GatewayID{}, err
-	}
-
-	return NewGatewayID(gatewayIDbytes)
-
-}
-
-func (gid GatewayID) String() string {
-	return hex.EncodeToString(gid[:])
-}
-
-func (gid GatewayID) Bytes() []byte {
-	return gid[:]
+func (gw *Gateway) Address() common.Address {
+	return crypto.PubkeyToAddress(*gw.PublicKey)
 }

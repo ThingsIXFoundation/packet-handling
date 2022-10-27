@@ -1,0 +1,99 @@
+# forwarder configuration
+forwarder:
+    # backend for the gateways to connect to
+    backend:
+        # Semtech UDP forwarder backend
+        semtech_udp:
+            # ip:port to bind the UDP listener to, ensure it is accessible by the gateways
+            #
+            # Example: 0.0.0.0:1680 to listen on port 1680 for all network interfaces.
+            udp_bind: 0.0.0.0:1680
+            # Skip the CRC status-check of received packets
+            #
+            # This is only has effect when the packet-forwarder is configured to forward
+            # LoRa frames with CRC errors.
+            skip_crc_check: false
+            # Fake RX timestamp.
+            #
+            # Fake the RX time when the gateways do not have GPS, in which case
+            # the time would otherwise be unset.
+            fake_rx_time: false
+    
+    # Gateways that can connect to backend
+    gateways:
+        # ThingsIX gateway registry address
+        #
+        # Used to determine which gateways from the store are onboarded and
+        # configured. Gateways that are not onboard on ThingsIX or don't have
+        # their details set are ignored.
+        gateway_registry: 0xDAA93030749C7fE99B0A26Ac8074D49143A47C4e
+
+        # ThingsIX gateway registry refresh interval
+        #
+        # Only for gateways from the store that are onboarded and have their
+        # details set in the gateway registry data is routed to its final destination.
+        # Check the registry every `refresh` interval for onboarded/offboarded gateways.
+        # must be at least 1m, default is 5m
+        refresh: 5m
+
+        # Gateway store
+        #
+        # Gateway
+        store:
+            # File based gateway store.
+            #
+            # Full gateway store path on the file system
+            file: /var/home/bas/dev/thingsix/packet-handling/cmd/forwarder/gateways.store
+        
+        # Optionally record gatway local id's for  gateways that are not the in
+        # the store into a file. This file can later be verified and imported
+        # into the gateway store. The import command will generate an onboarding
+        # file that can be uploaded to the dashboad to onboard all of these
+        # gateways.
+        record_unknown:
+            # location where connected gateways that are not in the store are
+            # logged.
+            file: /home/forwarder/unknown_gateways.list
+
+    # Routers to which gateway data can be forwarded to
+    routers:
+        # List with default routers
+        #
+        # Default routers are routers that will receive all gateway data and
+        # don't have to be registered in the ThingsIX router registry.
+        default:
+            - endpoint: localhost:3200
+              name: v47
+
+        # retrieve routers from the ThingsIX router registry.
+        on_chain:
+            # ThingsIX router registry address
+            registry: 0xA82C3D848c027F5034d833CE6B8aA2b79Ff3F655
+
+            # retrieve router list from registry every interval
+            interval: 30m
+
+    # accounting is not yet supported
+    accounting:
+
+# logging related configuration
+log:
+    level: info      # [trace,debug,info,warn,error,fatal,panic]
+    timestamp: true  # [true, false]
+
+# everything related to blockchain and RPC node
+blockchain:
+    polygon:
+        # Polygon node RPC endpoint
+        endpoint: https://polygon-mumbai.g.alchemy.com/v2/hpUKIykQy9ca835_jhIj28OoqP_YL0Zm
+        # Polygon chain id: 137 for mainnet, 80001 for mumbai testnet
+        chain_id: 80001
+        # Block confirmations, polygon blocks are final after 128 confirmations
+        confirmations: 128
+
+# optional enable metrics
+metrics:
+    # Enable prometheus http service
+    prometheus:
+        address: 0.0.0.0:8888
+        path: /metrics
