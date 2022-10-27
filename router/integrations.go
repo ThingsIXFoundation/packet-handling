@@ -24,9 +24,16 @@ func buildIntegrationsForMQTT(cfg RouterConfig) (integration.Integration, error)
 	chirpConfig.Integration.MQTT.MaxTokenWait = cfg.Integration.MQTT.MaxTokenWait
 	if cfg.Integration.MQTT.Auth != nil && cfg.Integration.MQTT.Auth.Generic != nil {
 		chirpConfig.Integration.MQTT.Auth.Type = "generic"
+		chirpConfig.Integration.MQTT.Auth.Generic.Server = cfg.Integration.MQTT.Auth.Generic.Server
 		chirpConfig.Integration.MQTT.Auth.Generic.Servers = cfg.Integration.MQTT.Auth.Generic.Servers
 		chirpConfig.Integration.MQTT.Auth.Generic.Username = cfg.Integration.MQTT.Auth.Generic.Username
 		chirpConfig.Integration.MQTT.Auth.Generic.Password = cfg.Integration.MQTT.Auth.Generic.Password
+		chirpConfig.Integration.MQTT.Auth.Generic.CACert = cfg.Integration.MQTT.Auth.Generic.CACert
+		chirpConfig.Integration.MQTT.Auth.Generic.TLSCert = cfg.Integration.MQTT.Auth.Generic.TLSCert
+		chirpConfig.Integration.MQTT.Auth.Generic.TLSKey = cfg.Integration.MQTT.Auth.Generic.TLSKey
+		chirpConfig.Integration.MQTT.Auth.Generic.QOS = cfg.Integration.MQTT.Auth.Generic.QOS
+		chirpConfig.Integration.MQTT.Auth.Generic.CleanSession = cfg.Integration.MQTT.Auth.Generic.CleanSession
+		chirpConfig.Integration.MQTT.Auth.Generic.ClientID = cfg.Integration.MQTT.Auth.Generic.ClientID
 	}
 	if cfg.Integration.MQTT.Auth != nil && cfg.Integration.MQTT.Auth.GCPCloudIoTCore != nil {
 		return nil, fmt.Errorf("GCP cloud IoT core auth unsupported")
