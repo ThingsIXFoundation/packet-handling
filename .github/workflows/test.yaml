@@ -1,0 +1,25 @@
+name: 'Test'
+
+on:
+  pull_request:
+    branches:
+      - main
+
+env:
+  GOPRIVATE: "github.com/ThingsIXFoundation"
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure git for private modules
+        run: git config --global url."https://${{secrets.GIT_ACCESS_TOKEN}}:x-oauth-basic@github.com".insteadOf "https://github.com"
+      - name: Check out code
+        uses: actions/checkout@v3
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19.2
+      - name: Test
+        run: go test $(go list ./... | grep -v /external/)
