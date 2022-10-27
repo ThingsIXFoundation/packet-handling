@@ -172,7 +172,7 @@ func fetchRoutersFromChain(cfg *Config, accounter Accounter) (RoutesUpdaterFunc,
 		}
 	}
 
-	logrus.WithField("interval", interval).Info("retrieve routers on chain")
+	logrus.WithField("interval", interval).Info("retrieve routes on chain")
 
 	return func() ([]*Router, error) {
 		client, err := dialRPCNode(cfg)

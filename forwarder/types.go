@@ -71,11 +71,19 @@ func NewGatewaySet(cfg *Config, store gateway.GatewayStore, local map[lorawan.EU
  * are onboarded and have their details set.
  */
 func (gs *GatewaySet) Refresh(ctx context.Context) {
+	if gs.config.Forwarder.Gateways.RegistryAddress == nil {
+		// don't refresh loaded gateway store with on-chain
+		// gateway registry. RegistryAddress must be made mandatory
+		// once Gateways can be onboarded/updated in ThingsIX
+		// (TODO: e.g. token support is added)
+		return
+	}
+
 	var (
 		refresh  = 5 * time.Minute  // check refresh interval gateway registry for updates
 		interval = time.Duration(0) // run instant first time
 	)
-	if gs.config.Forwarder.Gateways.Refresh != nil && *gs.config.Forwarder.Gateways.Refresh < time.Minute {
+	if *gs.config.Forwarder.Gateways.Refresh < time.Minute {
 		refresh = time.Minute
 	} else if gs.config.Forwarder.Gateways.Refresh != nil {
 		refresh = *gs.config.Forwarder.Gateways.Refresh
