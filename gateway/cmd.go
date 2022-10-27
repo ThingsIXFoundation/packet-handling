@@ -232,7 +232,7 @@ func addGatewayToStore(cmd *cobra.Command, args []string) {
 
 	gw, err := store.GatewayByLocalID(gateway.LocalGatewayID)
 	if err != nil {
-		logrus.WithError(err).Fatal("unable to retrieve added gateway: %s", localID)
+		logrus.WithError(err).Fatalf("unable to retrieve added gateway: %s", localID)
 	}
 	printGatewaysAsTable([]*Gateway{gw}, nil)
 }
