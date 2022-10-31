@@ -115,7 +115,10 @@ func NewExchange(cfg *Config) (*Exchange, error) {
 // Run the exchange until the given ctx expires.
 func (e *Exchange) Run(ctx context.Context) {
 	// start backend and accept gateways
-	e.backend.Start()
+	err := e.backend.Start()
+	if err != nil {
+		logrus.WithError(err).Fatal("could not start backend")
+	}
 
 	// update the routing table periodically
 	go e.routingTable.Run(ctx)
@@ -142,7 +145,10 @@ func (e *Exchange) Run(ctx context.Context) {
 				}
 			}
 		case <-ctx.Done():
-			e.backend.Stop()
+			err := e.backend.Stop()
+			if err != nil {
+				logrus.WithError(err).Error("could not stop backend, stopping anyway")
+			}
 			logrus.Info("packet exchange stopped")
 			return
 		}

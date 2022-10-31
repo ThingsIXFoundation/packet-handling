@@ -40,7 +40,12 @@ func Run(cmd *cobra.Command, args []string) {
 		logrus.WithError(err).Fatal("unable to instantiate integration")
 	}
 
-	go integration.Start()
+	go func() {
+		err := integration.Start()
+		if err != nil {
+			logrus.WithError(err).Fatal("unable to start integration")
+		}
+	}()
 
 	router, err := NewRouter(cfg, integration)
 	if err != nil {
@@ -50,7 +55,7 @@ func Run(cmd *cobra.Command, args []string) {
 	// start routing packets
 	wg.Add(1)
 	go func() {
-		go router.Run(ctx)
+		go router.MustRun(ctx)
 		wg.Done()
 	}()
 

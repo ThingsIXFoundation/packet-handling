@@ -92,6 +92,13 @@ func (r *Router) GatewayCommandExecHandler(cmdExec gw.GatewayCommandExecRequest)
 	logrus.Infof("got gateway command exec handle call: %x", cmdExec.GetGatewayId())
 }
 
+func (r *Router) MustRun(ctx context.Context) {
+	err := r.Run(ctx)
+	if err != nil {
+		logrus.WithError(err).Fatal("could not run router")
+	}
+}
+
 func (r *Router) Run(ctx context.Context) error {
 	logrus.WithField("addr", r.config.ForwarderListenerAddress()).Info("open forwarder listener")
 	lis, err := net.Listen("tcp", r.config.ForwarderListenerAddress())
@@ -273,7 +280,10 @@ func (r *Router) handleStatus(log *logrus.Entry, forwarderID uuid.UUID, gatewayI
 		r.gateways.SetOffline(forwarderID, gatewayID)
 	}
 	log.WithField("online", online).Debug("gateway status")
-	r.integration.SetGatewaySubscription(online, gatewayID)
+	err := r.integration.SetGatewaySubscription(online, gatewayID)
+	if err != nil {
+		logrus.WithError(err).Error("could not set gateway subscription")
+	}
 }
 
 func (r *Router) handleUplink(log *logrus.Entry, gatewayNetworkID lorawan.EUI64, event *router.GatewayToRouterEvent_UplinkFrameEvent) {

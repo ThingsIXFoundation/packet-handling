@@ -18,6 +18,7 @@ package main
 
 import (
 	"github.com/ThingsIXFoundation/packet-handling/router"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -32,5 +33,8 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.PersistentFlags().String("config", "", "configuration file")
-	viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
+	err := viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
+	if err != nil {
+		logrus.WithError(err).Fatal("could not find viper flag")
+	}
 }

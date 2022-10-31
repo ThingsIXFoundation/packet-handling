@@ -147,6 +147,9 @@ func runPrometheusHTTPEndpoint(ctx context.Context, cfg *Config) {
 	}()
 
 	<-ctx.Done()
-	httpServer.Shutdown(context.Background())
+	err := httpServer.Shutdown(context.Background())
+	if err != nil {
+		logrus.WithError(err).Error("could not stop prometheus metrics cleanly, stopping anyway")
+	}
 	<-done
 }

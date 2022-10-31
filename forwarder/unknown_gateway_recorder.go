@@ -82,7 +82,11 @@ func recordUnkownGatewaysToFile(cfg *Config) UnknownGatewayLoggerFunc {
 				log.WithError(err).Error("unable to open unknown gateway record file")
 				continue
 			}
-			file.Write(bytes)
+			_, err = file.Write(bytes)
+			if err != nil {
+				log.WithError(err).Error("unable to write unknown gateway record file")
+				continue
+			}
 			file.Close()
 
 			log.WithField("gw_local_id", id).Info("unknown gateway recorded")

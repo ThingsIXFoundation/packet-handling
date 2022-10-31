@@ -19,6 +19,7 @@ package main
 import (
 	"github.com/ThingsIXFoundation/packet-handling/forwarder"
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -37,7 +38,10 @@ the gateway.`,
 
 func init() {
 	rootCmd.PersistentFlags().String("config", "", "configuration file")
-	viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
+	err := viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
+	if err != nil {
+		logrus.WithError(err).Fatal("could not find viper flag")
+	}
 
 	rootCmd.AddCommand(gateway.Cmd)
 }

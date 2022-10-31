@@ -93,7 +93,7 @@ func NewRouterClient(router *Router,
 // to it to exchange packets.
 func (rc *RouterClient) Run(ctx context.Context) {
 	var (
-		lastConnectAttempt    = time.Now()
+		lastConnectAttempt    time.Time
 		reconnectInterval     = 5 * time.Second
 		nextReconnectInterval = func() time.Duration {
 			if reconnectInterval < time.Second {
