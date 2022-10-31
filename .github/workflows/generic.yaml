@@ -1,0 +1,47 @@
+# Copyright 2022 Stichting ThingsIX Foundation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Generic Checks'
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  license:
+    name: Check if all files contain license header
+    runs-on: ubuntu-latest
+    steps: 
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19.2     
+      - name: Install addlicense
+        run: go install github.com/google/addlicense@53d978ad7e086016cadd4beb6f8a92d73fde9ad0
+      - name: Check out code
+        uses: actions/checkout@v3
+      - name: Check license headers
+        run: ./check-license.sh
+  check-commit-message-style:
+    name: Check commit message
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check
+        uses: mristin/opinionated-commit-message@v3.0.0
+        with:
+          max-subject-line-length: '100'
+          allow-one-liners: 'true'

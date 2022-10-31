@@ -1,0 +1,45 @@
+// Copyright 2022 Stichting ThingsIX Foundation
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
+package utils
+
+import (
+	"crypto/sha256"
+	"fmt"
+
+	"github.com/brocaar/lorawan"
+)
+
+func GatewayPublicKeyToID(pubKey []byte) (lorawan.EUI64, error) {
+	// pubkey is the compressed 33-byte long public key,
+	// the gateway ID is the pub key without the 0x02 prefix
+	if len(pubKey) == 33 {
+		// compressed ThingsIX public keys always start with 0x02.
+		// therefore don't use it and use bytes [1:] to derive the id
+		h := sha256.Sum256(pubKey[1:])
+		return BytesToGatewayID(h[:8])
+	}
+	return lorawan.EUI64{}, fmt.Errorf("invalid gateway public key (len=%d)", len(pubKey))
+}
+
+func BytesToGatewayID(id []byte) (lorawan.EUI64, error) {
+	var gid lorawan.EUI64
+	if len(id) != len(gid) {
+		return lorawan.EUI64{}, fmt.Errorf("invalid gateway id length (len=%d)", len(id))
+	}
+	copy(gid[:], id)
+	return gid, nil
+}
