@@ -1,3 +1,4 @@
+#!/bin/sh
 # Copyright 2022 Stichting ThingsIX Foundation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,27 +15,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-FROM golang:1.19.2-alpine as build
 
-RUN apk add --update-cache build-base musl-dev git ca-certificates && rm -rf /var/cache/apk/*
-
-WORKDIR /build
-
-COPY go.mod .
-COPY go.sum .
-
-RUN go mod download
-RUN go mod verify
-
-COPY . .
-RUN cd cmd/forwarder && go build -ldflags="-s -w -extldflags '-static'" -o /forwarder
-
-# Now copy it into our base image.
-FROM scratch
-
-LABEL authors="ThingsIX Foundation"
-
-COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=build /forwarder .
-
-ENTRYPOINT ["./forwarder"]
+# Adds a license to all code files, requires the https://github.com/google/addlicense tool to be installed
+addlicense -check -c "Stichting ThingsIX Foundation" -s -ignore "external/**" . | xargs -I %s -- echo "::error file=%s,line=1::Missing license header"
