@@ -28,7 +28,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/ThingsIXFoundation/definitions-go"
+	frequency_plan "github.com/ThingsIXFoundation/frequency-plan/go/frequency_plan"
 	gateway_registry "github.com/ThingsIXFoundation/gateway-registry-go"
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	router_registry "github.com/ThingsIXFoundation/router-registry-go"
@@ -141,7 +141,7 @@ func acceptOnlyOnboardedAndRegistryGateways(cfg *Config, store gateway.Store) (m
 				"altitude":     rgw.Altitude * 3,
 				"antenna-gain": fmt.Sprintf("%.1f", (float32(rgw.AntennaGain) / 10.0)),
 				"owner":        gateway.Owner,
-				"freq-plan":    definitions.FrequencyPlan(rgw.FrequencyPlan),
+				"freq-plan":    frequency_plan.FromBlockchain(frequency_plan.BlockchainFrequencyPlan(rgw.FrequencyPlan)),
 			}).Debug("loaded gateway from store")
 		} else {
 			l := logrus.WithFields(logrus.Fields{
