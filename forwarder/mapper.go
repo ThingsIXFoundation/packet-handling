@@ -46,7 +46,6 @@ func NewMapperForwarder(exchange *Exchange) (*MapperForwarder, error) {
 }
 
 func IsMaybeMapperPacket(payload *lorawan.MACPayload) bool {
-	logrus.Infof("dev_addr=%s", hex.EncodeToString(payload.FHDR.DevAddr[:]))
 	return payload.FHDR.DevAddr[0] == 0x02
 }
 
