@@ -55,6 +55,10 @@ type Router struct {
 	// gatways keeps track which gateways are online and are connected through
 	// which forwarder
 	gateways *GatewayPool
+
+	// joinFilterGenerator generates the join filter that is required by gateways
+	// to be able to route joins (that don't have NetIds) to the right router
+	joinFilterGenerator JoinFilterGenerator
 }
 
 var _ router.RouterV1Server = (*Router)(nil)
@@ -65,10 +69,16 @@ func NewRouter(cfg *Config, in integration.Integration) (*Router, error) {
 		return nil, err
 	}
 
+	jfg, err := NewJoinFilterGenerator(cfg.Router)
+	if err != nil {
+		return nil, err
+	}
+
 	r := &Router{
-		integration: in,
-		gateways:    pool,
-		config:      cfg.Router,
+		integration:         in,
+		gateways:            pool,
+		config:              cfg.Router,
+		joinFilterGenerator: jfg,
 	}
 
 	// callbacks called by the integration layer
@@ -134,6 +144,26 @@ func (r *Router) Run(ctx context.Context) error {
 		logrus.Info("operator service stopped")
 	}()
 
+	// Update the JoinFilter every RenewInterval
+	go func() {
+		renewTicker := time.NewTicker(r.config.JoinFilterGenerator.RenewInterval)
+		for {
+			select {
+			case <-renewTicker.C:
+				ctx, cancel := context.WithTimeout(ctx, r.config.JoinFilterGenerator.RenewInterval/2)
+				err := r.joinFilterGenerator.UpdateFilter(ctx)
+				if err != nil {
+					logrus.WithError(err).Error("error while updating JoinFilter")
+				}
+				// No defer here because the function only returns once
+				cancel()
+			case <-ctx.Done():
+				logrus.Info("stopping JoinFilter update loop")
+				return
+			}
+		}
+	}()
+
 	// wait until the context expires and stop the service
 	<-ctx.Done()
 	grpcSrv.GracefulStop()
@@ -144,12 +174,13 @@ func (r *Router) Run(ctx context.Context) error {
 	return nil
 }
 
-func (r *Router) NetIds(ctx context.Context, req *router.NetIdsRequest) (*router.NetIdsResponse, error) {
-	panic("not implemented") // TODO: Implement
-}
-
 func (r *Router) JoinFilter(ctx context.Context, req *router.JoinFilterRequest) (*router.JoinFilterResponse, error) {
-	panic("not implemented") // TODO: Implement
+	filter, err := r.joinFilterGenerator.JoinFilter(ctx)
+	if err != nil {
+		logrus.WithError(err).Error("error while getting join filter")
+		return nil, status.Errorf(codes.Internal, "error while getting join filter")
+	}
+	return &router.JoinFilterResponse{JoinFilter: filter}, nil
 }
 
 var (

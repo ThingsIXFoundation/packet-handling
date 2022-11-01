@@ -27,6 +27,15 @@ import (
 )
 
 type RouterConfig struct {
+	JoinFilterGenerator struct {
+		RenewInterval time.Duration `mapstructure:"renew_interval"`
+		ChirpStack    struct {
+			Target   string `mapstructure:"target"`
+			Insecure bool
+			APIKey   string `mapstructure:"api_key"`
+		} `mapstructure:"chirpstack"`
+	}
+
 	Forwarder struct {
 		Endpoint struct {
 			Host string
