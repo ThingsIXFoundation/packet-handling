@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"github.com/FastFilter/xorfilter"
 	"time"
 
 	"github.com/ThingsIXFoundation/packet-handling/forwarder/broadcast"
@@ -196,10 +197,11 @@ func logRouterDialDetails(router *Router) {
 
 func (rc *RouterClient) run(ctx context.Context) error {
 	var (
-		log                 = logrus.WithField("router", rc.router)
-		pendingDownlinkAcks = make(map[[32]byte]time.Time)
-		dialCtx, cancel     = context.WithTimeout(ctx, 30*time.Second)
-		kacp                = keepalive.ClientParameters{
+		log                   = logrus.WithField("router", rc.router)
+		joinFilterRenewTicker = time.NewTicker(30 * time.Minute)
+		pendingDownlinkAcks   = make(map[[32]byte]time.Time)
+		dialCtx, cancel       = context.WithTimeout(ctx, 30*time.Second)
+		kacp                  = keepalive.ClientParameters{
 			Time:                20 * time.Second, // send pings every 20 seconds if there is no activity
 			Timeout:             5 * time.Second,  // wait 5 seconds for ping ack before considering the connection dead
 			PermitWithoutStream: true,             // send pings even without active streams
@@ -250,6 +252,9 @@ func (rc *RouterClient) run(ctx context.Context) error {
 	log.Trace("start router message exchange")
 	routersConnectedGauge.Add(1)
 	defer routersConnectedGauge.Sub(1)
+
+	// Get the JoinFilter now and update it later every joinFilterRenewInterval
+	go rc.updateJoinFilter(ctx, client)
 
 	for {
 		select {
@@ -380,8 +385,33 @@ func (rc *RouterClient) run(ctx context.Context) error {
 					return nil
 				}
 			}
+		case <-joinFilterRenewTicker.C:
+			// Update the join filter from the router every joinFilterRenewInterval
+			go rc.updateJoinFilter(ctx, client)
 		}
 	}
+}
+
+func (rc *RouterClient) updateJoinFilter(ctx context.Context, client router.RouterV1Client) {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	resp, err := client.JoinFilter(ctx, &router.JoinFilterRequest{})
+	if err != nil {
+		logrus.WithError(err).WithField("router", rc.router).Error("error while updating JoinFilter for router")
+		return
+	}
+
+	filter := &xorfilter.Xor8{}
+
+	if resp.GetJoinFilter().GetXor8() != nil {
+		xor := resp.GetJoinFilter().GetXor8()
+		filter.Seed = xor.Seed
+		filter.Fingerprints = xor.Fingerprints
+		filter.BlockLength = xor.Blocklength
+	}
+
+	rc.router.SetJoinFilter(filter)
+	logrus.WithField("router", rc.router).Infof("updated the JoinFilter with %d fingerprints", filter.Fingerprints)
 }
 
 func isDownlinkAckEvent(event *router.RouterToGatewayEvent) bool {

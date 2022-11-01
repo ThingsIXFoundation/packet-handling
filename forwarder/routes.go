@@ -18,8 +18,8 @@ package forwarder
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
+	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"sync"
 	"time"
 
@@ -66,13 +66,15 @@ type Router struct {
 	NetIDs []lorawan.NetID
 	// Owner is the routers owner
 	Owner common.Address
+
+	joinFilterMutex sync.RWMutex
 	// JoinFilter is the filter of devices that are allowed to join the network this router is part of
-	joinFilter xorfilter.Xor8
+	joinFilter *xorfilter.Xor8
 	// Accounting keeps track if this router pays for the data is received from the gateways
 	accounting Accounter
 }
 
-func (r Router) String() string {
+func (r *Router) String() string {
 	if r.Name != "" {
 		return r.Name
 	}
@@ -90,13 +92,13 @@ func NewRouter(id [32]byte, endpoint string, def bool, netIDs []lorawan.NetID, o
 	}
 }
 
-func (r Router) AllowAirtime(owner common.Address, airtime time.Duration) bool {
+func (r *Router) AllowAirtime(owner common.Address, airtime time.Duration) bool {
 	return r.Default || r.accounting.Allow(owner, airtime)
 }
 
 // InterestedIn returns an indication if router is interested in a message
 // from a device with the given devaddr.
-func (r Router) InterestedIn(addr lorawan.DevAddr) bool {
+func (r *Router) InterestedIn(addr lorawan.DevAddr) bool {
 	if r.Default { // default routers receive data from all devices
 		return true
 	}
@@ -108,13 +110,22 @@ func (r Router) InterestedIn(addr lorawan.DevAddr) bool {
 	return false
 }
 
+func (r *Router) SetJoinFilter(filter *xorfilter.Xor8) {
+	r.joinFilterMutex.Lock()
+	r.joinFilter = filter
+	r.joinFilterMutex.Unlock()
+}
+
 // AcceptsJoin returns an indication if the device that wants to join the
 // network is accepted by this router.
-func (r Router) AcceptsJoin(joinEUI lorawan.EUI64) bool {
+func (r *Router) AcceptsJoin(joinEUI lorawan.EUI64) bool {
+	r.joinFilterMutex.RLock()
+	defer r.joinFilterMutex.RUnlock()
+
 	if len(r.joinFilter.Fingerprints) == 0 {
-		return r.Default || false
+		return r.Default
 	}
-	return r.joinFilter.Contains(binary.BigEndian.Uint64(joinEUI[:]))
+	return r.joinFilter.Contains(utils.Eui64ToUint64(joinEUI))
 }
 
 // RoutingTable takes care of the communication between the Packet Exchange and

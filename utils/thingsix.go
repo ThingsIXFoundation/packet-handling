@@ -18,6 +18,7 @@ package utils
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
 
 	"github.com/brocaar/lorawan"
@@ -42,4 +43,20 @@ func BytesToGatewayID(id []byte) (lorawan.EUI64, error) {
 	}
 	copy(gid[:], id)
 	return gid, nil
+}
+
+// Eui64ToUint64 converts a lorawan.EUI64 into an uint64 in BigEndian format.
+func Eui64ToUint64(eui64 lorawan.EUI64) uint64 {
+	return binary.BigEndian.Uint64(eui64[:])
+}
+
+// Eui64FromString tries to read a lorawan.EUI64 from string. It returns an error if it doesn't succeed.
+func Eui64FromString(str string) (*lorawan.EUI64, error) {
+	eui := &lorawan.EUI64{}
+	err := eui.UnmarshalText([]byte(str))
+	if err != nil {
+		return nil, err
+	}
+
+	return eui, nil
 }
