@@ -173,7 +173,6 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 
 	// log frame details
 	log = log.WithField("gw_network_id", gw.NetworkGatewayID)
-
 	frameLog := log.WithFields(logrus.Fields{
 		"rssi":        frame.GetRxInfo().GetRssi(),
 		"snr":         frame.GetRxInfo().GetSnr(),
