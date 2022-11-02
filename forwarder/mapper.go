@@ -47,7 +47,7 @@ func IsMaybeMapperPacket(payload *lorawan.MACPayload) bool {
 	return payload.FHDR.DevAddr[0] == 0x02
 }
 
-func (mc *MapperForwarder) HandleMapperPacket(frame gw.UplinkFrame, mac *lorawan.MACPayload) {
+func (mc *MapperForwarder) HandleMapperPacket(frame *gw.UplinkFrame, mac *lorawan.MACPayload) {
 	gateway, err := mc.gatewayStore.GatewayByNetworkIDString(frame.RxInfo.GatewayId)
 	if err != nil || gateway == nil {
 		logrus.WithFields(logrus.Fields{

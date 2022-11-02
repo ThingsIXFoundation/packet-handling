@@ -433,7 +433,7 @@ func (e *Exchange) handleDownlinkFrame(event *router.DownlinkFrameEvent) {
 	frame := event.GetDownlinkFrame()
 	gwNetworkId, err := utils.Eui64FromString(frame.GetGatewayId())
 	if err != nil {
-		logrus.WithError(err).Errorf("unable to decode gateway-id: %s")
+		logrus.WithError(err).Errorf("unable to decode gateway-id: %s", frame.GetGatewayId())
 	}
 
 	log := logrus.WithField("gw_network_id", gwNetworkId)
