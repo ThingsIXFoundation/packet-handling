@@ -412,7 +412,7 @@ func (rc *RouterClient) updateJoinFilter(ctx context.Context, client router.Rout
 	}
 
 	rc.router.SetJoinFilter(filter)
-	logrus.WithField("router", rc.router).Infof("updated the JoinFilter with %d fingerprints", filter.Fingerprints)
+	logrus.WithField("router", rc.router).Infof("updated the JoinFilter with %d fingerprints", len(filter.Fingerprints))
 }
 
 func isDownlinkAckEvent(event *router.RouterToGatewayEvent) bool {
