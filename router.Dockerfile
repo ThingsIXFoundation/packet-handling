@@ -29,8 +29,8 @@ RUN go mod verify
 COPY . .
 RUN cd cmd/router && go build -ldflags="-s -w" -o /router
 
-# copy forwarder and certs to base image.
-FROM alpine 
+# copy router and certs to base image.
+FROM alpine
 
 LABEL authors="ThingsIX Foundation"
 

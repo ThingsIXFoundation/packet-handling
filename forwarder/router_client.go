@@ -19,6 +19,7 @@ package forwarder
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
 	"github.com/FastFilter/xorfilter"
 	"time"
@@ -26,7 +27,6 @@ import (
 	"github.com/ThingsIXFoundation/packet-handling/forwarder/broadcast"
 	"github.com/ThingsIXFoundation/router-api/go/router"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/gofrs/uuid"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -286,7 +286,7 @@ func (rc *RouterClient) run(ctx context.Context) error {
 							"devaddr":       ev.uplink.device,
 							"gw_network_id": ev.receivedFrom.NetworkGatewayID,
 							"gw-local-id":   ev.receivedFrom.LocalGatewayID,
-							"uplink_id":     uuid.FromBytesOrNil(ev.uplink.event.GetUplinkFrameEvent().UplinkFrame.GetRxInfo().GetUplinkId()),
+							"uplink_id":     ev.uplink.event.GetUplinkFrameEvent().UplinkFrame.GetRxInfo().GetUplinkId(),
 						}).Info("forward uplink packet")
 
 						var (
@@ -308,14 +308,14 @@ func (rc *RouterClient) run(ctx context.Context) error {
 							"joinEUI":       ev.join.joinEUI,
 							"gw_network_id": ev.receivedFrom.NetworkGatewayID,
 							"gw-local-id":   ev.receivedFrom.LocalGatewayID,
-							"uplink_id":     uuid.FromBytesOrNil(ev.join.event.GetUplinkFrameEvent().UplinkFrame.GetRxInfo().GetUplinkId()),
+							"uplink_id":     ev.join.event.GetUplinkFrameEvent().UplinkFrame.GetRxInfo().GetUplinkId(),
 						}).Info("forward join to router")
 						if err := eventStream.Send(ev.join.event); err != nil {
 							return fmt.Errorf("unable to send event to router: %w", err)
 						}
 					}
 				} else if ev.IsDownlinkAck() {
-					downlinkID := sha256.Sum256(append(rc.router.ThingsIXID[:], ev.downlinkAck.downlinkID...))
+					downlinkID := sha256.Sum256(binary.BigEndian.AppendUint32(rc.router.ThingsIXID[:], ev.downlinkAck.downlinkID))
 					// test if the router this client is connected to asked for the ACK
 					if _, ok := pendingDownlinkAcks[downlinkID]; ok {
 						// our router ordered the ACK
@@ -352,7 +352,8 @@ func (rc *RouterClient) run(ctx context.Context) error {
 				// the downlink message. Store the downlink ID so its possible to
 				// determine if a downlink ACK must be forwarded to the router this
 				// client is connected to.
-				downlinkID := sha256.Sum256(append(rc.router.ThingsIXID[:], event.GetDownlinkFrameEvent().GetDownlinkFrame().GetDownlinkId()...))
+
+				downlinkID := sha256.Sum256(binary.BigEndian.AppendUint32(rc.router.ThingsIXID[:], event.GetDownlinkFrameEvent().GetDownlinkFrame().GetDownlinkId()))
 				log.WithField("downlink_id", fmt.Sprintf("%x", downlinkID[:8])).Info("received downlink ACK from router")
 				pendingDownlinkAcks[downlinkID] = time.Now()
 			}

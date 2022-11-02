@@ -33,9 +33,8 @@ type Config struct {
 		// endpoint and supported protocol.
 		Backend struct {
 			SemtechUDP *struct {
-				UDPBind      *string `mapstructure:"udp_bind"`
-				SkipCRCCheck *bool   `mapstructure:"skip_crc_check"`
-				FakeRxTime   *bool   `mapstructure:"fake_rx_time"`
+				UDPBind    *string `mapstructure:"udp_bind"`
+				FakeRxTime *bool   `mapstructure:"fake_rx_time"`
 			} `mapstructure:"semtech_udp"`
 
 			BasicStation  *struct{} `mapstructure:"basic_station"`

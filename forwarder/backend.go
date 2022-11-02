@@ -44,10 +44,9 @@ func buildBackend(cfg *Config) (Backend, error) {
 // based on the given cfg.
 func buildSemtechUDPBackend(cfg *Config) (*semtechudp.Backend, error) {
 	var (
-		chirpCfg     chirpconfig.Config
-		udpBind      = "0.0.0.0:1680" // default
-		fakeRxTime   = false          // default
-		skipCRCCheck = false          // default
+		chirpCfg   chirpconfig.Config
+		udpBind    = "0.0.0.0:1680" // default
+		fakeRxTime = false          // default
 	)
 
 	if cfg.Forwarder.Backend.SemtechUDP.UDPBind != nil {
@@ -58,19 +57,13 @@ func buildSemtechUDPBackend(cfg *Config) (*semtechudp.Backend, error) {
 		fakeRxTime = *cfg.Forwarder.Backend.SemtechUDP.FakeRxTime
 	}
 
-	if cfg.Forwarder.Backend.SemtechUDP.SkipCRCCheck != nil {
-		skipCRCCheck = *cfg.Forwarder.Backend.SemtechUDP.SkipCRCCheck
-	}
-
 	chirpCfg.Backend.Type = "semtech_udp"
 	chirpCfg.Backend.SemtechUDP.UDPBind = udpBind
 	chirpCfg.Backend.SemtechUDP.FakeRxTime = fakeRxTime
-	chirpCfg.Backend.SemtechUDP.SkipCRCCheck = skipCRCCheck
 
 	logrus.WithFields(logrus.Fields{
-		"udp_bind":       chirpCfg.Backend.SemtechUDP.UDPBind,
-		"skip_crc_check": chirpCfg.Backend.SemtechUDP.SkipCRCCheck,
-		"fake_rx_time":   chirpCfg.Backend.SemtechUDP.FakeRxTime,
+		"udp_bind":     chirpCfg.Backend.SemtechUDP.UDPBind,
+		"fake_rx_time": chirpCfg.Backend.SemtechUDP.FakeRxTime,
 	}).Info("Semtech UDP backend")
 
 	backend, err := semtechudp.NewBackend(chirpCfg)

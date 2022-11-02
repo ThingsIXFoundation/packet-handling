@@ -8,8 +8,7 @@ require (
 	github.com/ThingsIXFoundation/coverage-api v1.0.1
 	github.com/ThingsIXFoundation/frequency-plan v1.1.1
 	github.com/ThingsIXFoundation/gateway-registry-go v1.0.0
-	github.com/ThingsIXFoundation/router-api v1.1.0
-	github.com/brocaar/chirpstack-api/go/v3 v3.12.5
+	github.com/ThingsIXFoundation/router-api v1.2.0
 	github.com/brocaar/lorawan v0.0.0-20220715134808-3b283dda1534
 	github.com/chirpstack/chirpstack/api/go/v4 v4.0.2
 	github.com/eclipse/paho.mqtt.golang v1.4.1
@@ -17,7 +16,6 @@ require (
 	github.com/go-zeromq/zmq4 v0.7.0
 	github.com/gofrs/uuid v4.3.0+incompatible
 	github.com/golang-jwt/jwt/v4 v4.4.2
-	github.com/golang/protobuf v1.5.2
 	github.com/goreleaser/goreleaser v0.106.0
 	github.com/goreleaser/nfpm v0.11.0
 	github.com/gorilla/websocket v1.5.0
@@ -37,7 +35,10 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-require github.com/biter777/countries v1.5.6 // indirect
+require (
+	github.com/biter777/countries v1.5.6 // indirect
+	github.com/golang/protobuf v1.5.2 // indirect
+)
 
 require (
 	github.com/ThingsIXFoundation/router-registry-go v1.0.0

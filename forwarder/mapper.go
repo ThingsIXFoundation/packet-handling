@@ -19,18 +19,16 @@ package forwarder
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/hex"
+	"github.com/ThingsIXFoundation/packet-handling/utils"
+	"github.com/chirpstack/chirpstack/api/go/v4/gw"
 	"time"
 
 	"github.com/ThingsIXFoundation/coverage-api/go/mapper"
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	"github.com/ThingsIXFoundation/packet-handling/mapperpacket"
 	"github.com/ThingsIXFoundation/router-api/go/router"
-	"github.com/brocaar/chirpstack-api/go/v3/common"
-	"github.com/brocaar/chirpstack-api/go/v3/gw"
 	"github.com/brocaar/lorawan"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/gofrs/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/uber/h3-go/v4"
 	"google.golang.org/protobuf/proto"
@@ -49,11 +47,11 @@ func IsMaybeMapperPacket(payload *lorawan.MACPayload) bool {
 	return payload.FHDR.DevAddr[0] == 0x02
 }
 
-func (mc *MapperForwarder) HandleMapperPacket(frame gw.UplinkFrame, mac *lorawan.MACPayload) {
-	gateway, err := mc.gatewayStore.GatewayByNetworkIDBytes(frame.RxInfo.GatewayId)
+func (mc *MapperForwarder) HandleMapperPacket(frame *gw.UplinkFrame, mac *lorawan.MACPayload) {
+	gateway, err := mc.gatewayStore.GatewayByNetworkIDString(frame.RxInfo.GatewayId)
 	if err != nil || gateway == nil {
 		logrus.WithFields(logrus.Fields{
-			"local_gateway_id": hex.EncodeToString(frame.RxInfo.GatewayId),
+			"local_gateway_id": frame.RxInfo.GatewayId,
 		}).Error("unknown gateway, dropping mapper packet")
 		return
 	}
@@ -93,10 +91,10 @@ func (mc *MapperForwarder) HandleMapperPacket(frame gw.UplinkFrame, mac *lorawan
 	dpr := &mapper.DiscoveryPacketReceipt{
 		Frequency:        frame.TxInfo.Frequency,
 		Rssi:             frame.RxInfo.Rssi,
-		LoraSnr:          frame.RxInfo.LoraSnr,
-		SpreadingFactor:  frame.TxInfo.GetLoraModulationInfo().GetSpreadingFactor(),
-		Bandwidth:        frame.TxInfo.GetLoraModulationInfo().Bandwidth,
-		CodeRate:         frame.TxInfo.GetLoraModulationInfo().CodeRate,
+		LoraSnr:          float64(frame.RxInfo.Snr),
+		SpreadingFactor:  frame.TxInfo.GetModulation().GetLora().GetSpreadingFactor(),
+		Bandwidth:        frame.TxInfo.GetModulation().GetLora().GetBandwidth(),
+		CodeRate:         frame.TxInfo.GetModulation().GetLora().GetCodeRate().String(),
 		Phy:              frame.PhyPayload,
 		Time:             frame.RxInfo.Time,
 		GatewaySignature: []byte{},
@@ -137,21 +135,23 @@ func (mc *MapperForwarder) HandleMapperPacket(frame gw.UplinkFrame, mac *lorawan
 		}
 
 		dfi := gw.DownlinkFrameItem{
-			TxInfo: &gw.DownlinkTXInfo{
-				GatewayId: frame.RxInfo.GatewayId,
+			TxInfo: &gw.DownlinkTxInfo{
 				Frequency: dtr.Frequency,
 				Power:     dtr.Power,
-				Timing:    gw.DownlinkTiming_IMMEDIATELY,
-				TimingInfo: &gw.DownlinkTXInfo_ImmediatelyTimingInfo{
-					ImmediatelyTimingInfo: &gw.ImmediatelyTimingInfo{},
+				Timing: &gw.Timing{
+					Parameters: &gw.Timing_Immediately{
+						Immediately: &gw.ImmediatelyTimingInfo{},
+					},
 				},
-				Modulation: common.Modulation_LORA,
-				ModulationInfo: &gw.DownlinkTXInfo_LoraModulationInfo{
-					LoraModulationInfo: &gw.LoRaModulationInfo{
-						Bandwidth:             125,
-						SpreadingFactor:       7,
-						CodeRate:              "4/5",
-						PolarizationInversion: true,
+				Modulation: &gw.Modulation{
+					Parameters: &gw.Modulation_Lora{
+						Lora: &gw.LoraModulationInfo{
+							Bandwidth:             125,
+							SpreadingFactor:       7,
+							CodeRateLegacy:        "4/5",
+							CodeRate:              gw.CodeRate_CR_4_5,
+							PolarizationInversion: true,
+						},
 					},
 				},
 				Context: frame.RxInfo.Context,
@@ -160,10 +160,9 @@ func (mc *MapperForwarder) HandleMapperPacket(frame gw.UplinkFrame, mac *lorawan
 		}
 
 		df := gw.DownlinkFrame{
-			DownlinkId: uuid.Must(uuid.NewV4()).Bytes(), //
+			DownlinkId: utils.RandUint32(), //
 			Items:      []*gw.DownlinkFrameItem{&dfi},
 			GatewayId:  frame.RxInfo.GatewayId,
-			PhyPayload: dtr.GetPhy(),
 		}
 
 		dfe := router.DownlinkFrameEvent{

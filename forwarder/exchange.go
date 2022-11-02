@@ -25,9 +25,8 @@ import (
 	"github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/backend/events"
 	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/ThingsIXFoundation/router-api/go/router"
-	"github.com/brocaar/chirpstack-api/go/v3/gw"
 	"github.com/brocaar/lorawan"
-	"github.com/gofrs/uuid"
+	"github.com/chirpstack/chirpstack/api/go/v4/gw"
 	"github.com/sirupsen/logrus"
 	"github.com/zyedidia/generic/mapset"
 )
@@ -154,8 +153,8 @@ func (e *Exchange) Run(ctx context.Context) {
 	}
 }
 
-func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
-	gatewayLocalID, err := utils.BytesToGatewayID(frame.GetRxInfo().GetGatewayId())
+func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
+	gatewayLocalID, err := utils.Eui64FromString(frame.GetRxInfo().GetGatewayId())
 	if err != nil {
 		logrus.WithError(err).Warn("received uplink from gateway with invalid gateway ID")
 		return
@@ -164,7 +163,7 @@ func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
 	log := logrus.WithField("gw_local_id", gatewayLocalID)
 
 	// ensure that received frame is from a trusted gateway if not drop it
-	gw, ok := e.trustedGateways.ByLocalIDBytes(frame.RxInfo.GatewayId)
+	gw, ok := e.trustedGateways.ByLocalIDString(frame.RxInfo.GatewayId)
 	if !ok {
 		uplinksCounter.WithLabelValues(lorawan.EUI64{}.String(), "failed").Inc()
 		log.Warn("uplink from unknown gateway, drop packet")
@@ -176,11 +175,11 @@ func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
 	log = log.WithField("gw_network_id", gw.NetworkGatewayID)
 	frameLog := log.WithFields(logrus.Fields{
 		"rssi":        frame.GetRxInfo().GetRssi(),
-		"snr":         frame.GetRxInfo().GetLoraSnr(),
+		"snr":         frame.GetRxInfo().GetSnr(),
 		"freq":        frame.GetTxInfo().GetFrequency(),
-		"sf":          frame.GetTxInfo().GetLoraModulationInfo().GetSpreadingFactor(),
-		"pol":         frame.GetTxInfo().GetLoraModulationInfo().GetPolarizationInversion(),
-		"coderate":    frame.GetTxInfo().GetLoraModulationInfo().GetCodeRate(),
+		"sf":          frame.GetTxInfo().GetModulation().GetLora().GetSpreadingFactor(),
+		"pol":         frame.GetTxInfo().GetModulation().GetLora().GetPolarizationInversion(),
+		"coderate":    frame.GetTxInfo().GetModulation().GetLora().GetCodeRate(),
 		"payload":     base64.RawStdEncoding.EncodeToString(frame.GetPhyPayload()),
 		"payload_len": len(frame.GetPhyPayload()),
 	})
@@ -237,7 +236,7 @@ func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
 			},
 			Event: &router.GatewayToRouterEvent_UplinkFrameEvent{
 				UplinkFrameEvent: &router.UplinkFrameEvent{
-					UplinkFrame: &frame,
+					UplinkFrame: frame,
 					AirtimeReceipt: &router.AirtimeReceipt{
 						Owner:   gw.Owner.Bytes(),
 						Airtime: uint32(airtime.Milliseconds()),
@@ -285,7 +284,7 @@ func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
 			},
 			Event: &router.GatewayToRouterEvent_UplinkFrameEvent{
 				UplinkFrameEvent: &router.UplinkFrameEvent{
-					UplinkFrame: &frame,
+					UplinkFrame: frame,
 					AirtimeReceipt: &router.AirtimeReceipt{
 						Owner:   gw.Owner.Bytes(),
 						Airtime: uint32(airtime.Milliseconds()),
@@ -315,19 +314,17 @@ func (e *Exchange) uplinkFrameCallback(frame gw.UplinkFrame) {
 	}
 }
 
-func (e *Exchange) gatewayStats(stats gw.GatewayStats) {
-	gw, ok := e.trustedGateways.ByLocalIDBytes(stats.GetGatewayId())
+func (e *Exchange) gatewayStats(stats *gw.GatewayStats) {
+	gw, ok := e.trustedGateways.ByLocalIDString(stats.GetGatewayId())
 	if !ok {
 		logrus.Warn("gateway stats from unknown gateway, drop stats")
 		return
 	}
 
 	var (
-		id, _ = uuid.FromBytes(stats.StatsId)
-		log   = logrus.WithFields(logrus.Fields{
+		log = logrus.WithFields(logrus.Fields{
 			"gw_network_id": gw.NetworkGatewayID,
 			"gw_local_id":   gw.LocalGatewayID,
-			"id":            id,
 		})
 		gatewayNetworkID = gw.NetworkGatewayID.String()
 	)
@@ -341,7 +338,7 @@ func (e *Exchange) gatewayStats(stats gw.GatewayStats) {
 		gatewayRxPacketsPerModulationGauge.WithLabelValues(gatewayNetworkID,
 			fmt.Sprintf("%d", lora.GetBandwidth()),
 			fmt.Sprintf("%d", lora.GetSpreadingFactor()),
-			lora.GetCodeRate()).Set(float64(m.GetCount()))
+			lora.GetCodeRate().String()).Set(float64(m.GetCount()))
 	}
 	gatewayRxReceivedGauge.WithLabelValues(gatewayNetworkID, "success").Set(float64(stats.RxPacketsReceived))
 	gatewayTxEmittedGauge.WithLabelValues(gatewayNetworkID).Set(float64(stats.TxPacketsEmitted))
@@ -353,7 +350,7 @@ func (e *Exchange) gatewayStats(stats gw.GatewayStats) {
 		gatewayTxPacketsPerModulationGauge.WithLabelValues(gatewayNetworkID,
 			fmt.Sprintf("%d", lora.GetBandwidth()),
 			fmt.Sprintf("%d", lora.GetSpreadingFactor()),
-			lora.GetCodeRate()).Set(float64(m.GetCount()))
+			lora.GetCodeRate().String()).Set(float64(m.GetCount()))
 	}
 
 	for status, count := range stats.TxPacketsPerStatus {
@@ -381,7 +378,7 @@ func (e *Exchange) subscribeEvent(event events.Subscribe) {
 		return
 	}
 	// ensure that received frame is from a trusted gateway if not drop it
-	gw, ok := e.trustedGateways.ByLocalIDBytes(event.GatewayID[:])
+	gw, ok := e.trustedGateways.ByLocalID(localGatewayID)
 	if !ok {
 		log.Warn("event from unknown gateway, drop event")
 		e.recordUnknownGateway(localGatewayID)
@@ -433,17 +430,19 @@ func (e *Exchange) subscribeEvent(event events.Subscribe) {
 }
 
 func (e *Exchange) handleDownlinkFrame(event *router.DownlinkFrameEvent) {
-	var (
-		frame        = event.GetDownlinkFrame()
-		gwNetworkId  = GatewayIDBytesToLoraEUID(frame.GetGatewayId())
-		log          = logrus.WithField("gw_network_id", gwNetworkId)
-		sink, sinkOk = e.trustedGateways.byNetworkID[gwNetworkId]
-	)
+	frame := event.GetDownlinkFrame()
+	gwNetworkId, err := utils.Eui64FromString(frame.GetGatewayId())
+	if err != nil {
+		logrus.WithError(err).Errorf("unable to decode gateway-id: %s", frame.GetGatewayId())
+	}
+
+	log := logrus.WithField("gw_network_id", gwNetworkId)
+	sink, sinkOk := e.trustedGateways.byNetworkID[gwNetworkId]
 
 	if !sinkOk {
 		downlinksCounter.WithLabelValues(gwNetworkId.String(), "failed").Inc()
 		log.WithFields(logrus.Fields{
-			"payload": base64.RawStdEncoding.EncodeToString(frame.GetPhyPayload()),
+			"payload": base64.RawStdEncoding.EncodeToString(frame.Items[0].GetPhyPayload()),
 		}).Warn("drop downlink frame - target gateway not found")
 		return
 	}
@@ -454,7 +453,7 @@ func (e *Exchange) handleDownlinkFrame(event *router.DownlinkFrameEvent) {
 	frame = networkDownlinkFrameToLocal(sink, frame)
 
 	// order backend to send the downlink to the gateway so it can be broadcasted
-	if err := e.backend.SendDownlinkFrame(*frame); err != nil {
+	if err := e.backend.SendDownlinkFrame(frame); err != nil {
 		downlinksCounter.WithLabelValues(gwNetworkId.String(), "failed").Inc()
 		log.WithError(err).Error("drop downlink: unable to send to gateway")
 		return
@@ -464,17 +463,17 @@ func (e *Exchange) handleDownlinkFrame(event *router.DownlinkFrameEvent) {
 	}
 }
 
-func (e *Exchange) downlinkTxAck(txack gw.DownlinkTXAck) {
+func (e *Exchange) downlinkTxAck(txack *gw.DownlinkTxAck) {
 	var (
 		log = logrus.WithFields(logrus.Fields{
-			"gw_local_id": hex.EncodeToString(txack.GatewayId),
+			"gw_local_id": txack.GatewayId,
 		})
 	)
 	log.Info("received downlink tx ack from gateway")
 
-	localGatewayID, err := utils.BytesToGatewayID(txack.GetGatewayId())
+	localGatewayID, err := utils.Eui64FromString(txack.GetGatewayId())
 	if err != nil {
-		log.Error("received downlink ACK with gateway local id, drop packet")
+		log.Errorf("received downlink ACK with invalid local gateway id: %s", txack.GetGatewayId())
 		return
 	}
 
@@ -502,7 +501,7 @@ func (e *Exchange) downlinkTxAck(txack gw.DownlinkTXAck) {
 		},
 		Event: &router.GatewayToRouterEvent_DownlinkTXAckEvent{
 			DownlinkTXAckEvent: &router.DownlinkTXAckEvent{
-				DownlinkTXAck: &txack,
+				DownlinkTXAck: txack,
 				AirtimeReceipt: &router.AirtimeReceipt{
 					Owner: gw.Owner.Bytes(),
 					//TODO: Airtime: uint32(airtime.Milliseconds()),
@@ -515,7 +514,7 @@ func (e *Exchange) downlinkTxAck(txack gw.DownlinkTXAck) {
 	if !e.routingTable.gatewayEvents.TryBroadcast(&GatewayEvent{
 		receivedFrom: gw,
 		downlinkAck: &struct {
-			downlinkID []byte
+			downlinkID uint32
 			event      *router.GatewayToRouterEvent
 		}{
 			downlinkID: txack.GetDownlinkId(),

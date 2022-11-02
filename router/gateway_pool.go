@@ -18,11 +18,11 @@ package router
 
 import (
 	"fmt"
+	"github.com/chirpstack/chirpstack/api/go/v4/gw"
 	"sync"
 
 	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/ThingsIXFoundation/router-api/go/router"
-	"github.com/brocaar/chirpstack-api/go/v3/gw"
 	"github.com/brocaar/lorawan"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gofrs/uuid"
@@ -97,22 +97,22 @@ func (gp *GatewayPool) AllOffline(forwarderID uuid.UUID) {
 // DownlinkFrame is a callback that must be called by the integration layer if
 // it wants to send a downlink frame to a gateway through the forwarder it is
 // connected to.
-func (gp *GatewayPool) DownlinkFrame(frame gw.DownlinkFrame) {
+func (gp *GatewayPool) DownlinkFrame(frame *gw.DownlinkFrame) {
 	event := &router.RouterToGatewayEvent{
 		Event: &router.RouterToGatewayEvent_DownlinkFrameEvent{
 			DownlinkFrameEvent: &router.DownlinkFrameEvent{
-				DownlinkFrame: &frame,
+				DownlinkFrame: frame,
 			},
 		},
 	}
 	gp.sendDownlink(frame.GatewayId, event)
 }
 
-func (gp *GatewayPool) sendDownlink(addressedGatewayID []byte, event *router.RouterToGatewayEvent) {
+func (gp *GatewayPool) sendDownlink(addressedGatewayID string, event *router.RouterToGatewayEvent) {
 	gp.gatewaysMu.Lock()
 	defer gp.gatewaysMu.Unlock()
 
-	if gwId, err := utils.BytesToGatewayID(addressedGatewayID); err == nil {
+	if gwId, err := utils.Eui64FromString(addressedGatewayID); err == nil {
 		// send packet to forwarders that have this gateway attached
 		for gatewayID, gateway := range gp.gateways {
 			if gatewayID == gwId {

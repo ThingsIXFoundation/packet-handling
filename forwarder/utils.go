@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/brocaar/lorawan"
 	"math/big"
 	"net/http"
 	"os"
@@ -32,8 +33,7 @@ import (
 	gateway_registry "github.com/ThingsIXFoundation/gateway-registry-go"
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	router_registry "github.com/ThingsIXFoundation/router-registry-go"
-	"github.com/brocaar/chirpstack-api/go/v3/gw"
-	"github.com/brocaar/lorawan"
+	"github.com/chirpstack/chirpstack/api/go/v4/gw"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -42,28 +42,22 @@ import (
 
 // localUplinkFrameToNetwork converts the given frame that was received from a gateway
 // into a frame that can be send onto the network on behalf of the given gw.
-func localUplinkFrameToNetwork(gw *gateway.Gateway, frame gw.UplinkFrame) (gw.UplinkFrame, error) {
-	copy(frame.RxInfo.GatewayId, gw.NetworkGatewayID[:])
+func localUplinkFrameToNetwork(gw *gateway.Gateway, frame *gw.UplinkFrame) (*gw.UplinkFrame, error) {
+	frame.RxInfo.GatewayId = gw.NetworkGatewayID.String()
 	return frame, nil
 }
 
 // localDownlinkTxAckToNetwork converts the given txack that was received from a gateway
 // into a txack that can be send onto the network on behalf of the given gw.
-func localDownlinkTxAckToNetwork(gw *gateway.Gateway, txack gw.DownlinkTXAck) (gw.DownlinkTXAck, error) {
-	txack.GatewayId = gw.NetworkGatewayID[:]
+func localDownlinkTxAckToNetwork(gw *gateway.Gateway, txack *gw.DownlinkTxAck) (*gw.DownlinkTxAck, error) {
+	txack.GatewayId = gw.NetworkGatewayID.String()
 	return txack, nil
 }
 
 // networkDownlinkFrameToLocal converts the given frame received from gw into
 // a frame that can be forwarded onto the network.
 func networkDownlinkFrameToLocal(gw *gateway.Gateway, frame *gw.DownlinkFrame) *gw.DownlinkFrame {
-	frame.GatewayId = gw.LocalGatewayID[:]
-	if frame.TxInfo != nil {
-		frame.TxInfo.GatewayId = gw.LocalGatewayID[:]
-	}
-	for i := range frame.Items {
-		frame.Items[i].TxInfo.GatewayId = gw.LocalGatewayID[:]
-	}
+	frame.GatewayId = gw.LocalGatewayID.String()
 	return frame
 }
 
