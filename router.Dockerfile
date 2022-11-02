@@ -14,9 +14,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-FROM golang:1.19.2-alpine as build
+FROM golang:1.19.3-alpine as build
 
-RUN apk add --update-cache build-base musl-dev git ca-certificates && rm -rf /var/cache/apk/*
+RUN apk add --update-cache build-base ca-certificates && rm -rf /var/cache/apk/*
 
 WORKDIR /build
 
@@ -27,10 +27,10 @@ RUN go mod download
 RUN go mod verify
 
 COPY . .
-RUN cd cmd/router && go build -ldflags="-s -w -extldflags '-static'" -o /router
+RUN cd cmd/router && go build -ldflags="-s -w" -o /router
 
-# Now copy it into our base image.
-FROM scratch
+# copy forwarder and certs to base image.
+FROM alpine 
 
 LABEL authors="ThingsIX Foundation"
 
