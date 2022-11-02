@@ -8,7 +8,7 @@ require (
 	github.com/ThingsIXFoundation/coverage-api v1.0.1
 	github.com/ThingsIXFoundation/frequency-plan v1.1.1
 	github.com/ThingsIXFoundation/gateway-registry-go v1.0.0
-	github.com/ThingsIXFoundation/router-api v1.1.0
+	github.com/ThingsIXFoundation/router-api v1.2.0
 	github.com/brocaar/chirpstack-api/go/v3 v3.12.5
 	github.com/brocaar/lorawan v0.0.0-20220715134808-3b283dda1534
 	github.com/chirpstack/chirpstack/api/go/v4 v4.0.2

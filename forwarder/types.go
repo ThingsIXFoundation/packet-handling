@@ -18,14 +18,15 @@ package forwarder
 
 import (
 	"encoding/hex"
+	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"sync"
 
 	"context"
 	"github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/backend/events"
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	"github.com/ThingsIXFoundation/router-api/go/router"
-	"github.com/brocaar/chirpstack-api/go/v3/gw"
 	"github.com/brocaar/lorawan"
+	"github.com/chirpstack/chirpstack/api/go/v4/gw"
 	"github.com/sirupsen/logrus"
 	"time"
 )
@@ -39,28 +40,28 @@ type Backend interface {
 	Start() error
 
 	// SetDownlinkTxAckFunc sets the DownlinkTXAck handler func.
-	SetDownlinkTxAckFunc(func(gw.DownlinkTXAck))
+	SetDownlinkTxAckFunc(func(*gw.DownlinkTxAck))
 
 	// SetGatewayStatsFunc sets the GatewayStats handler func.
-	SetGatewayStatsFunc(func(gw.GatewayStats))
+	SetGatewayStatsFunc(func(*gw.GatewayStats))
 
 	// SetUplinkFrameFunc sets the UplinkFrame handler func.
-	SetUplinkFrameFunc(func(gw.UplinkFrame))
+	SetUplinkFrameFunc(func(*gw.UplinkFrame))
 
 	// SetRawPacketForwarderEventFunc sets the RawPacketForwarderEvent handler func.
-	SetRawPacketForwarderEventFunc(func(gw.RawPacketForwarderEvent))
+	SetRawPacketForwarderEventFunc(func(*gw.RawPacketForwarderEvent))
 
 	// SetSubscribeEventFunc sets the Subscribe handler func.
 	SetSubscribeEventFunc(func(events.Subscribe))
 
 	// SendDownlinkFrame sends the given downlink frame.
-	SendDownlinkFrame(gw.DownlinkFrame) error
+	SendDownlinkFrame(*gw.DownlinkFrame) error
 
 	// ApplyConfiguration applies the given configuration to the gateway.
-	ApplyConfiguration(gw.GatewayConfiguration) error
+	ApplyConfiguration(*gw.GatewayConfiguration) error
 
 	// RawPacketForwarderCommand sends the given raw command to the packet-forwarder.
-	RawPacketForwarderCommand(gw.RawPacketForwarderCommand) error
+	RawPacketForwarderCommand(*gw.RawPacketForwarderCommand) error
 }
 
 // GatewaySet sync a gateway store periodically with the gateway registry and
@@ -135,16 +136,16 @@ func (gs *GatewaySet) Refresh(ctx context.Context) {
 	}
 }
 
-func (gs *GatewaySet) ByLocalIDBytes(id []byte) (*gateway.Gateway, bool) {
+func (gs *GatewaySet) ByLocalIDString(id string) (*gateway.Gateway, bool) {
 	gs.mu.RLock()
 	defer gs.mu.RUnlock()
 
-	var lid lorawan.EUI64
-	if len(id) != len(lid) {
-		logrus.WithField("id", hex.EncodeToString(id)).Warn("search gateway by invalid id")
+	lid, err := utils.Eui64FromString(id)
+	if err != nil {
+		logrus.WithError(err).WithField("id", id).Warn("search gateway by invalid id")
 		return nil, false
 	}
-	copy(lid[:], id)
+
 	return gs.ByLocalID(lid)
 }
 
@@ -199,7 +200,7 @@ type GatewayEvent struct {
 		event *router.GatewayToRouterEvent
 	}
 	downlinkAck *struct {
-		downlinkID []byte
+		downlinkID uint32
 		event      *router.GatewayToRouterEvent
 	}
 	receivedFrom *gateway.Gateway

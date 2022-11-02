@@ -20,13 +20,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/brocaar/chirpstack-api/go/v3/gw"
 	"github.com/brocaar/lorawan/airtime"
+	"github.com/chirpstack/chirpstack/api/go/v4/gw"
 )
 
-func UplinkAirtime(frame gw.UplinkFrame) (time.Duration, error) {
+func UplinkAirtime(frame *gw.UplinkFrame) (time.Duration, error) {
 	payload := len(frame.PhyPayload)
-	lora := frame.GetTxInfo().GetLoraModulationInfo()
+	lora := frame.GetTxInfo().GetModulation().GetLora()
 	if lora == nil {
 		return 0, fmt.Errorf("packet is not LoRa, cannot calculate airtime")
 	}
@@ -35,11 +35,11 @@ func UplinkAirtime(frame gw.UplinkFrame) (time.Duration, error) {
 	preamble := 8 // always 8 for LoRaWAN
 	var codingrate airtime.CodingRate
 	switch lora.CodeRate {
-	case "4/5":
+	case gw.CodeRate_CR_4_5:
 		codingrate = airtime.CodingRate45
-	case "4/6":
+	case gw.CodeRate_CR_4_6:
 		codingrate = airtime.CodingRate46
-	case "4/7":
+	case gw.CodeRate_CR_4_7:
 		codingrate = airtime.CodingRate47
 	default:
 		return 0, fmt.Errorf("invalid code rate: %s", lora.CodeRate)
@@ -50,9 +50,9 @@ func UplinkAirtime(frame gw.UplinkFrame) (time.Duration, error) {
 	return airtime.CalculateLoRaAirtime(payload, sf, bandwidth, preamble, codingrate, headerEnabled, lowDataRateOptimization)
 }
 
-func DownlinkAirtime(frame gw.DownlinkFrame) (time.Duration, error) {
-	payload := len(frame.PhyPayload)
-	lora := frame.GetTxInfo().GetLoraModulationInfo()
+func DownlinkAirtime(frame *gw.DownlinkFrame) (time.Duration, error) {
+	payload := len(frame.Items[0].GetPhyPayload())
+	lora := frame.Items[0].GetTxInfo().GetModulation().GetLora()
 	if lora == nil {
 		return 0, fmt.Errorf("packet is not LoRa, cannot calculate airtime")
 	}
@@ -61,11 +61,11 @@ func DownlinkAirtime(frame gw.DownlinkFrame) (time.Duration, error) {
 	preamble := 8 // always 8 for LoRaWAN
 	var codingrate airtime.CodingRate
 	switch lora.CodeRate {
-	case "4/5":
+	case gw.CodeRate_CR_4_5:
 		codingrate = airtime.CodingRate45
-	case "4/6":
+	case gw.CodeRate_CR_4_6:
 		codingrate = airtime.CodingRate46
-	case "4/7":
+	case gw.CodeRate_CR_4_7:
 		codingrate = airtime.CodingRate47
 	default:
 		return 0, fmt.Errorf("invalid code rate: %s", lora.CodeRate)

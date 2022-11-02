@@ -53,6 +53,8 @@ github.com/ThingsIXFoundation/gateway-registry-go v1.0.0 h1:cRUoWP8d8HuE00frR1lS
 github.com/ThingsIXFoundation/gateway-registry-go v1.0.0/go.mod h1:/d0dfBbjyrZL1DU+Ct4ORT/dFBT7b+N9cH97r3M+wxo=
 github.com/ThingsIXFoundation/router-api v1.1.0 h1:X0ImXL0Ysr1/NWRUl4d8wlOqPNt8ZHUUNTr/Ltwc0rQ=
 github.com/ThingsIXFoundation/router-api v1.1.0/go.mod h1:jED1RkCsj3JM6I0rbjUTPTxOeJvPTYXqAu5E1uBSmVo=
+github.com/ThingsIXFoundation/router-api v1.2.0 h1:f6B8BcX1BakGYYfRSknTtVPNtRgRX4hX+/Isb2L5TYA=
+github.com/ThingsIXFoundation/router-api v1.2.0/go.mod h1:jED1RkCsj3JM6I0rbjUTPTxOeJvPTYXqAu5E1uBSmVo=
 github.com/ThingsIXFoundation/router-registry-go v1.0.0 h1:BJr4yMXOyxDeqZqi1cEfXtlRCd70cx4Z2kcVCvcWUQg=
 github.com/ThingsIXFoundation/router-registry-go v1.0.0/go.mod h1:JA8B+SBQEL1MAvHrbNw053bSzq++BBwW7QJ/s7BH018=
 github.com/VictoriaMetrics/fastcache v1.6.0 h1:C/3Oi3EiBCqufydp1neRZkqcwmEiuRT9c3fqvvgKm5o=

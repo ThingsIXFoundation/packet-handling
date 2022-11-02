@@ -30,7 +30,7 @@ COPY . .
 RUN cd cmd/router && go build -ldflags="-s -w -extldflags '-static'" -o /router
 
 # Now copy it into our base image.
-FROM scratch
+FROM alpine
 
 LABEL authors="ThingsIX Foundation"
 

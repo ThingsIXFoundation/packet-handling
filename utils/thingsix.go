@@ -17,9 +17,11 @@
 package utils
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
+	"github.com/sirupsen/logrus"
 
 	"github.com/brocaar/lorawan"
 )
@@ -51,12 +53,21 @@ func Eui64ToUint64(eui64 lorawan.EUI64) uint64 {
 }
 
 // Eui64FromString tries to read a lorawan.EUI64 from string. It returns an error if it doesn't succeed.
-func Eui64FromString(str string) (*lorawan.EUI64, error) {
-	eui := &lorawan.EUI64{}
+func Eui64FromString(str string) (lorawan.EUI64, error) {
+	eui := lorawan.EUI64{}
 	err := eui.UnmarshalText([]byte(str))
 	if err != nil {
-		return nil, err
+		return lorawan.EUI64{}, err
 	}
 
 	return eui, nil
+}
+
+func RandUint32() uint32 {
+	b := make([]byte, 4)
+	_, err := rand.Read(b)
+	if err != nil {
+		logrus.WithError(err).Fatal("could not generate random number")
+	}
+	return binary.BigEndian.Uint32(b)
 }

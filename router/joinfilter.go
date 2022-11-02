@@ -92,7 +92,7 @@ func (c *chirpstackGenerator) UpdateFilter(ctx context.Context) error {
 				logrus.WithError(err).Warnf("could not parse DevEui from string: %s, skipping", dev.DevEui)
 				continue
 			}
-			devEUIs = append(devEUIs, utils.Eui64ToUint64(*eui))
+			devEUIs = append(devEUIs, utils.Eui64ToUint64(eui))
 		}
 
 		totalCount = resp.GetTotalCount()

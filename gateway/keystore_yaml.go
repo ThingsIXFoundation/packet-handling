@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"os"
 
 	"github.com/brocaar/lorawan"
@@ -89,13 +90,13 @@ func (store *GatewayYamlFileStore) GatewayByNetworkID(id lorawan.EUI64) (*Gatewa
 	return nil, ErrNotFound
 }
 
-func (store *GatewayYamlFileStore) GatewayByNetworkIDBytes(id []byte) (*Gateway, error) {
-	if len(id) == 8 {
-		var gid lorawan.EUI64
-		copy(gid[:], id)
-		return store.GatewayByNetworkID(gid)
+func (store *GatewayYamlFileStore) GatewayByNetworkIDString(id string) (*Gateway, error) {
+	eui, err := utils.Eui64FromString(id)
+	if err != nil {
+		return nil, ErrInvalidGatewayID
 	}
-	return nil, ErrInvalidGatewayID
+
+	return store.GatewayByNetworkID(eui)
 }
 
 func (store *GatewayYamlFileStore) AddGateway(localID lorawan.EUI64, key *ecdsa.PrivateKey) error {

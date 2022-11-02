@@ -19,6 +19,7 @@ package router
 import (
 	"context"
 	"fmt"
+	"github.com/chirpstack/chirpstack/api/go/v4/gw"
 	"net"
 	"sync/atomic"
 	"time"
@@ -26,7 +27,6 @@ import (
 	"github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/integration"
 	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/ThingsIXFoundation/router-api/go/router"
-	"github.com/brocaar/chirpstack-api/go/v3/gw"
 	"github.com/brocaar/lorawan"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gofrs/uuid"
@@ -90,15 +90,15 @@ func NewRouter(cfg *Config, in integration.Integration) (*Router, error) {
 	return r, nil
 }
 
-func (r *Router) GatewayConfigurationHandler(conf gw.GatewayConfiguration) {
+func (r *Router) GatewayConfigurationHandler(conf *gw.GatewayConfiguration) {
 	logrus.Infof("got gateway configuration handle call: %x", conf.GetGatewayId())
 }
 
-func (r *Router) RawPacketForwarderCommandHandler(cmd gw.RawPacketForwarderCommand) {
+func (r *Router) RawPacketForwarderCommandHandler(cmd *gw.RawPacketForwarderCommand) {
 	logrus.Infof("got raw packet forwarder command handle call: %x", cmd.GetGatewayId())
 }
 
-func (r *Router) GatewayCommandExecHandler(cmdExec gw.GatewayCommandExecRequest) {
+func (r *Router) GatewayCommandExecHandler(cmdExec *gw.GatewayCommandExecRequest) {
 	logrus.Infof("got gateway command exec handle call: %x", cmdExec.GetGatewayId())
 }
 
@@ -320,8 +320,8 @@ func (r *Router) handleStatus(log *logrus.Entry, forwarderID uuid.UUID, gatewayI
 func (r *Router) handleUplink(log *logrus.Entry, gatewayNetworkID lorawan.EUI64, event *router.GatewayToRouterEvent_UplinkFrameEvent) {
 	var (
 		frame                          = event.UplinkFrameEvent.GetUplinkFrame()
-		gatewayNetworkIDFromFrame, err = utils.BytesToGatewayID(frame.GetRxInfo().GetGatewayId())
-		uplinkID                       = uuid.FromBytesOrNil(frame.GetRxInfo().GetUplinkId())
+		gatewayNetworkIDFromFrame, err = utils.Eui64FromString(frame.GetRxInfo().GetGatewayId())
+		uplinkID                       = frame.GetRxInfo().GetUplinkId()
 	)
 	log = log.WithFields(logrus.Fields{
 		"uplink_id": uplinkID,
@@ -356,8 +356,8 @@ func (r *Router) handleUplink(log *logrus.Entry, gatewayNetworkID lorawan.EUI64,
 func (r *Router) handleDownlinkTxAck(log *logrus.Entry, gatewayNetworkID lorawan.EUI64, event *router.GatewayToRouterEvent_DownlinkTXAckEvent) {
 	var (
 		ack                            = event.DownlinkTXAckEvent.GetDownlinkTXAck()
-		gatewayNetworkIDFromFrame, err = utils.BytesToGatewayID(ack.GetGatewayId())
-		downlinkId                     = uuid.FromBytesOrNil(ack.GetDownlinkId())
+		gatewayNetworkIDFromFrame, err = utils.Eui64FromString(ack.GetGatewayId())
+		downlinkId                     = ack.GetDownlinkId()
 	)
 	log = log.WithField("downlink_id", downlinkId)
 
@@ -369,15 +369,6 @@ func (r *Router) handleDownlinkTxAck(log *logrus.Entry, gatewayNetworkID lorawan
 		log.WithField("frame_gw_network-id", gatewayNetworkIDFromFrame).
 			Error("received downlink ack with gateway info id != frame gateway id, drop downlink-tx-ack")
 		return
-	}
-
-	// for backwards compatibility
-	for _, err := range ack.Items {
-		if err.Status == gw.TxAckStatus_OK {
-			ack.Error = ""
-			break
-		}
-		ack.Error = err.String()
 	}
 
 	if err := integration.GetIntegration().PublishEvent(gatewayNetworkID, integration.EventAck, downlinkId, ack); err != nil {

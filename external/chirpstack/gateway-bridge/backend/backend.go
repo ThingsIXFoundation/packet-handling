@@ -10,7 +10,7 @@ import (
 	"github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/backend/events"
 	"github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/backend/semtechudp"
 	"github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/config"
-	"github.com/brocaar/chirpstack-api/go/v3/gw"
+	"github.com/chirpstack/chirpstack/api/go/v4/gw"
 )
 
 var backend Backend
@@ -51,26 +51,26 @@ type Backend interface {
 	Start() error
 
 	// SetDownlinkTxAckFunc sets the DownlinkTXAck handler func.
-	SetDownlinkTxAckFunc(func(gw.DownlinkTXAck))
+	SetDownlinkTxAckFunc(func(*gw.DownlinkTxAck))
 
 	// SetGatewayStatsFunc sets the GatewayStats handler func.
-	SetGatewayStatsFunc(func(gw.GatewayStats))
+	SetGatewayStatsFunc(func(*gw.GatewayStats))
 
 	// SetUplinkFrameFunc sets the UplinkFrame handler func.
-	SetUplinkFrameFunc(func(gw.UplinkFrame))
+	SetUplinkFrameFunc(func(*gw.UplinkFrame))
 
 	// SetRawPacketForwarderEventFunc sets the RawPacketForwarderEvent handler func.
-	SetRawPacketForwarderEventFunc(func(gw.RawPacketForwarderEvent))
+	SetRawPacketForwarderEventFunc(func(*gw.RawPacketForwarderEvent))
 
 	// SetSubscribeEventFunc sets the Subscribe handler func.
 	SetSubscribeEventFunc(func(events.Subscribe))
 
 	// SendDownlinkFrame sends the given downlink frame.
-	SendDownlinkFrame(gw.DownlinkFrame) error
+	SendDownlinkFrame(*gw.DownlinkFrame) error
 
 	// ApplyConfiguration applies the given configuration to the gateway.
-	ApplyConfiguration(gw.GatewayConfiguration) error
+	ApplyConfiguration(*gw.GatewayConfiguration) error
 
 	// RawPacketForwarderCommand sends the given raw command to the packet-forwarder.
-	RawPacketForwarderCommand(gw.RawPacketForwarderCommand) error
+	RawPacketForwarderCommand(*gw.RawPacketForwarderCommand) error
 }
