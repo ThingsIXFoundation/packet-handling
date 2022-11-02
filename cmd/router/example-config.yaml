@@ -21,8 +21,18 @@ log:
 router:
   forwarder:
     endpoint:
-      host: 127.0.0.1
+      host: 0.0.0.0
       port: 3200
+
+  joinfiltergenerator:
+    renew_interval: 5m
+    chirpstack:
+      # Enter global API key from Chirpstack
+      api_key: api_key
+      # set to true for local connections
+      insecure: false
+      # target uses GRPC target naming "dns:<hostname>:<port>"
+      target: dns:chirpstack:8080
 
   integration:
     marshaler: protobuf
