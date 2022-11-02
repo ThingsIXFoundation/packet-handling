@@ -55,7 +55,6 @@ router:
 
 metrics:
     prometheus:
-        host: 0.0.0.0
-        port: 8081
+        address: 0.0.0.0:9999
         path: /metrics
     
