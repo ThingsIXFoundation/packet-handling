@@ -146,6 +146,11 @@ func (r *Router) Run(ctx context.Context) error {
 
 	// Update the JoinFilter every RenewInterval
 	go func() {
+		err := r.joinFilterGenerator.UpdateFilter(ctx)
+		if err != nil {
+			logrus.WithError(err).Error("error while updating JoinFilter")
+		}
+
 		renewTicker := time.NewTicker(r.config.JoinFilterGenerator.RenewInterval)
 		for {
 			select {

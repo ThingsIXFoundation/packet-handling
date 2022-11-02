@@ -46,6 +46,8 @@ func NewJoinFilterGenerator(config RouterConfig) (JoinFilterGenerator, error) {
 
 type chirpstackGenerator struct {
 	dsc api.DeviceServiceClient
+	asc api.ApplicationServiceClient
+	tsc api.TenantServiceClient
 
 	filterMutex sync.RWMutex
 	filter      *xorfilter.Xor8
@@ -65,22 +67,77 @@ func (c *chirpstackGenerator) JoinFilter(ctx context.Context) (*router.JoinFilte
 	}
 }
 
-func (c *chirpstackGenerator) UpdateFilter(ctx context.Context) error {
+func (c *chirpstackGenerator) getTenantIds(ctx context.Context) ([]string, error) {
 	var (
-		devEUIs    []uint64
-		hasMore           = true
-		limit      uint32 = 500
-		processed  uint32 = 0
-		totalCount uint32 = 0
+		hasMore          = true
+		limit     uint32 = 500
+		processed uint32 = 0
+		tenIds    []string
 	)
-
 	for hasMore {
-		resp, err := c.dsc.List(ctx, &api.ListDevicesRequest{
+		resp, err := c.tsc.List(ctx, &api.ListTenantsRequest{
 			Limit:  limit,
 			Offset: processed,
 		})
 		if err != nil {
-			return fmt.Errorf("error while getting devEUIs from chirpstack: %w", err)
+			return nil, fmt.Errorf("got error while listing tenants: %w", err)
+		}
+
+		processed += uint32(len(resp.Result))
+		hasMore = len(resp.Result) >= int(limit)
+
+		for _, ten := range resp.GetResult() {
+			tenIds = append(tenIds, ten.Id)
+		}
+	}
+
+	return tenIds, nil
+}
+
+func (c *chirpstackGenerator) getApplicationIds(ctx context.Context, tenantId string) ([]string, error) {
+	var (
+		hasMore          = true
+		limit     uint32 = 500
+		processed uint32 = 0
+		appIds    []string
+	)
+	for hasMore {
+		resp, err := c.asc.List(ctx, &api.ListApplicationsRequest{
+			TenantId: tenantId,
+			Limit:    limit,
+			Offset:   processed,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("got error while listing applications: %w", err)
+		}
+
+		processed += uint32(len(resp.Result))
+		hasMore = len(resp.Result) >= int(limit)
+
+		for _, app := range resp.GetResult() {
+			appIds = append(appIds, app.Id)
+		}
+	}
+
+	return appIds, nil
+}
+
+func (c *chirpstackGenerator) getDevEuisForApplication(ctx context.Context, appId string) ([]uint64, error) {
+	var (
+		devEUIs   []uint64
+		hasMore          = true
+		limit     uint32 = 500
+		processed uint32 = 0
+	)
+
+	for hasMore {
+		resp, err := c.dsc.List(ctx, &api.ListDevicesRequest{
+			ApplicationId: appId,
+			Limit:         limit,
+			Offset:        processed,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("got error while listing devices: %w", err)
 		}
 
 		processed += uint32(len(resp.Result))
@@ -94,20 +151,53 @@ func (c *chirpstackGenerator) UpdateFilter(ctx context.Context) error {
 			}
 			devEUIs = append(devEUIs, utils.Eui64ToUint64(eui))
 		}
-
-		totalCount = resp.GetTotalCount()
 	}
 
-	filter, err := xorfilter.Populate(devEUIs)
+	return devEUIs, nil
+}
+
+func (c *chirpstackGenerator) UpdateFilter(ctx context.Context) error {
+	var (
+		devEUIs []uint64
+	)
+
+	tenantIds, err := c.getTenantIds(ctx)
 	if err != nil {
-		return fmt.Errorf("error while populating xor8 filter from devEUIs: %w", err)
+		return err
+	}
+
+	for _, tenantId := range tenantIds {
+
+		appIds, err := c.getApplicationIds(ctx, tenantId)
+		if err != nil {
+			return err
+		}
+
+		for _, appId := range appIds {
+			newDevEUIs, err := c.getDevEuisForApplication(ctx, appId)
+			if err != nil {
+				return err
+			}
+
+			devEUIs = append(devEUIs, newDevEUIs...)
+		}
+	}
+
+	var filter *xorfilter.Xor8
+	if len(devEUIs) > 0 {
+		filter, err = xorfilter.Populate(devEUIs)
+		if err != nil {
+			return fmt.Errorf("error while populating xor8 filter from devEUIs: %w", err)
+		}
+	} else {
+		filter = nil
 	}
 
 	c.filterMutex.Lock()
 	c.filter = filter
 	c.filterMutex.Unlock()
 
-	logrus.Infof("processed %d / %d devEUIs from Chirpstack into Xor8 filter for joining", processed, totalCount)
+	logrus.Infof("processed %d devEUIs from Chirpstack into Xor8 filter for joining", len(devEUIs))
 
 	return nil
 
@@ -133,7 +223,6 @@ func newChirpstackGenerator(config RouterConfig) (JoinFilterGenerator, error) {
 	cg := &chirpstackGenerator{}
 
 	dialOpts := []grpc.DialOption{
-		grpc.WithBlock(),
 		grpc.WithPerRPCCredentials(&chirpstackJwtCredentials{token: conf.APIKey}),
 	}
 
@@ -152,6 +241,8 @@ func newChirpstackGenerator(config RouterConfig) (JoinFilterGenerator, error) {
 	}
 
 	cg.dsc = api.NewDeviceServiceClient(conn)
+	cg.asc = api.NewApplicationServiceClient(conn)
+	cg.tsc = api.NewTenantServiceClient(conn)
 
 	return cg, nil
 }
