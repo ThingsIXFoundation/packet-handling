@@ -24,11 +24,6 @@ forwarder:
             #
             # Example: 0.0.0.0:1680 to listen on port 1680 for all network interfaces.
             udp_bind: 0.0.0.0:1680
-            # Skip the CRC status-check of received packets
-            #
-            # This is only has effect when the packet-forwarder is configured to forward
-            # LoRa frames with CRC errors.
-            skip_crc_check: false
             # Fake RX timestamp.
             #
             # Fake the RX time when the gateways do not have GPS, in which case

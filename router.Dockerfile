@@ -30,7 +30,7 @@ COPY . .
 RUN cd cmd/router && go build -ldflags="-s -w" -o /router
 
 # copy router and certs to base image.
-FROM alpine 
+FROM alpine
 
 LABEL authors="ThingsIX Foundation"
 
