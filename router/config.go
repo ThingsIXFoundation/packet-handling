@@ -120,8 +120,7 @@ type Config struct {
 
 	Metrics *struct {
 		Prometheus *struct {
-			Host string
-			Port uint16
+			Address string
 			Path string
 		}
 	}
@@ -133,18 +132,10 @@ func (cfg Config) PrometheusEnabled() bool {
 }
 
 func (cfg Config) MetricsPrometheusAddress() string {
-	var (
-		host        = "localhost"
-		port uint16 = 8080
-	)
-
-	if cfg.Metrics.Prometheus.Host != "" {
-		host = cfg.Metrics.Prometheus.Host
+	if cfg.Metrics.Prometheus.Address != "" {
+		return cfg.Metrics.Prometheus.Address
 	}
-	if cfg.Metrics.Prometheus.Port != 0 {
-		port = cfg.Metrics.Prometheus.Port
-	}
-	return fmt.Sprintf("%s:%d", host, port)
+	return "localhost:8080"
 }
 
 func (cfg Config) MetricsPrometheusPath() string {
