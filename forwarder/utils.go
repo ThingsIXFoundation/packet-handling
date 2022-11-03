@@ -241,8 +241,8 @@ func fetchRoutersFromChain(cfg *Config, accounter Accounter) (RoutesUpdaterFunc,
 				netids := make([]lorawan.NetID, len(r.Networks))
 				for i, id := range r.Networks {
 					var netid [4]byte
-					binary.LittleEndian.PutUint32(netid[:], uint32(id.Uint64()))
-					netids[i] = lorawan.NetID{netid[0], netid[1], netid[2]}
+					binary.BigEndian.PutUint32(netid[:], uint32(id.Uint64()))
+					netids[i] = lorawan.NetID{netid[1], netid[2], netid[3]}
 				}
 				routers = append(routers, NewRouter(r.Id, r.Endpoint, false, netids, r.Owner, accounter))
 			}
