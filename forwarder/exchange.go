@@ -265,7 +265,7 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 			frameLog.Info("delivered packet")
 		}
 	case lorawan.JoinRequest, lorawan.RejoinRequest:
-		// Filter by Xor8 filter on joinEUI
+		// Filter by Xor8 filter on devEUI
 		jr, ok := phy.MACPayload.(*lorawan.JoinRequestPayload)
 		if !ok {
 			log.Error("invalid packet: join but no join-payload, drop packet")
@@ -299,10 +299,10 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 		if !e.routingTable.gatewayEvents.TryBroadcast(&GatewayEvent{
 			receivedFrom: gw,
 			join: &struct {
-				joinEUI lorawan.EUI64
-				event   *router.GatewayToRouterEvent
+				devEUI lorawan.EUI64
+				event  *router.GatewayToRouterEvent
 			}{
-				jr.JoinEUI, &event,
+				jr.DevEUI, &event,
 			},
 		}) {
 			uplinksCounter.WithLabelValues(gw.NetworkGatewayID.String(), "failed").Inc()

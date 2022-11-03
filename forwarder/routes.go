@@ -118,14 +118,14 @@ func (r *Router) SetJoinFilter(filter *xorfilter.Xor8) {
 
 // AcceptsJoin returns an indication if the device that wants to join the
 // network is accepted by this router.
-func (r *Router) AcceptsJoin(joinEUI lorawan.EUI64) bool {
+func (r *Router) AcceptsJoin(devEUI lorawan.EUI64) bool {
 	r.joinFilterMutex.RLock()
 	defer r.joinFilterMutex.RUnlock()
 
 	if len(r.joinFilter.Fingerprints) == 0 {
 		return r.Default
 	}
-	return r.joinFilter.Contains(utils.Eui64ToUint64(joinEUI))
+	return r.joinFilter.Contains(utils.Eui64ToUint64(devEUI))
 }
 
 // RoutingTable takes care of the communication between the Packet Exchange and

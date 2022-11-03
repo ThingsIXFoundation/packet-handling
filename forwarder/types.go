@@ -189,8 +189,8 @@ type NetworkEvent struct {
 // what kind of event was received.
 type GatewayEvent struct {
 	join *struct {
-		joinEUI lorawan.EUI64
-		event   *router.GatewayToRouterEvent
+		devEUI lorawan.EUI64
+		event  *router.GatewayToRouterEvent
 	}
 	uplink *struct {
 		device lorawan.DevAddr

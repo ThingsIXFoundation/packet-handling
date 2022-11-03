@@ -283,9 +283,9 @@ func (rc *RouterClient) run(ctx context.Context) error {
 					// send event if router is interested in it
 					if rc.router.InterestedIn(ev.uplink.device) {
 						log.WithFields(logrus.Fields{
-							"devaddr":       ev.uplink.device,
+							"dev_addr":      ev.uplink.device,
 							"gw_network_id": ev.receivedFrom.NetworkGatewayID,
-							"gw-local-id":   ev.receivedFrom.LocalGatewayID,
+							"gw_local_id":   ev.receivedFrom.LocalGatewayID,
 							"uplink_id":     ev.uplink.event.GetUplinkFrameEvent().UplinkFrame.GetRxInfo().GetUplinkId(),
 						}).Info("forward uplink packet")
 
@@ -303,11 +303,11 @@ func (rc *RouterClient) run(ctx context.Context) error {
 					}
 				} else if ev.IsJoin() {
 					// send event if router is accepts the join request
-					if rc.router.AcceptsJoin(ev.join.joinEUI) {
+					if rc.router.AcceptsJoin(ev.join.devEUI) {
 						log.WithFields(logrus.Fields{
-							"joinEUI":       ev.join.joinEUI,
+							"dev_eui":       ev.join.devEUI,
 							"gw_network_id": ev.receivedFrom.NetworkGatewayID,
-							"gw-local-id":   ev.receivedFrom.LocalGatewayID,
+							"gw_local_id":   ev.receivedFrom.LocalGatewayID,
 							"uplink_id":     ev.join.event.GetUplinkFrameEvent().UplinkFrame.GetRxInfo().GetUplinkId(),
 						}).Info("forward join to router")
 						if err := eventStream.Send(ev.join.event); err != nil {
