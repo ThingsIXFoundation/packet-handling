@@ -21,8 +21,9 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
-	"github.com/FastFilter/xorfilter"
 	"time"
+
+	"github.com/FastFilter/xorfilter"
 
 	"github.com/ThingsIXFoundation/packet-handling/forwarder/broadcast"
 	"github.com/ThingsIXFoundation/router-api/go/router"
@@ -316,7 +317,7 @@ func (rc *RouterClient) run(ctx context.Context) error {
 					}
 				} else if ev.IsDownlinkAck() {
 					downlinkID := sha256.Sum256(binary.BigEndian.AppendUint32(rc.router.ThingsIXID[:], ev.downlinkAck.downlinkID))
-					// test if the router this client is connected to asked for the ACK
+					// test if the router this client is connected to asked for the downlink
 					if _, ok := pendingDownlinkAcks[downlinkID]; ok {
 						// our router ordered the ACK
 						delete(pendingDownlinkAcks, downlinkID)
@@ -347,14 +348,14 @@ func (rc *RouterClient) run(ctx context.Context) error {
 				rc.router.accounting.AddPayment(airtimePayment)
 			}
 
-			if isDownlinkAckEvent(event) {
-				// router asked the end-device for a confirmation that it received
+			if downlinkEvent := event.GetDownlinkFrameEvent(); downlinkEvent != nil {
+				// router asked the gateway for a confirmation that it transmitted
 				// the downlink message. Store the downlink ID so its possible to
 				// determine if a downlink ACK must be forwarded to the router this
 				// client is connected to.
 
-				downlinkID := sha256.Sum256(binary.BigEndian.AppendUint32(rc.router.ThingsIXID[:], event.GetDownlinkFrameEvent().GetDownlinkFrame().GetDownlinkId()))
-				log.WithField("downlink_id", fmt.Sprintf("%x", downlinkID[:8])).Info("received downlink ACK from router")
+				downlinkID := sha256.Sum256(binary.BigEndian.AppendUint32(rc.router.ThingsIXID[:], downlinkEvent.GetDownlinkFrame().GetDownlinkId()))
+				log.WithField("downlink_id", fmt.Sprintf("%x", downlinkID[:8])).Info("received downlink from router")
 				pendingDownlinkAcks[downlinkID] = time.Now()
 			}
 			rc.routerEvents <- &NetworkEvent{
@@ -413,26 +414,6 @@ func (rc *RouterClient) updateJoinFilter(ctx context.Context, client router.Rout
 
 	rc.router.SetJoinFilter(filter)
 	logrus.WithField("router", rc.router).Infof("updated the JoinFilter with %d fingerprints", len(filter.Fingerprints))
-}
-
-func isDownlinkAckEvent(event *router.RouterToGatewayEvent) bool {
-	// TODO: check if event is a downlink that requires an ACK
-	// for now return true if its a downlink
-	return event.GetDownlinkFrameEvent().GetDownlinkFrame() != nil
-
-	// var (
-	// 	phy   lorawan.PHYPayload
-	// 	frame = event.GetDownlinkFrameEvent().GetDownlinkFrame()
-	// )
-	// logrus.Info("DBG BVK: isDownlinkAckEvent")
-	// if frame != nil {
-	// 	if err := phy.UnmarshalBinary(frame.PhyPayload); err != nil {
-	// 		logrus.WithError(err).Warn("could not decode lorawan downlink frame")
-	// 		return false
-	// 	}
-	// 	return phy.MHDR.MType == 5 //bin 100 MType.ConfirmedDataDown
-	// }
-	// return false
 }
 
 // routerEventsChan turns the given events readable into a readable go channel
