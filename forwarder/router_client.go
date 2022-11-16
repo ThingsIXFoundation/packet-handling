@@ -21,8 +21,9 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
-	"github.com/FastFilter/xorfilter"
 	"time"
+
+	"github.com/FastFilter/xorfilter"
 
 	"github.com/ThingsIXFoundation/packet-handling/forwarder/broadcast"
 	"github.com/ThingsIXFoundation/router-api/go/router"
@@ -131,7 +132,9 @@ func (rc *RouterClient) Run(ctx context.Context) {
 			return
 		case details := <-rc.routerDetails:
 			rc.router.Endpoint = details.Endpoint
-			rc.router.NetIDs = details.NetIDs
+			rc.router.NetID = details.NetID
+			rc.router.Prefix = details.Prefix
+			rc.router.Mask = details.Mask
 			rc.router.Owner = details.Owner
 
 			log = logrus.WithFields(logrus.Fields{
@@ -165,7 +168,9 @@ func (rc *RouterClient) Run(ctx context.Context) {
 				wait = false
 			case details := <-rc.routerDetails:
 				rc.router.Endpoint = details.Endpoint
-				rc.router.NetIDs = details.NetIDs
+				rc.router.NetID = details.NetID
+				rc.router.Prefix = details.Prefix
+				rc.router.Mask = details.Mask
 				rc.router.Owner = details.Owner
 
 				log = logrus.WithFields(logrus.Fields{
@@ -186,7 +191,9 @@ func logRouterDialDetails(router *Router) {
 		"router":   router,
 		"endpoint": router.Endpoint,
 		"default":  router.Default,
-		"routes":   router.NetIDs,
+		"netid":    router.NetID,
+		"prefix":   router.Prefix,
+		"mask":     router.Mask,
 	})
 	if !router.Default {
 		log = log.WithField("owner", router.Owner)
@@ -270,7 +277,9 @@ func (rc *RouterClient) run(ctx context.Context) error {
 		case details := <-rc.routerDetails:
 			reconnect := rc.router.Endpoint != details.Endpoint
 			rc.router.Endpoint = details.Endpoint
-			rc.router.NetIDs = details.NetIDs
+			rc.router.NetID = details.NetID
+			rc.router.Prefix = details.Prefix
+			rc.router.Mask = details.Mask
 			rc.router.Owner = details.Owner
 
 			if reconnect {
@@ -373,7 +382,9 @@ func (rc *RouterClient) run(ctx context.Context) error {
 						endpointChanged := rc.router.Endpoint != router.Endpoint
 						// update router details
 						rc.router.Endpoint = router.Endpoint
-						rc.router.NetIDs = router.NetIDs
+						rc.router.NetID = router.NetID
+						rc.router.Prefix = router.Prefix
+						rc.router.Mask = router.Mask
 						rc.router.Owner = router.Owner
 						if endpointChanged {
 							return fmt.Errorf("endpoint changed") // force reconnect

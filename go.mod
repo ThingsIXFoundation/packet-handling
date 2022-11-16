@@ -41,7 +41,7 @@ require (
 )
 
 require (
-	github.com/ThingsIXFoundation/router-registry-go v1.0.0
+	github.com/ThingsIXFoundation/router-registry-go v1.1.0
 	github.com/rivo/uniseg v0.4.2 // indirect
 	golang.org/x/exp v0.0.0-20221028150844-83b7d23a625f // indirect
 )

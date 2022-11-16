@@ -19,9 +19,10 @@ package forwarder
 import (
 	"context"
 	"fmt"
-	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"sync"
 	"time"
+
+	"github.com/ThingsIXFoundation/packet-handling/utils"
 
 	"github.com/FastFilter/xorfilter"
 	"github.com/ThingsIXFoundation/packet-handling/forwarder/broadcast"
@@ -47,8 +48,12 @@ func (id ID) String() string {
 type RouterDetails struct {
 	// Endpoint is the URI where the router can be reached
 	Endpoint string
-	// NetIDs is the set of network identifiers this routers wants to receive packets from
-	NetIDs []lorawan.NetID
+	// NetID is the NetID that a Router wants to receive traffic for
+	NetID lorawan.NetID
+	// Prefix is the DevAddr prefix that matches the DevAddr of devices the Router wants to receive traffic for
+	Prefix uint32
+	// Mask is the DevAddr mask  that matches the DevAddr of devices the Router wants to receive traffic for
+	Mask uint8
 	// Owner is the routers owner
 	Owner common.Address
 }
@@ -62,8 +67,12 @@ type Router struct {
 	Default bool
 	// Name is an optional name users can appoint to routers that are in the configuration
 	Name string
-	// NetIDs is the set of network identifiers this routers wants to receive packets from
-	NetIDs []lorawan.NetID
+	// NetID is the NetID that a Router wants to receive traffic for
+	NetID lorawan.NetID
+	// Prefix is the DevAddr prefix that matches the DevAddr of devices the Router wants to receive traffic for
+	Prefix uint32
+	// Mask is the DevAddr mask  that matches the DevAddr of devices the Router wants to receive traffic for
+	Mask uint8
 	// Owner is the routers owner
 	Owner common.Address
 
@@ -81,12 +90,14 @@ func (r *Router) String() string {
 	return r.ThingsIXID.String()
 }
 
-func NewRouter(id [32]byte, endpoint string, def bool, netIDs []lorawan.NetID, owner common.Address, accounting Accounter) *Router {
+func NewRouter(id [32]byte, endpoint string, def bool, netID lorawan.NetID, prefix uint32, mask uint8, owner common.Address, accounting Accounter) *Router {
 	return &Router{
 		ThingsIXID: id,
 		Endpoint:   endpoint,
 		Default:    def,
-		NetIDs:     netIDs,
+		NetID:      netID,
+		Prefix:     prefix,
+		Mask:       mask,
 		Owner:      owner,
 		accounting: accounting,
 	}
@@ -102,11 +113,15 @@ func (r *Router) InterestedIn(addr lorawan.DevAddr) bool {
 	if r.Default { // default routers receive data from all devices
 		return true
 	}
-	for _, netID := range r.NetIDs {
-		if addr.IsNetID(netID) {
-			return true
-		}
+
+	if r.Mask > 0 && DevAddrHasPrefix(addr, r.Prefix, r.Mask) {
+		return true
 	}
+
+	if r.Mask == 0 && addr.IsNetID(r.NetID) {
+		return true
+	}
+
 	return false
 }
 
@@ -261,7 +276,9 @@ func (r *RoutingTable) keepRouteTableUpToDate(ctx context.Context) {
 					go func() {
 						client.details <- &RouterDetails{
 							Endpoint: router.Endpoint,
-							NetIDs:   router.NetIDs,
+							NetID:    router.NetID,
+							Prefix:   router.Prefix,
+							Mask:     router.Mask,
 							Owner:    router.Owner,
 						}
 					}()

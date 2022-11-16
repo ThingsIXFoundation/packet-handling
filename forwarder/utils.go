@@ -22,12 +22,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/brocaar/lorawan"
 	"math/big"
 	"net/http"
 	"os"
 	"path"
 	"time"
+
+	"github.com/brocaar/lorawan"
 
 	frequency_plan "github.com/ThingsIXFoundation/frequency-plan/go/frequency_plan"
 	gateway_registry "github.com/ThingsIXFoundation/gateway-registry-go"
@@ -238,13 +239,11 @@ func fetchRoutersFromChain(cfg *Config, accounter Accounter) (RoutesUpdaterFunc,
 			}
 
 			for _, r := range fetchedRouters {
-				netids := make([]lorawan.NetID, len(r.Networks))
-				for i, id := range r.Networks {
-					var netid [4]byte
-					binary.BigEndian.PutUint32(netid[:], uint32(id.Uint64()))
-					netids[i] = lorawan.NetID{netid[1], netid[2], netid[3]}
-				}
-				routers = append(routers, NewRouter(r.Id, r.Endpoint, false, netids, r.Owner, accounter))
+				var netidb [4]byte
+				binary.BigEndian.PutUint32(netidb[:], uint32(r.Netid.Uint64()))
+				netid := lorawan.NetID{netidb[1], netidb[2], netidb[3]}
+
+				routers = append(routers, NewRouter(r.Id, r.Endpoint, false, netid, r.Prefix, r.Mask, r.Owner, accounter))
 			}
 		}
 
@@ -300,7 +299,9 @@ func fetchRoutersFromThingsIXAPI(cfg *Config, accounter Accounter) (RoutesUpdate
 				Endpoint string
 				ID       string
 				Owner    common.Address
-				Networks []uint32
+				NetId    uint32
+				Prefix   uint32
+				Mask     uint8
 			}
 		}{}
 
@@ -315,8 +316,7 @@ func fetchRoutersFromThingsIXAPI(cfg *Config, accounter Accounter) (RoutesUpdate
 		routers := make([]*Router, len(snapshot.Routers))
 		for i, r := range snapshot.Routers {
 			var (
-				id     [32]byte
-				netids = make([]lorawan.NetID, len(r.Networks))
+				id [32]byte
 			)
 			rID, err := hex.DecodeString(r.ID)
 			if err != nil {
@@ -325,14 +325,42 @@ func fetchRoutersFromThingsIXAPI(cfg *Config, accounter Accounter) (RoutesUpdate
 			}
 
 			copy(id[:], rID)
-			for i, id := range r.Networks {
-				var netid [4]byte
-				binary.LittleEndian.PutUint32(netid[:], id)
-				netids[i] = lorawan.NetID{netid[0], netid[1], netid[2]}
-			}
-			routers[i] = NewRouter(id, r.Endpoint, false, netids, r.Owner, accounter)
+			var netidb [4]byte
+			binary.BigEndian.PutUint32(netidb[:], r.NetId)
+			netid := lorawan.NetID{netidb[0], netidb[1], netidb[2]}
+			routers[i] = NewRouter(id, r.Endpoint, false, netid, r.Prefix, r.Mask, r.Owner, accounter)
 		}
 		logrus.WithField("#routers", len(routers)).Info("fetched routing table from ThingsIX API")
 		return routers, nil
 	}, interval, nil
+}
+
+func SetDevAddrPrefix(devAddr lorawan.DevAddr, prefix uint32, maskLength uint8) lorawan.DevAddr {
+	// convert DevAddr to uint32
+	devAddrU := binary.BigEndian.Uint32(devAddr[:])
+
+	// clear the bits for the prefix using the mask
+	var mask uint32
+	mask-- // sets all uint32 bits to 1
+	devAddrU &^= mask << uint32(32-maskLength)
+
+	// set the prefix
+	devAddrU |= prefix
+
+	ret := lorawan.DevAddr{}
+	binary.BigEndian.PutUint32(ret[:], devAddrU)
+
+	return ret
+}
+
+func DevAddrHasPrefix(devAddr lorawan.DevAddr, prefix uint32, mask uint8) bool {
+	// The mask of 0 is a special case where no mask is applied, it doesn't match any prefix
+	// It's impossible to have a prefix longer than 32.
+	// 32 is also very unlikely as there are no variable bits left but in theory possible for testing
+	if mask == 0 || mask > 32 {
+		return false
+	}
+
+	tempAddr := SetDevAddrPrefix(devAddr, prefix, mask)
+	return tempAddr == devAddr
 }
