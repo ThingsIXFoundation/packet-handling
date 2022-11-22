@@ -327,7 +327,7 @@ func fetchRoutersFromThingsIXAPI(cfg *Config, accounter Accounter) (RoutesUpdate
 			copy(id[:], rID)
 			var netidb [4]byte
 			binary.BigEndian.PutUint32(netidb[:], r.NetId)
-			netid := lorawan.NetID{netidb[0], netidb[1], netidb[2]}
+			netid := lorawan.NetID{netidb[1], netidb[2], netidb[3]}
 			routers[i] = NewRouter(id, r.Endpoint, false, netid, r.Prefix, r.Mask, r.Owner, accounter)
 		}
 		logrus.WithField("#routers", len(routers)).Info("fetched routing table from ThingsIX API")

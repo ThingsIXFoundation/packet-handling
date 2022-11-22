@@ -192,8 +192,7 @@ func logRouterDialDetails(router *Router) {
 		"endpoint": router.Endpoint,
 		"default":  router.Default,
 		"netid":    router.NetID,
-		"prefix":   router.Prefix,
-		"mask":     router.Mask,
+		"prefix":   fmt.Sprintf("%08x/%d", router.Prefix, router.Mask),
 	})
 	if !router.Default {
 		log = log.WithField("owner", router.Owner)
