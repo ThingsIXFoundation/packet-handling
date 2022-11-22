@@ -19,9 +19,11 @@ package forwarder
 import (
 	"context"
 	"crypto/sha256"
+	"time"
+
+	h3light "github.com/ThingsIXFoundation/h3-light"
 	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/chirpstack/chirpstack/api/go/v4/gw"
-	"time"
 
 	"github.com/ThingsIXFoundation/coverage-api/go/mapper"
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
@@ -30,7 +32,6 @@ import (
 	"github.com/brocaar/lorawan"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/sirupsen/logrus"
-	"github.com/uber/h3-go/v4"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -82,10 +83,10 @@ func (mc *MapperForwarder) HandleMapperPacket(frame *gw.UplinkFrame, mac *lorawa
 		logrus.Error("invalid mapper signature, malformed packet?")
 		return
 	}
-	lat, lon := dp.LatLon()
+	lat, lon := dp.LatLonFloat()
 	logrus.Infof("packet was mapped at: %f, %f", float64(lat)/1000000, float64(lon)/1000000)
 
-	region := h3.LatLngToCell(dp.LatLonGeoCoordinate(), 3)
+	region := h3light.LatLonToRes0ToCell(lat, lon)
 	logrus.Infof("packet is for region: %s", region)
 
 	dpr := &mapper.DiscoveryPacketReceipt{
@@ -173,6 +174,6 @@ func (mc *MapperForwarder) HandleMapperPacket(frame *gw.UplinkFrame, mac *lorawa
 	}()
 }
 
-func (m *MapperForwarder) mapperClientForRegion(region h3.Cell) (*CoverageClient, error) {
+func (m *MapperForwarder) mapperClientForRegion(region h3light.Cell) (*CoverageClient, error) {
 	return NewCoverageClient()
 }

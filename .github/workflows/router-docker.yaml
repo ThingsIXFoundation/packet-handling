@@ -20,9 +20,8 @@ on:
   pull_request:
     branches:
       - main
-  release:
-    types:
-      - published
+    tags: 
+      - v*
 
 jobs:
   test-build-amd64:

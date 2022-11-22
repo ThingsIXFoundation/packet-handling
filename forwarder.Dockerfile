@@ -14,9 +14,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-FROM golang:1.19.3-alpine as build
+FROM --platform=$BUILDPLATFORM golang:1.19.3-alpine as build
 
-RUN apk add --update-cache build-base ca-certificates && rm -rf /var/cache/apk/*
+RUN apk add --update-cache ca-certificates && rm -rf /var/cache/apk/*
 
 WORKDIR /build
 
@@ -27,10 +27,10 @@ RUN go mod download
 RUN go mod verify
 
 COPY . .
-RUN cd cmd/forwarder && go build -ldflags="-s -w" -o /forwarder
+RUN cd cmd/forwarder && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-s -w" -o /forwarder
 
 # copy forwarder and certs to base image.
-FROM alpine 
+FROM scratch 
 
 LABEL authors="ThingsIX Foundation"
 
