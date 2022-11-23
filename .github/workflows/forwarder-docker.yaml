@@ -20,13 +20,14 @@ on:
   pull_request:
     branches:
       - main
-  release:
-    types:
-      - published
+  push:
+    tags: 
+      - v*
+
 
 jobs:
   test-build-amd64:
-    if: github.event_name != 'release'
+    if: startsWith(github.ref, 'refs/tags/') == false
     name: Test Build for AMD64
     runs-on: ubuntu-latest
     steps:
@@ -65,7 +66,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
   release-build:
-    if: github.event_name == 'release'
+    if: startsWith(github.ref, 'refs/tags/')
     name: Release Docker Build for all supported architectures
     runs-on: ubuntu-latest
     steps:
@@ -99,7 +100,7 @@ jobs:
         with:
           context: .
           file: ./forwarder.Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

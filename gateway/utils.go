@@ -24,13 +24,13 @@ import (
 	"strings"
 
 	gateway_registry "github.com/ThingsIXFoundation/gateway-registry-go"
+	h3light "github.com/ThingsIXFoundation/h3-light"
 	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/brocaar/lorawan"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/olekukonko/tablewriter"
 	"github.com/sirupsen/logrus"
-	"github.com/uber/h3-go/v4"
 )
 
 type Config struct {
@@ -110,8 +110,9 @@ func printGatewaysAsTable(gateways []*Gateway, registry *gateway_registry.Gatewa
 				if gateway.Owner != (common.Address{}) {
 					row = append(row, gateway.Owner.Hex()) // guaranteed to be set
 					if gateway.AntennaGain != 0 {
+						location := h3light.Cell(gateway.Location)
 						row = append(row, fmt.Sprintf("%.1f", float32(gateway.AntennaGain)/10.0))
-						row = append(row, h3.CellToLatLng(h3.Cell(gateway.Location)).String())
+						row = append(row, location.String())
 						row = append(row, fmt.Sprintf("%d", uint64(gateway.Altitude)*3))
 					}
 				}

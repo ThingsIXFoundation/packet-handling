@@ -6,7 +6,7 @@ require (
 	github.com/FastFilter/xorfilter v0.1.2
 	github.com/ThingsIXFoundation/bitoffset v1.0.0
 	github.com/ThingsIXFoundation/coverage-api v1.0.1
-	github.com/ThingsIXFoundation/frequency-plan v1.1.1
+	github.com/ThingsIXFoundation/frequency-plan v1.2.0
 	github.com/ThingsIXFoundation/gateway-registry-go v1.0.0
 	github.com/ThingsIXFoundation/router-api v1.2.0
 	github.com/brocaar/lorawan v0.0.0-20220715134808-3b283dda1534
@@ -28,7 +28,6 @@ require (
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/viper v1.13.0
 	github.com/stretchr/testify v1.8.0
-	github.com/uber/h3-go/v4 v4.0.1
 	github.com/zyedidia/generic v1.2.0
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616
 	google.golang.org/grpc v1.50.1
@@ -38,6 +37,7 @@ require (
 require (
 	github.com/biter777/countries v1.5.6 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
+	github.com/tidwall/geojson v1.4.3 // indirect
 )
 
 require (
@@ -48,6 +48,7 @@ require (
 
 require (
 	github.com/Masterminds/semver v1.4.2 // indirect
+	github.com/ThingsIXFoundation/h3-light v0.0.0-20221122151216-69018e780344
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d // indirect
 	github.com/apex/log v1.1.0 // indirect
