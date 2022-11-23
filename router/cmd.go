@@ -25,12 +25,30 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
+
+func GenerateKey(cmd *cobra.Command, args []string) {
+	filename := "/etc/thingsix-router/router.key" // default location
+	// if config contains keyfile overwrite default
+	if configFile := viper.GetString("config"); configFile != "" {
+		cfg := mustLoadConfig()
+		if cfg.Router.Keyfile != "" {
+			filename = cfg.Router.Keyfile
+		}
+	}
+	// if location as argument is given use that
+	if len(args) == 1 {
+		filename = args[0]
+	}
+
+	mustGenerateKey(filename)
+}
 
 func Run(cmd *cobra.Command, args []string) {
 	var (
 		ctx, shutdown    = context.WithCancel(context.Background())
-		cfg              = mustLoadConfig(args)
+		cfg              = mustLoadConfig()
 		wg               sync.WaitGroup
 		sign             = make(chan os.Signal, 1)
 		integration, err = buildIntegrations(cfg)

@@ -21,8 +21,10 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+
 	"github.com/ThingsIXFoundation/packet-handling/airtime"
 	"github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/backend/events"
+	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/ThingsIXFoundation/router-api/go/router"
 	"github.com/brocaar/lorawan"
@@ -372,7 +374,7 @@ func init() {
 // is online this callback is called.ys
 func (e *Exchange) subscribeEvent(event events.Subscribe) {
 	log := logrus.WithField("gw_local_id", hex.EncodeToString(event.GatewayID[:]))
-	localGatewayID, err := utils.BytesToGatewayID(event.GatewayID[:])
+	localGatewayID, err := gateway.BytesToGatewayID(event.GatewayID[:])
 	if err != nil {
 		log.Warn("event from gateway with invalid local id, drop event")
 		return

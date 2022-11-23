@@ -19,6 +19,8 @@ log:
     timestamp: true
 
 router:
+  keyfile: /etc/thingsix-router/router.key
+
   forwarder:
     endpoint:
       host: 0.0.0.0

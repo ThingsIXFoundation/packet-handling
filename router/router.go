@@ -19,15 +19,16 @@ package router
 import (
 	"context"
 	"fmt"
-	"github.com/chirpstack/chirpstack/api/go/v4/gw"
 	"net"
 	"sync/atomic"
 	"time"
 
 	"github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/integration"
+	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/ThingsIXFoundation/router-api/go/router"
 	"github.com/brocaar/lorawan"
+	"github.com/chirpstack/chirpstack/api/go/v4/gw"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gofrs/uuid"
 	"github.com/sirupsen/logrus"
@@ -64,6 +65,15 @@ type Router struct {
 var _ router.RouterV1Server = (*Router)(nil)
 
 func NewRouter(cfg *Config, in integration.Integration) (*Router, error) {
+	identity, err := loadRouterIdentity(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"router_id": identity.ID,
+	}).Info("keyfile loaded")
+
 	pool, err := NewGatewayPool()
 	if err != nil {
 		return nil, err
@@ -239,7 +249,7 @@ func (r *Router) Events(forwarder router.RouterV1_EventsServer) error {
 			var (
 				info                  = fwdEvent.GetGatewayInformation()
 				pubKey                = info.GetPublicKey()
-				gatewayNetworkID, err = utils.GatewayPublicKeyToID(pubKey)
+				gatewayNetworkID, err = gateway.GatewayPublicKeyToID(pubKey)
 				gatewayOwner          = common.BytesToAddress(info.GetOwner())
 				event                 = fwdEvent.GetEvent()
 			)

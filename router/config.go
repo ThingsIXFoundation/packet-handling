@@ -28,6 +28,8 @@ import (
 )
 
 type RouterConfig struct {
+	Keyfile string `yaml:"key_file"`
+
 	JoinFilterGenerator struct {
 		RenewInterval time.Duration `mapstructure:"renew_interval"`
 		ChirpStack    struct {
@@ -122,7 +124,7 @@ type Config struct {
 	Metrics *struct {
 		Prometheus *struct {
 			Address string
-			Path string
+			Path    string
 		}
 	}
 }
@@ -147,7 +149,7 @@ func (cfg Config) MetricsPrometheusPath() string {
 	return path
 }
 
-func mustLoadConfig(args []string) *Config {
+func mustLoadConfig() *Config {
 	viper.SetConfigName("config") // name of config file (without extension)
 	viper.SetConfigType("yaml")   // REQUIRED if the config file does not have the extension in the name
 
