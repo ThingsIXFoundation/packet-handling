@@ -14,11 +14,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-# forwarder configuration
 forwarder:
-    # backend for the gateways to connect to
+    # described backend for the gateways
     backend:
-        # Semtech UDP forwarder backend
+        # Use Semtech UDP forwarder backend
         semtech_udp:
             # ip:port to bind the UDP listener to, ensure it is accessible by the gateways
             #
@@ -30,79 +29,83 @@ forwarder:
             # the time would otherwise be unset.
             fake_rx_time: false
     
-    # Gateways that can connect to backend
+    # Gateways that can use this forwarder
     gateways:
-        # ThingsIX gateway registry address
-        #
-        # Used to determine which gateways from the store are onboarded and
-        # configured. Gateways that are not onboard on ThingsIX or don't have
-        # their details set are ignored.
-        gateway_registry: 0xDAA93030749C7fE99B0A26Ac8074D49143A47C4e
-
-        # ThingsIX gateway registry refresh interval
-        #
-        # Only for gateways from the store that are onboarded and have their
-        # details set in the gateway registry data is routed to its final destination.
-        # Check the registry every `refresh` interval for onboarded/offboarded gateways.
-        # must be at least 1m, default is 5m
-        refresh: 5m
-
         # Gateway store
         #
         # Gateway
         store:
-            # File based gateway store.
+            # File based gateway store. This store contains all gateways and
+            # their identity keys.
             #
             # Full gateway store path on the file system
             file: /etc/thingsix-forwarder/gateways.yaml
         
-        # Optionally record gatway local id's for  gateways that are not the in
-        # the store into a file. This file can later be verified and imported
-        # into the gateway store. The import command will generate an onboarding
-        # file that can be uploaded to the dashboad to onboard all of these
-        # gateways.
+        # Optionally record gateway local id's for unknown gateways to a file. 
+        # This file can be imported into the gateway store later. This is
+        # convenient if you have a lot of gateways that you would need to 
+        # add to the store 1 by 1.
         record_unknown:
-            # location where connected gateways that are not in the store are
-            # logged.
+            # path to file where unknown gateways are recorded, must be
+            # writeable by the forwarder.
             file: /etc/thingsix-forwarder/unknown_gateways.yaml
 
-    # Routers to which gateway data can be forwarded to
+    # Routers to forward gateway data to.
     routers:
         # List with default routers
         #
         # Default routers are routers that will receive all gateway data and
-        # don't have to be registered in the ThingsIX router registry.
+        # don't have to be registered at ThingsIX.
         default:
             - endpoint: localhost:3200
               name: v47
-
-        # retrieve routers from the ThingsIX router registry.
+        
+        # Retrieve routers from the ThingsIX router registry.
         on_chain:
-            # ThingsIX router registry address
-            registry: 0xA82C3D848c027F5034d833CE6B8aA2b79Ff3F655
+            # Fetch routers from the ThingsIX router registry smart contract.
+            # 
+            # This address is environment specific, see the ThingsIX 
+            # documentation for a list of router registry addresses per 
+            # environment. This requires blockchain.polygon configuration.
+            registry: 0xd6bcc904C2B312f9a3893d9D2f5f2b6b0e86f9a1
 
             # retrieve router list from registry every interval
             interval: 30m
 
-    # accounting is not yet supported
-    accounting:
+        # Retrieve routers from the ThingsIX API.
+        thingsix_api:
+            # ThingsIX router API.
+            #
+            # ThingsIX offers an API to fetch registered routers from. This API
+            # syncs periodically with the router registry smart contract. The
+            # preferred method is to fetch them direct from the smart contract
+            # using the on_chain method. If that is not possible the API can be
+            # used.
+            endpoint: https://api.thingsix.com/routers/v1/snapshot
 
-# logging related configuration
+            # Interval when to fetch the latest set of routers from the ThingsIX
+            # API.
+            #
+            # Routes don't frequently change and are cached. There is no point
+            # in setting this interval to a very small value.
+            interval: 30m
+
+# Logging related configuration
 log:
     level: info      # [trace,debug,info,warn,error,fatal,panic]
     timestamp: true  # [true, false]
 
-# everything related to blockchain and RPC node
+# Blockchain related configuration
 blockchain:
     polygon:
         # Polygon node RPC endpoint
-        endpoint: https://rpc-mumbai.matic.today
-        # Polygon chain id: 137 for mainnet, 80001 for mumbai testnet
-        chain_id: 80001
+        endpoint: https://polygon-rpc.com
+        # Polygon chain id; mainnet=137, mumbai testnet=80001
+        chain_id: 137
         # Block confirmations, polygon blocks are final after 128 confirmations
         confirmations: 128
 
-# optional enable metrics
+# Optionally enable metrics
 metrics:
     # Enable prometheus http service
     prometheus:
