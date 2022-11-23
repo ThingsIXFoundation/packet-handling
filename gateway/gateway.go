@@ -19,6 +19,7 @@ package gateway
 import (
 	"crypto/ecdsa"
 	"crypto/sha256"
+	"fmt"
 
 	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/brocaar/lorawan"
@@ -51,49 +52,62 @@ func (gw Gateway) CompressedPubKeyBytes() []byte {
 func NewGateway(localGatewayID lorawan.EUI64, priv *ecdsa.PrivateKey) (*Gateway, error) {
 	return &Gateway{
 		LocalGatewayID:           localGatewayID,
-		NetworkGatewayID:         CalculateNetworkGatewayID(priv),
+		NetworkGatewayID:         GatewayIDFromPrivateKey(priv),
 		PrivateKey:               priv,
 		PublicKey:                &priv.PublicKey,
-		CompressedPublicKeyBytes: CalculateCompressedPublicKeyBytes(&priv.PublicKey),
-		PublicKeyBytes:           CalculatePublicKeyBytes(&priv.PublicKey),
+		CompressedPublicKeyBytes: utils.CalculateCompressedPublicKeyBytes(&priv.PublicKey),
+		PublicKeyBytes:           utils.CalculatePublicKeyBytes(&priv.PublicKey),
 		Owner:                    common.Address{}, // TODO
 	}, nil
 }
 
 func GenerateNewGateway(localID lorawan.EUI64) (*Gateway, error) {
-	priv, err := GeneratePrivateKey()
+	priv, err := utils.GeneratePrivateKey()
 	if err != nil {
 		return nil, err
 	}
 
 	return &Gateway{
 		LocalGatewayID:           localID,
-		NetworkGatewayID:         CalculateNetworkGatewayID(priv),
+		NetworkGatewayID:         GatewayIDFromPrivateKey(priv),
 		PrivateKey:               priv,
 		PublicKey:                &priv.PublicKey,
-		CompressedPublicKeyBytes: CalculateCompressedPublicKeyBytes(&priv.PublicKey),
+		CompressedPublicKeyBytes: utils.CalculateCompressedPublicKeyBytes(&priv.PublicKey),
 		Owner:                    common.Address{}, // TODO
 	}, nil
 }
 
-func CalculateNetworkGatewayID(priv *ecdsa.PrivateKey) lorawan.EUI64 {
+func (gw *Gateway) Address() common.Address {
+	return crypto.PubkeyToAddress(*gw.PublicKey)
+}
+
+func GatewayIDFromPrivateKey(priv *ecdsa.PrivateKey) lorawan.EUI64 {
 	pub := priv.PublicKey
-	pubBytes := CalculateCompressedPublicKeyBytes(&pub)
+	pubBytes := utils.CalculateCompressedPublicKeyBytes(&pub)
 	h := sha256.Sum256(pubBytes)
 
-	gatewayID, _ := utils.BytesToGatewayID(h[0:8])
+	gatewayID, _ := BytesToGatewayID(h[0:8])
 
 	return gatewayID
 }
 
-func CalculateCompressedPublicKeyBytes(pub *ecdsa.PublicKey) []byte {
-	return crypto.CompressPubkey(pub)[1:]
+func GatewayPublicKeyToID(pubKey []byte) (lorawan.EUI64, error) {
+	// pubkey is the compressed 33-byte long public key,
+	// the gateway ID is the pub key without the 0x02 prefix
+	if len(pubKey) == 33 {
+		// compressed ThingsIX public keys always start with 0x02.
+		// therefore don't use it and use bytes [1:] to derive the id
+		h := sha256.Sum256(pubKey[1:])
+		return BytesToGatewayID(h[:8])
+	}
+	return lorawan.EUI64{}, fmt.Errorf("invalid gateway public key (len=%d)", len(pubKey))
 }
 
-func CalculatePublicKeyBytes(pub *ecdsa.PublicKey) []byte {
-	return crypto.FromECDSAPub(pub)
-}
-
-func (gw *Gateway) Address() common.Address {
-	return crypto.PubkeyToAddress(*gw.PublicKey)
+func BytesToGatewayID(id []byte) (lorawan.EUI64, error) {
+	var gid lorawan.EUI64
+	if len(id) != len(gid) {
+		return lorawan.EUI64{}, fmt.Errorf("invalid gateway id length (len=%d)", len(id))
+	}
+	copy(gid[:], id)
+	return gid, nil
 }

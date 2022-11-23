@@ -17,7 +17,6 @@
 package gateway
 
 import (
-	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -25,10 +24,8 @@ import (
 
 	gateway_registry "github.com/ThingsIXFoundation/gateway-registry-go"
 	h3light "github.com/ThingsIXFoundation/h3-light"
-	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/brocaar/lorawan"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/olekukonko/tablewriter"
 	"github.com/sirupsen/logrus"
 )
@@ -41,27 +38,13 @@ type Config struct {
 	} `mapstructure:"blockchain"`
 }
 
-func GeneratePrivateKey() (*ecdsa.PrivateKey, error) {
-	for {
-		priv, err := crypto.GenerateKey()
-		if err != nil {
-			return nil, err
-		}
-
-		compressedPub := crypto.CompressPubkey(&priv.PublicKey)
-		if compressedPub[0] == 0x02 {
-			return priv, nil
-		}
-	}
-}
-
 func mustDecodeGatewayID(input string) lorawan.EUI64 {
 	bytes, err := hex.DecodeString(input)
 	if err != nil {
 		logrus.WithError(err).Fatal("invalid gateway local id")
 	}
 
-	id, err := utils.BytesToGatewayID(bytes)
+	id, err := BytesToGatewayID(bytes)
 	if err != nil {
 		logrus.WithError(err).Fatal("invalid gateway local id")
 	}

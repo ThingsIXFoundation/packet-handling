@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,26 +18,17 @@ package main
 
 import (
 	"github.com/ThingsIXFoundation/packet-handling/router"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "router",
-	Short: "run the router service",
-	Args:  cobra.RangeArgs(0, 1),
-	Run:   router.Run,
+var keyCmd = &cobra.Command{
+	Use:   "key",
+	Short: "key commands",
 }
 
-func init() {
-	keyCmd.AddCommand(genKeyCmd)
-	rootCmd.AddCommand(keyCmd)
-
-	rootCmd.PersistentFlags().String("config", "", "configuration file")
-	err := viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
-	if err != nil {
-		logrus.WithError(err).Fatal("could not find viper flag")
-	}
+var genKeyCmd = &cobra.Command{
+	Use:   "generate [keyfile]",
+	Short: "Generate router key",
+	Args:  cobra.RangeArgs(0, 1),
+	Run:   router.GenerateKey,
 }
