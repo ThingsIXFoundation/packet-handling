@@ -31,4 +31,4 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
-          args: --skip-dirs="(^|/)external($|/)"
+          args: --skip-dirs="(^|/)external($|/)" --timeout=10m
