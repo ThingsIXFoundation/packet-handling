@@ -38,9 +38,10 @@ the gateway.`,
 
 func init() {
 	rootCmd.PersistentFlags().String("config", "", "configuration file")
-	err := viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
-	if err != nil {
-		logrus.WithError(err).Fatal("could not find viper flag")
+	rootCmd.PersistentFlags().String("net", "main", "the network to load the default parameters for (\"dev\", \"test\", \"main\" or \"\")")
+
+	if err := viper.BindPFlags(rootCmd.PersistentFlags()); err != nil {
+		logrus.WithError(err).Fatal("could not bind command line flags")
 	}
 
 	rootCmd.AddCommand(gateway.Cmd)

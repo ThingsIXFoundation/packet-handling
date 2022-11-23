@@ -283,7 +283,7 @@ func fetchRoutersFromThingsIXAPI(cfg *Config, accounter Accounter) (RoutesUpdate
 		}
 	}
 
-	logrus.WithField("interval", interval).Info("retrieve routers from ThingsIX API")
+	logrus.WithField("interval", interval).WithField("api", *cfg.Forwarder.Routers.ThingsIXApi.Endpoint).Info("retrieve routers from ThingsIX API")
 
 	return func() ([]*Router, error) {
 		resp, err := http.Get(*cfg.Forwarder.Routers.ThingsIXApi.Endpoint)
