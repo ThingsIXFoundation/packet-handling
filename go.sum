@@ -55,8 +55,6 @@ github.com/ThingsIXFoundation/h3-light v0.0.0-20221122151216-69018e780344 h1:faZ
 github.com/ThingsIXFoundation/h3-light v0.0.0-20221122151216-69018e780344/go.mod h1:jSChfHi3fbZIAHTaPSEy+ghN/kF32U/f+NZdQt6oDD8=
 github.com/ThingsIXFoundation/router-api v1.2.0 h1:f6B8BcX1BakGYYfRSknTtVPNtRgRX4hX+/Isb2L5TYA=
 github.com/ThingsIXFoundation/router-api v1.2.0/go.mod h1:jED1RkCsj3JM6I0rbjUTPTxOeJvPTYXqAu5E1uBSmVo=
-github.com/ThingsIXFoundation/router-registry-go v1.0.0 h1:BJr4yMXOyxDeqZqi1cEfXtlRCd70cx4Z2kcVCvcWUQg=
-github.com/ThingsIXFoundation/router-registry-go v1.0.0/go.mod h1:JA8B+SBQEL1MAvHrbNw053bSzq++BBwW7QJ/s7BH018=
 github.com/ThingsIXFoundation/router-registry-go v1.1.0 h1:zWZMhrc4ZuLVR5X2hsu1TVSpkQJo4xM/+oWMrW7bUK0=
 github.com/ThingsIXFoundation/router-registry-go v1.1.0/go.mod h1:JA8B+SBQEL1MAvHrbNw053bSzq++BBwW7QJ/s7BH018=
 github.com/VictoriaMetrics/fastcache v1.6.0 h1:C/3Oi3EiBCqufydp1neRZkqcwmEiuRT9c3fqvvgKm5o=
@@ -260,6 +258,8 @@ github.com/hpcloud/tail v1.0.0/go.mod h1:ab1qPbhIpdTxEkNHXyeSf5vhxWSCs/tWer42PpO
 github.com/huin/goupnp v1.0.3 h1:N8No57ls+MnjlB+JPiCVSOyy/ot7MJTqlo7rn+NYSqQ=
 github.com/ianlancetaylor/demangle v0.0.0-20181102032728-5e5cf60278f6/go.mod h1:aSSvb/t6k1mPoxDqO4vJh6VOCGPwU4O0C2/Eqndh1Sc=
 github.com/ianlancetaylor/demangle v0.0.0-20200824232613-28f6c0f3b639/go.mod h1:aSSvb/t6k1mPoxDqO4vJh6VOCGPwU4O0C2/Eqndh1Sc=
+github.com/icza/gog v0.0.0-20220909135443-35d926f98ec3 h1:O8SoyXDpxP94MiNQQ4I8Va4qwNDWM6k4yygxhh/KNBw=
+github.com/icza/gog v0.0.0-20220909135443-35d926f98ec3/go.mod h1:DfGPW5hjxzL8lvxIU3S1/jYrehLWYdue9RDw0FFA/fI=
 github.com/imdario/mergo v0.3.4/go.mod h1:2EnlNZ0deacrJVfApfmtdGgDfMuh/nq6Ok1EcJh5FfA=
 github.com/imdario/mergo v0.3.6 h1:xTNEAn+kxVO7dTZGu0CegyqKZmoWFI0rF8UxjlB2d28=
 github.com/imdario/mergo v0.3.6/go.mod h1:2EnlNZ0deacrJVfApfmtdGgDfMuh/nq6Ok1EcJh5FfA=
