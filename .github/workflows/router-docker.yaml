@@ -20,7 +20,8 @@ on:
   pull_request:
     branches:
       - main
-    tags: 
+  push:
+    tags:
       - v*
 
 jobs:

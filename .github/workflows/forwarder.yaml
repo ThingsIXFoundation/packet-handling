@@ -70,7 +70,7 @@ jobs:
         run: |
           cd ./cmd/forwarder
           CGO_ENABLED=0 GOOS=${{matrix.goos}} GOARCH=${{matrix.goarch}} GOMIPS="${{matrix.gomips}}" go build .
-          tar -zcvf thingsix-forwarder-${{matrix.goos}}-${{matrix.goarch}}${{matrix.gomips}}.tar.gz forwarder
+          tar -zcvf thingsix-forwarder-${{matrix.goos}}-${{matrix.goarch}}${{matrix.gomips}}.tar.gz forwarder*
       - uses: actions/upload-artifact@v3
         with:
           name: thingsix-forwarder-${{matrix.goos}}-${{matrix.goarch}}${{matrix.gomips}}
