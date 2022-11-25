@@ -18,6 +18,7 @@ package main
 
 import (
 	"github.com/ThingsIXFoundation/packet-handling/router"
+	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -25,10 +26,11 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "router",
-	Short: "run the router service",
-	Args:  cobra.RangeArgs(0, 1),
-	Run:   router.Run,
+	Use:     "router",
+	Short:   "run the router service",
+	Args:    cobra.RangeArgs(0, 1),
+	Run:     router.Run,
+	Version: utils.Version(),
 }
 
 func init() {

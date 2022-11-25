@@ -134,6 +134,7 @@ func mustLoadConfig() *Config {
 	} else {
 		logrus.Info("***Starting ThingsIX Forwarder connected to unknown net***")
 	}
+	logrus.Infof("Version: %s", utils.Version())
 
 	// ensure user provided polygon blockchain config
 	if cfg.BlockChain.Polygon == nil {

@@ -26,8 +26,11 @@ COPY go.sum .
 RUN go mod download
 RUN go mod verify
 
+ARG GIT_COMMIT=unknown
+ARG GIT_VERSION=develop
+
 COPY . .
-RUN cd cmd/router && go build -ldflags="-s -w" -o /router
+RUN cd cmd/router && go build -ldflags="-s -w -X github.com/ThingsIXFoundation/packet-handling/utils.version=${GIT_VERSION} -X github.com/ThingsIXFoundation/packet-handling/utils.commit=${GIT_COMMIT}" -o /router
 
 # copy router and certs to base image.
 FROM alpine
