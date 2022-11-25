@@ -116,3 +116,7 @@ func StringToLogrusLevel() mapstructure.DecodeHookFunc {
 		}
 	}
 }
+
+func Ptr[T any](v T) *T {
+	return &v
+}

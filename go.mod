@@ -19,7 +19,6 @@ require (
 	github.com/goreleaser/goreleaser v0.106.0
 	github.com/goreleaser/nfpm v0.11.0
 	github.com/gorilla/websocket v1.5.0
-	github.com/icza/gog v0.0.0-20220909135443-35d926f98ec3
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/patrickmn/go-cache v2.1.0+incompatible
