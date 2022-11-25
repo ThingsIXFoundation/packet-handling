@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/ThingsIXFoundation/packet-handling/utils"
-	"github.com/icza/gog"
 	"github.com/mitchellh/mapstructure"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -54,16 +53,16 @@ func getNetConfig(net string) *Config {
 	cfg.Forwarder = ForwarderConfig{}
 	cfg.Forwarder.Backend = ForwarderBackendConfig{}
 	cfg.Forwarder.Backend.SemtechUDP = &ForwarderBackendSemtechUDPConfig{}
-	cfg.Forwarder.Backend.SemtechUDP.UDPBind = gog.Ptr("0.0.0.0:1680")
-	cfg.Forwarder.Backend.SemtechUDP.FakeRxTime = gog.Ptr(false)
+	cfg.Forwarder.Backend.SemtechUDP.UDPBind = utils.Ptr("0.0.0.0:1680")
+	cfg.Forwarder.Backend.SemtechUDP.FakeRxTime = utils.Ptr(false)
 	cfg.Forwarder.Gateways = ForwarderGatewayConfig{}
 	cfg.Forwarder.Gateways.Store = ForwarderGatewayStoreConfig{}
-	cfg.Forwarder.Gateways.Store.YamlStorePath = gog.Ptr("/etc/thingsix-forwarder/gateways.yaml")
+	cfg.Forwarder.Gateways.Store.YamlStorePath = utils.Ptr("/etc/thingsix-forwarder/gateways.yaml")
 	cfg.Forwarder.Gateways.RecordUnknown = &ForwarderGatewayRecordUnknownConfig{}
 	cfg.Forwarder.Gateways.RecordUnknown.File = "/etc/thingsix-forwarder/unknown_gateways.yaml"
 	cfg.Forwarder.Routers = ForwarderRoutersConfig{}
 	cfg.Forwarder.Routers.ThingsIXApi = &ForwarderRoutersThingsIXAPIConfig{}
-	cfg.Forwarder.Routers.ThingsIXApi.UpdateInterval = gog.Ptr(30 * time.Minute)
+	cfg.Forwarder.Routers.ThingsIXApi.UpdateInterval = utils.Ptr(30 * time.Minute)
 	cfg.BlockChain = BlockchainConfig{}
 	cfg.BlockChain.Polygon = &BlockchainPolygonConfig{}
 	cfg.BlockChain.Polygon.Confirmations = 128
@@ -76,19 +75,19 @@ func getNetConfig(net string) *Config {
 	cfg.Metrics.Prometheus.Path = "/metrics"
 
 	if net == "main" {
-		cfg.Forwarder.Routers.ThingsIXApi.Endpoint = gog.Ptr("https://api.thingsix.com/routers/v1/snapshot")
+		cfg.Forwarder.Routers.ThingsIXApi.Endpoint = utils.Ptr("https://api.thingsix.com/routers/v1/snapshot")
 		cfg.BlockChain.Polygon.Endpoint = "https://polygon-rpc.com"
 		cfg.BlockChain.Polygon.ChainID = 137
 		return &cfg
 	}
 	if net == "test" {
-		cfg.Forwarder.Routers.ThingsIXApi.Endpoint = gog.Ptr("https://api-testnet.thingsix.com/routers/v1/snapshot")
+		cfg.Forwarder.Routers.ThingsIXApi.Endpoint = utils.Ptr("https://api-testnet.thingsix.com/routers/v1/snapshot")
 		cfg.BlockChain.Polygon.Endpoint = "https://rpc.ankr.com/polygon_mumbai"
 		cfg.BlockChain.Polygon.ChainID = 80001
 		return &cfg
 	}
 	if net == "dev" {
-		cfg.Forwarder.Routers.ThingsIXApi.Endpoint = gog.Ptr("https://api-devnet.thingsix.com/routers/v1/snapshot")
+		cfg.Forwarder.Routers.ThingsIXApi.Endpoint = utils.Ptr("https://api-devnet.thingsix.com/routers/v1/snapshot")
 		cfg.BlockChain.Polygon.Endpoint = "https://rpc.ankr.com/polygon_mumbai"
 		cfg.BlockChain.Polygon.ChainID = 80001
 		return &cfg
