@@ -26,8 +26,11 @@ COPY go.sum .
 RUN go mod download
 RUN go mod verify
 
+ARG GIT_COMMIT=unknown
+ARG GIT_VERSION=develop
+
 COPY . .
-RUN cd cmd/forwarder && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-s -w" -o /forwarder
+RUN cd cmd/forwarder && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-s -w -X github.com/ThingsIXFoundation/packet-handling/utils.version=${GIT_VERSION} -X github.com/ThingsIXFoundation/packet-handling/utils.commit=${GIT_COMMIT}" -o /forwarder
 
 # copy forwarder and certs to base image.
 FROM scratch 

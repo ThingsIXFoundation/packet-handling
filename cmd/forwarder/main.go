@@ -19,6 +19,7 @@ package main
 import (
 	"github.com/ThingsIXFoundation/packet-handling/forwarder"
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
+	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -32,8 +33,9 @@ var rootCmd = &cobra.Command{
 registered ThingsIX routers. It accepts packets from trusted gateways and
 forwards these to routers and delivers packets from these routers back to
 the gateway.`,
-	Args: cobra.NoArgs,
-	Run:  forwarder.Run,
+	Args:    cobra.NoArgs,
+	Run:     forwarder.Run,
+	Version: utils.Version(),
 }
 
 func init() {
