@@ -56,21 +56,23 @@ forwarder:
         #
         # Default routers are routers that will receive all gateway data and
         # don't have to be registered at ThingsIX.
-        default:
-            - endpoint: localhost:3200
-              name: v47
+
+        #default:
+        #    - endpoint: localhost:3200
+        #      name: v47
         
-        # Retrieve routers from the ThingsIX router registry.
-        on_chain:
-            # Fetch routers from the ThingsIX router registry smart contract.
-            # 
-            # This address is environment specific, see the ThingsIX 
-            # documentation for a list of router registry addresses per 
-            # environment. This requires blockchain.polygon configuration.
-            registry: 0xd6bcc904C2B312f9a3893d9D2f5f2b6b0e86f9a1
+        # Fetch routers from the ThingsIX router registry smart contract.
+        #
+        # This address is environment specific, see the ThingsIX
+        # documentation for a list of router registry addresses per
+        # environment. This requires blockchain.polygon configuration.
+
+        #on_chain:
+            #registry: 0xd6bcc904C2B312f9a3893d9D2f5f2b6b0e86f9a1
 
             # retrieve router list from registry every interval
-            interval: 30m
+
+            #interval: 30m
 
         # Retrieve routers from the ThingsIX API.
         thingsix_api:
