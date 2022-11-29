@@ -37,7 +37,7 @@ func init() {
 	keyCmd.AddCommand(genKeyCmd)
 	rootCmd.AddCommand(keyCmd)
 
-	rootCmd.PersistentFlags().String("config", "", "configuration file")
+	rootCmd.PersistentFlags().String("config", "/etc/thingsix-router/config.yaml", "configuration file")
 	err := viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
 	if err != nil {
 		logrus.WithError(err).Fatal("could not find viper flag")
