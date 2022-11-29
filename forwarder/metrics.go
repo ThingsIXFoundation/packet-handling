@@ -136,6 +136,9 @@ func runPrometheusHTTPEndpoint(ctx context.Context, cfg *Config) {
 	)
 
 	mux.Handle(path, promhttp.Handler())
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	})
 
 	go func() {
 		defer close(done)
