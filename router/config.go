@@ -17,6 +17,7 @@
 package router
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"time"
@@ -149,22 +150,20 @@ func (cfg Config) MetricsPrometheusPath() string {
 	return path
 }
 
-func mustLoadConfig() *Config {
-	viper.SetConfigName("config") // name of config file (without extension)
-	viper.SetConfigType("yaml")   // REQUIRED if the config file does not have the extension in the name
-
-	if home, err := os.UserHomeDir(); err == nil {
-		viper.AddConfigPath(home) // call multiple times to add many search paths
-	}
-	viper.AddConfigPath("/etc/thingsix-router/") // path to look for the config file in
-	viper.AddConfigPath(".")
-
+func mustLoadConfig() (*Config, error) {
 	if configFile := viper.GetString("config"); configFile != "" {
 		viper.SetConfigFile(configFile)
 	}
 
-	if err := viper.ReadInConfig(); err != nil {
-		logrus.WithError(err).Fatal("unable to read config")
+	// Read in the file and expand environment variables
+	cb, err := os.ReadFile(viper.GetString("config"))
+	if err != nil {
+		return nil, err
+	}
+	cbs := os.ExpandEnv(string(cb))
+
+	if err := viper.ReadConfig(bytes.NewBufferString(cbs)); err != nil {
+		return nil, err
 	}
 
 	var cfg Config
@@ -177,11 +176,11 @@ func mustLoadConfig() *Config {
 		utils.StringToDuration(),
 		utils.StringToLogrusLevel(),
 	))); err != nil {
-		logrus.WithError(err).Fatal("unable to load configuration")
+		return nil, err
 	}
 
 	logrus.SetLevel(cfg.Log.Level)
 	logrus.SetFormatter(&logrus.TextFormatter{FullTimestamp: cfg.Log.Timestamp})
 
-	return &cfg
+	return &cfg, nil
 }
