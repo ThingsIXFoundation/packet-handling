@@ -2,6 +2,7 @@
 .AppleDouble
 .LSOverride
 .vscode
+.idea
 
 *.exe
 *.exe~
@@ -15,4 +16,6 @@ go.work
 *.code-workspace
 /cmd/forwarder/forwarder
 /cmd/router/router
-
+/cmd/router/*.yaml
+/cmd/forwarder/*.yaml
+*.secret

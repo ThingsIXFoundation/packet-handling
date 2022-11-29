@@ -57,6 +57,6 @@ router:
 
 metrics:
     prometheus:
-        address: 0.0.0.0:9999
+        address: 0.0.0.0:9090
         path: /metrics
     
