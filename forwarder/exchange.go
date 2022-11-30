@@ -264,7 +264,7 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 			frameLog.Warn("unable to broadcast uplink to routing table, drop packet")
 		} else {
 			uplinksCounter.WithLabelValues(gw.NetworkGatewayID.String(), "success").Inc()
-			frameLog.Info("delivered packet")
+			frameLog.Info("received packet")
 		}
 	case lorawan.JoinRequest, lorawan.RejoinRequest:
 		// Filter by Xor8 filter on devEUI
@@ -311,7 +311,7 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 			frameLog.Warn("unable to broadcast uplink to routing table, drop packet")
 		} else {
 			uplinksCounter.WithLabelValues(gw.NetworkGatewayID.String(), "success").Inc()
-			frameLog.Info("delivered packet")
+			frameLog.Info("received packet")
 		}
 	}
 }

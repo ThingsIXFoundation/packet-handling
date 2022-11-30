@@ -27,7 +27,6 @@ import (
 
 	"github.com/ThingsIXFoundation/packet-handling/forwarder/broadcast"
 	"github.com/ThingsIXFoundation/router-api/go/router"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -290,36 +289,49 @@ func (rc *RouterClient) run(ctx context.Context) error {
 				if ev.IsUplink() {
 					// send event if router is interested in it
 					if rc.router.InterestedIn(ev.uplink.device) {
-						log.WithFields(logrus.Fields{
+						pktlog := log.WithFields(logrus.Fields{
 							"dev_addr":      ev.uplink.device,
 							"gw_network_id": ev.receivedFrom.NetworkGatewayID,
 							"gw_local_id":   ev.receivedFrom.LocalGatewayID,
 							"uplink_id":     ev.uplink.event.GetUplinkFrameEvent().UplinkFrame.GetRxInfo().GetUplinkId(),
-						}).Info("forward uplink packet")
+							"router_id":     rc.router.ThingsIXID,
+						})
 
 						var (
-							owner   = common.BytesToAddress(ev.uplink.event.GetDownlinkTXAckEvent().GetAirtimeReceipt().GetOwner())
-							airtime = time.Duration(ev.uplink.event.GetDownlinkTXAckEvent().GetAirtimeReceipt().GetAirtime()) * time.Millisecond
+							owner   = rc.router.Owner
+							airtime = time.Duration(ev.uplink.event.GetUplinkFrameEvent().GetAirtimeReceipt().GetAirtime()) * time.Millisecond
 						)
 						if rc.router.AllowAirtime(owner, airtime) {
 							if err := eventStream.Send(ev.uplink.event); err != nil {
 								return fmt.Errorf("unable to send event to router: %w", err)
 							}
+							pktlog.Info("forwarded uplink packet to router")
 						} else {
-							log.Warn("accounting prevents uplink, drop packet")
+							pktlog.Warn("accounting prevents forwarding uplink packet to router, drop packet")
 						}
 					}
 				} else if ev.IsJoin() {
 					// send event if router is accepts the join request
 					if rc.router.AcceptsJoin(ev.join.devEUI) {
-						log.WithFields(logrus.Fields{
+						pktlog := log.WithFields(logrus.Fields{
 							"dev_eui":       ev.join.devEUI,
 							"gw_network_id": ev.receivedFrom.NetworkGatewayID,
 							"gw_local_id":   ev.receivedFrom.LocalGatewayID,
 							"uplink_id":     ev.join.event.GetUplinkFrameEvent().UplinkFrame.GetRxInfo().GetUplinkId(),
-						}).Info("forward join to router")
-						if err := eventStream.Send(ev.join.event); err != nil {
-							return fmt.Errorf("unable to send event to router: %w", err)
+							"router_id":     rc.router.ThingsIXID,
+						})
+
+						var (
+							owner   = rc.router.Owner
+							airtime = time.Duration(ev.join.event.GetUplinkFrameEvent().GetAirtimeReceipt().GetAirtime()) * time.Millisecond
+						)
+						if rc.router.AllowAirtime(owner, airtime) {
+							if err := eventStream.Send(ev.join.event); err != nil {
+								return fmt.Errorf("unable to send event to router: %w", err)
+							}
+							pktlog.Info("forwarded join packet to router")
+						} else {
+							pktlog.Warn("accounting prevents forwarding join packet to router, drop packet")
 						}
 					}
 				} else if ev.IsDownlinkAck() {
@@ -328,14 +340,17 @@ func (rc *RouterClient) run(ctx context.Context) error {
 					if _, ok := pendingDownlinkAcks[downlinkID]; ok {
 						// our router ordered the ACK
 						delete(pendingDownlinkAcks, downlinkID)
-						log.WithFields(logrus.Fields{
-							"downlink_id":   fmt.Sprintf("%x", downlinkID[:8]),
-							"gw_network_id": ev.receivedFrom.NetworkGatewayID,
-							"gw-local-id":   ev.receivedFrom.LocalGatewayID,
-						}).Info("forward downlink ACK to router")
+
 						if err := eventStream.Send(ev.downlinkAck.event); err != nil {
 							return fmt.Errorf("unable to send event to router: %w", err)
 						}
+
+						log.WithFields(logrus.Fields{
+							"downlink_id":   fmt.Sprintf("%x", downlinkID[:8]),
+							"gw_network_id": ev.receivedFrom.NetworkGatewayID,
+							"gw_local_id":   ev.receivedFrom.LocalGatewayID,
+							"router_id":     rc.router.ThingsIXID,
+						}).Info("forwarded downlink-ack to router")
 					}
 				} else if ev.IsOnlineOfflineEvent() {
 					// send to all connected routers
