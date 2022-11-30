@@ -182,6 +182,7 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 		"sf":          frame.GetTxInfo().GetModulation().GetLora().GetSpreadingFactor(),
 		"pol":         frame.GetTxInfo().GetModulation().GetLora().GetPolarizationInversion(),
 		"coderate":    frame.GetTxInfo().GetModulation().GetLora().GetCodeRate(),
+		"bandwidth":   frame.GetTxInfo().GetModulation().GetLora().GetBandwidth(),
 		"payload":     base64.RawStdEncoding.EncodeToString(frame.GetPhyPayload()),
 		"payload_len": len(frame.GetPhyPayload()),
 	})
