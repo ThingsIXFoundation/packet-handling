@@ -31,7 +31,7 @@ func UplinkAirtime(frame *gw.UplinkFrame) (time.Duration, error) {
 		return 0, fmt.Errorf("packet is not LoRa, cannot calculate airtime")
 	}
 	sf := int(lora.GetSpreadingFactor())
-	bandwidth := int(lora.GetBandwidth())
+	bandwidth := int(lora.GetBandwidth() / 1000)
 	preamble := 8 // always 8 for LoRaWAN
 	var codingrate airtime.CodingRate
 	switch lora.CodeRate {
@@ -57,7 +57,7 @@ func DownlinkAirtime(frame *gw.DownlinkFrame) (time.Duration, error) {
 		return 0, fmt.Errorf("packet is not LoRa, cannot calculate airtime")
 	}
 	sf := int(lora.GetSpreadingFactor())
-	bandwidth := int(lora.GetBandwidth())
+	bandwidth := int(lora.GetBandwidth() / 1000)
 	preamble := 8 // always 8 for LoRaWAN
 	var codingrate airtime.CodingRate
 	switch lora.CodeRate {

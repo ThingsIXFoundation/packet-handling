@@ -202,7 +202,7 @@ func logRouterDialDetails(router *Router) {
 
 func (rc *RouterClient) run(ctx context.Context) error {
 	var (
-		log                   = logrus.WithField("router", rc.router)
+		log                   = logrus.WithField("router_id", rc.router)
 		joinFilterRenewTicker = time.NewTicker(30 * time.Minute)
 		pendingDownlinkAcks   = make(map[[32]byte]time.Time)
 		dialCtx, cancel       = context.WithTimeout(ctx, 30*time.Second)
@@ -294,7 +294,6 @@ func (rc *RouterClient) run(ctx context.Context) error {
 							"gw_network_id": ev.receivedFrom.NetworkGatewayID,
 							"gw_local_id":   ev.receivedFrom.LocalGatewayID,
 							"uplink_id":     ev.uplink.event.GetUplinkFrameEvent().UplinkFrame.GetRxInfo().GetUplinkId(),
-							"router_id":     rc.router.ThingsIXID,
 						})
 
 						var (
@@ -318,7 +317,6 @@ func (rc *RouterClient) run(ctx context.Context) error {
 							"gw_network_id": ev.receivedFrom.NetworkGatewayID,
 							"gw_local_id":   ev.receivedFrom.LocalGatewayID,
 							"uplink_id":     ev.join.event.GetUplinkFrameEvent().UplinkFrame.GetRxInfo().GetUplinkId(),
-							"router_id":     rc.router.ThingsIXID,
 						})
 
 						var (
@@ -349,7 +347,6 @@ func (rc *RouterClient) run(ctx context.Context) error {
 							"downlink_id":   fmt.Sprintf("%x", downlinkID[:8]),
 							"gw_network_id": ev.receivedFrom.NetworkGatewayID,
 							"gw_local_id":   ev.receivedFrom.LocalGatewayID,
-							"router_id":     rc.router.ThingsIXID,
 						}).Info("forwarded downlink-ack to router")
 					}
 				} else if ev.IsOnlineOfflineEvent() {
