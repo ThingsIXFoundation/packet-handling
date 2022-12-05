@@ -28,6 +28,8 @@ RUN go mod verify
 
 ARG GIT_COMMIT=unknown
 ARG GIT_VERSION=develop
+ARG TARGETOS
+ARG TARGETARCH
 
 COPY . .
 RUN cd cmd/forwarder && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-s -w -X github.com/ThingsIXFoundation/packet-handling/utils.version=${GIT_VERSION} -X github.com/ThingsIXFoundation/packet-handling/utils.commit=${GIT_COMMIT}" -o /forwarder
