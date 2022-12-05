@@ -268,6 +268,9 @@ func (r *RoutingTable) keepRouteTableUpToDate(ctx context.Context) {
 			}
 
 			for _, router := range routers {
+				// don't capture loop variable since it is used in a new go-routine
+				// and reused in the next iteration.
+				copy := router
 				// send route details to client for existing routers
 				if client, ok := existingRouters[router.ThingsIXID]; ok {
 					// existing route, send route details update to client, in case
@@ -275,11 +278,11 @@ func (r *RoutingTable) keepRouteTableUpToDate(ctx context.Context) {
 					// therefore do it in the background.
 					go func() {
 						client.details <- &RouterDetails{
-							Endpoint: router.Endpoint,
-							NetID:    router.NetID,
-							Prefix:   router.Prefix,
-							Mask:     router.Mask,
-							Owner:    router.Owner,
+							Endpoint: copy.Endpoint,
+							NetID:    copy.NetID,
+							Prefix:   copy.Prefix,
+							Mask:     copy.Mask,
+							Owner:    copy.Owner,
 						}
 					}()
 					existingRoutesCount++
@@ -289,7 +292,7 @@ func (r *RoutingTable) keepRouteTableUpToDate(ctx context.Context) {
 						clientCtx, clientCancel = context.WithCancel(ctx)
 						details                 = make(chan *RouterDetails)
 					)
-					go NewRouterClient(router, r.routesTableBroadcaster, r.networkEvents, r.gatewayEvents, details).Run(clientCtx)
+					go NewRouterClient(copy, r.routesTableBroadcaster, r.networkEvents, r.gatewayEvents, details).Run(clientCtx)
 					existingRouters[router.ThingsIXID] = &struct {
 						stop    context.CancelFunc
 						details chan *RouterDetails
