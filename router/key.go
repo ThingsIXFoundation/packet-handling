@@ -55,8 +55,12 @@ func mustGenerateKey(filename string) {
 		}
 
 		// serialize gateway details
-		var keyfile Keyfile
-		keyfile.Router.ID = hex.EncodeToString(utils.CalculateCompressedPublicKeyBytes(&key.PublicKey))
+		var (
+			keyfile    Keyfile
+			thingsIxID = utils.DeriveThingsIxID(&key.PublicKey)
+		)
+
+		keyfile.Router.ID = hex.EncodeToString(thingsIxID[:])
 		keyfile.Router.PrivateKey = hex.EncodeToString(crypto.FromECDSA(key))
 		if err := yaml.NewEncoder(outputFile).Encode(keyfile); err != nil {
 			logrus.WithError(err).Fatalf("unable to write router key to %s", filename)
@@ -84,9 +88,9 @@ func loadRouterIdentity(cfg *Config) (*Identity, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not decode router private key from keyfile %s", cfg.Router.Keyfile)
 	}
-
+	thingsIxID := utils.DeriveThingsIxID(&key.PublicKey)
 	return &Identity{
-		ID:         hex.EncodeToString(utils.CalculateCompressedPublicKeyBytes(&key.PublicKey)),
+		ID:         hex.EncodeToString(thingsIxID[:]),
 		PrivateKey: key,
 	}, nil
 }

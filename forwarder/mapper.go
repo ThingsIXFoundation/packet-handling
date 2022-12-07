@@ -22,11 +22,11 @@ import (
 	"time"
 
 	h3light "github.com/ThingsIXFoundation/h3-light"
+	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/chirpstack/chirpstack/api/go/v4/gw"
 
 	"github.com/ThingsIXFoundation/coverage-api/go/mapper"
-	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	"github.com/ThingsIXFoundation/packet-handling/mapperpacket"
 	"github.com/ThingsIXFoundation/router-api/go/router"
 	"github.com/brocaar/lorawan"
@@ -36,7 +36,7 @@ import (
 )
 
 type MapperForwarder struct {
-	gatewayStore gateway.Store
+	gatewayStore gateway.GatewayStore
 	exchange     *Exchange
 }
 
@@ -49,7 +49,7 @@ func IsMaybeMapperPacket(payload *lorawan.MACPayload) bool {
 }
 
 func (mc *MapperForwarder) HandleMapperPacket(frame *gw.UplinkFrame, mac *lorawan.MACPayload) {
-	gateway, err := mc.gatewayStore.GatewayByNetworkIDString(frame.RxInfo.GatewayId)
+	gateway, err := mc.gatewayStore.ByNetworkIDString(frame.RxInfo.GatewayId)
 	if err != nil || gateway == nil {
 		logrus.WithFields(logrus.Fields{
 			"local_gateway_id": frame.RxInfo.GatewayId,

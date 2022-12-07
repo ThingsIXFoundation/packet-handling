@@ -18,7 +18,6 @@ package gateway
 
 import (
 	"crypto/ecdsa"
-	"crypto/sha256"
 	"fmt"
 
 	"github.com/ThingsIXFoundation/packet-handling/utils"
@@ -27,38 +26,45 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+// ThingsIxID is the gateways public key without the leading `0x02`.
+type ThingsIxID [32]byte
+
+func (id ThingsIxID) String() string {
+	return fmt.Sprintf("%x", id[:])
+}
+
+// Gateway represents a ThingsIX gateway
 type Gateway struct {
-	LocalGatewayID           lorawan.EUI64
-	NetworkGatewayID         lorawan.EUI64
-	PrivateKey               *ecdsa.PrivateKey
-	PublicKey                *ecdsa.PublicKey
-	PublicKeyBytes           []byte
-	CompressedPublicKeyBytes []byte
-	Owner                    common.Address
+	// LocalID is the gateway ID as used in the communication between gateway
+	// and ThingsIX forwarder and is usually derived from the gateways hardware.
+	LocalID lorawan.EUI64
+	// NetId is the gateway id as used in the communication between the
+	// forwarder and the ThingsIX network.
+	NetID lorawan.EUI64
+	// PrivateKey is the gateways private key
+	PrivateKey *ecdsa.PrivateKey
+	// PublicKey is the gateways public key from which the ThingsIX is derived.
+	PublicKey *ecdsa.PublicKey
+	// PublicKeyBytes
+	PublicKeyBytes []byte
+	// ThingsIxID is the gateway id as used when onboarding the gateway in
+	// ThingsIX. It is the gateways public key without the `0x02` prefix.
+	ThingsIxID ThingsIxID
+	// Owner is the gateways owner if the gateway is onboarded in ThingsIX. If
+	// nil it means the gateway is in the store but it is not onboarded in
+	// ThingsIX (yet).
+	Owner common.Address
 }
 
-// ID is the identifier as which the gateway is registered in the gateway registry.
-func (gw Gateway) ID() [32]byte {
-	var id [32]byte
-	copy(id[:], gw.CompressedPublicKeyBytes)
-	return id
+// ID is the identifier as which the gateway is registered in the gateway
+// registry.
+func (gw Gateway) ID() ThingsIxID {
+	return gw.ThingsIxID
 }
 
-// CompressedPubKeyBytes returns the compressed public key including 0x02 prefix
+// CompressedPubKeyBytes returns the compressed public key with 0x02 prefix
 func (gw Gateway) CompressedPubKeyBytes() []byte {
-	return append([]byte{0x2}, gw.CompressedPublicKeyBytes...)
-}
-
-func NewGateway(localGatewayID lorawan.EUI64, priv *ecdsa.PrivateKey) (*Gateway, error) {
-	return &Gateway{
-		LocalGatewayID:           localGatewayID,
-		NetworkGatewayID:         GatewayIDFromPrivateKey(priv),
-		PrivateKey:               priv,
-		PublicKey:                &priv.PublicKey,
-		CompressedPublicKeyBytes: utils.CalculateCompressedPublicKeyBytes(&priv.PublicKey),
-		PublicKeyBytes:           utils.CalculatePublicKeyBytes(&priv.PublicKey),
-		Owner:                    common.Address{}, // TODO
-	}, nil
+	return append([]byte{0x2}, gw.ThingsIxID[:]...)
 }
 
 func GenerateNewGateway(localID lorawan.EUI64) (*Gateway, error) {
@@ -68,46 +74,15 @@ func GenerateNewGateway(localID lorawan.EUI64) (*Gateway, error) {
 	}
 
 	return &Gateway{
-		LocalGatewayID:           localID,
-		NetworkGatewayID:         GatewayIDFromPrivateKey(priv),
-		PrivateKey:               priv,
-		PublicKey:                &priv.PublicKey,
-		CompressedPublicKeyBytes: utils.CalculateCompressedPublicKeyBytes(&priv.PublicKey),
-		Owner:                    common.Address{}, // TODO
+		LocalID:    localID,
+		NetID:      GatewayIDFromPrivateKey(priv),
+		PrivateKey: priv,
+		PublicKey:  &priv.PublicKey,
+		ThingsIxID: utils.DeriveThingsIxID(&priv.PublicKey),
+		Owner:      common.Address{}, // TODO: set once gateway onboard are required
 	}, nil
 }
 
 func (gw *Gateway) Address() common.Address {
 	return crypto.PubkeyToAddress(*gw.PublicKey)
-}
-
-func GatewayIDFromPrivateKey(priv *ecdsa.PrivateKey) lorawan.EUI64 {
-	pub := priv.PublicKey
-	pubBytes := utils.CalculateCompressedPublicKeyBytes(&pub)
-	h := sha256.Sum256(pubBytes)
-
-	gatewayID, _ := BytesToGatewayID(h[0:8])
-
-	return gatewayID
-}
-
-func GatewayPublicKeyToID(pubKey []byte) (lorawan.EUI64, error) {
-	// pubkey is the compressed 33-byte long public key,
-	// the gateway ID is the pub key without the 0x02 prefix
-	if len(pubKey) == 33 {
-		// compressed ThingsIX public keys always start with 0x02.
-		// therefore don't use it and use bytes [1:] to derive the id
-		h := sha256.Sum256(pubKey[1:])
-		return BytesToGatewayID(h[:8])
-	}
-	return lorawan.EUI64{}, fmt.Errorf("invalid gateway public key (len=%d)", len(pubKey))
-}
-
-func BytesToGatewayID(id []byte) (lorawan.EUI64, error) {
-	var gid lorawan.EUI64
-	if len(id) != len(gid) {
-		return lorawan.EUI64{}, fmt.Errorf("invalid gateway id length (len=%d)", len(id))
-	}
-	copy(gid[:], id)
-	return gid, nil
 }

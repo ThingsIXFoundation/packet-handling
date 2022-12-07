@@ -14,56 +14,58 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package gateway
+package forwarder
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
 	"os"
+	"time"
 
 	gateway_registry "github.com/ThingsIXFoundation/gateway-registry-go"
+	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	"github.com/brocaar/lorawan"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 var (
-	Cmd = &cobra.Command{
+	GatewayCmds = &cobra.Command{
 		Use:   "gateway",
 		Short: "gateway related commands",
 	}
 
 	importGatewayCmd = &cobra.Command{
-		Use:   "import <gateway-store-file> <chain-id> <owner> <onboarder-address> <recorded-unknown-gateway-file>",
-		Short: "Import gateway to gateway store",
-		Args:  cobra.ExactArgs(5),
+		Use:   "import <chain-id> <owner> <onboarder-address>",
+		Short: "Import recorded unknown gateways in gateway store",
+		Args:  cobra.ExactArgs(3),
 		Run:   importGatewayStore,
 	}
 
 	listGatewayCmd = &cobra.Command{
-		Use:   "list <gateway-store-file>",
+		Use:   "list",
 		Short: "List gateway in gateway store",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.NoArgs,
 		Run:   listGatewayStore,
 	}
 
 	addGatewayCmd = &cobra.Command{
-		Use:   "add <gateway-store-file> <local-id>",
+		Use:   "add <local-id>",
 		Short: "Add gateway to gateway store",
-		Args:  cobra.ExactArgs(2),
+		Args:  cobra.ExactArgs(1),
 		Run:   addGatewayToStore,
 	}
 
 	gatewayDetailsCmd = &cobra.Command{
-		Use:   "details <gateway-store-file> <thingsix-id/local-id/network-id>",
+		Use:   "details <thingsix-id/local-id/network-id>",
 		Short: "Show gateway details",
-		Args:  cobra.RangeArgs(2, 3),
+		Args:  cobra.ExactArgs(1),
 		Run:   gatewayDetails,
 	}
 
@@ -77,29 +79,30 @@ func init() {
 	gatewayDetailsCmd.PersistentFlags().StringVar(&rpcEndpoint, "rpc.endpoint", "", "RPC endpoint")
 	gatewayDetailsCmd.PersistentFlags().StringVar(&registryAddress, "registry.address", "", "Gateway registry address")
 
-	Cmd.AddCommand(importGatewayCmd)
-	Cmd.AddCommand(listGatewayCmd)
-	Cmd.AddCommand(addGatewayCmd)
-	Cmd.AddCommand(gatewayDetailsCmd)
+	GatewayCmds.AddCommand(importGatewayCmd)
+	GatewayCmds.AddCommand(listGatewayCmd)
+	GatewayCmds.AddCommand(addGatewayCmd)
+	GatewayCmds.AddCommand(gatewayDetailsCmd)
 }
 
 func gatewayDetails(cmd *cobra.Command, args []string) {
 	var (
-		store, err = LoadGatewayYamlFileStore(args[0])
-		id         = args[1]
+		cfg        = mustLoadConfig()
+		store, err = gateway.NewGatewayStore(context.Background(), &cfg.Forwarder.Gateways.Store)
+		id         = args[0]
 		registry   *gateway_registry.GatewayRegistry
-		gw         *Gateway
+		gw         *gateway.Gateway
 	)
 	if err != nil {
 		logrus.WithError(err).Fatal("unable to open gateway store")
 	}
 	if len(id) == 16 {
-		gw, err = store.GatewayByLocalID(mustDecodeGatewayID(id))
-		if errors.Is(err, ErrNotFound) {
-			gw, err = store.GatewayByNetworkID(mustDecodeGatewayID(id))
+		gw, err = store.ByLocalID(mustDecodeGatewayID(id))
+		if errors.Is(err, gateway.ErrNotFound) {
+			gw, err = store.ByNetworkID(mustDecodeGatewayID(id))
 		}
 	} else {
-		gw, err = store.GatewayByThingsIxID(mustDecodeThingsIXID(id))
+		gw, err = store.ByThingsIxID(mustDecodeThingsIXID(id))
 	}
 	if err != nil {
 		logrus.WithError(err).Fatal("gateway not found in store")
@@ -117,47 +120,40 @@ func gatewayDetails(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	printGatewaysAsTable([]*Gateway{gw}, registry)
+	printGatewaysAsTable([]*gateway.Gateway{gw}, registry)
 }
 
 func importGatewayStore(cmd *cobra.Command, args []string) {
 	var (
-		owner     = common.HexToAddress(args[2])
-		onboarder = common.HexToAddress(args[3])
-		log       = logrus.WithField("file", args[4])
-		version   = uint8(1)
+		cfg         = mustLoadConfig()
+		store, err  = gateway.NewGatewayStore(context.Background(), &cfg.Forwarder.Gateways.Store)
+		owner       = common.HexToAddress(args[1])
+		onboarder   = common.HexToAddress(args[2])
+		version     = uint8(1)
+		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+		gateways    []*gateway.Gateway
 	)
+	defer cancel()
 
-	chainID, ok := new(big.Int).SetString(args[1], 0)
+	if err != nil {
+		logrus.WithError(err).Fatal("unable to load gateway store")
+	}
+
+	chainID, ok := new(big.Int).SetString(args[0], 0)
 	if !ok {
-		log.Fatal("invalid chain id")
+		logrus.Fatal("invalid chain id")
 	}
-	store, err := LoadGatewayYamlFileStore(args[0])
+
+	recordedLocalIDs, err := GetAllRecordedUnknownGateways(cfg.Forwarder.Gateways.RecordUnknown)
 	if err != nil {
-		logrus.WithError(err).Fatal("unable to open gateway store")
+		logrus.WithError(err).Fatal("unable to retrieve recorded unknown gateways")
 	}
 
-	// load list with unknown gateway local ids and generate a new gateway
-	// record for each of them
-	in, err := os.Open(args[4])
-	if err != nil {
-		log.WithError(err).Fatal("unable to open recorded gateways file")
-	}
-	defer in.Close()
-
-	var (
-		ids      []lorawan.EUI64
-		gateways []*Gateway
-	)
-	if err := yaml.NewDecoder(in).Decode(&ids); err != nil {
-		log.WithError(err).Fatal("unable to decode recorded gateways file")
-	}
-
-	// generate for all ids a new gateway key
-	for _, id := range ids {
-		gw, err := GenerateNewGateway(id)
+	// generate for all recorded id's a new gateway key
+	for _, id := range recordedLocalIDs {
+		gw, err := gateway.GenerateNewGateway(id)
 		if err != nil {
-			log.WithError(err).Fatal("unable to generate new gateway")
+			logrus.WithError(err).Fatal("unable to generate new gateway")
 		}
 		gateways = append(gateways, gw)
 	}
@@ -174,23 +170,23 @@ func importGatewayStore(cmd *cobra.Command, args []string) {
 
 	var output []outputGw
 	for _, gw := range gateways {
-		sign, err := SignPlainBatchOnboardMessage(chainID, onboarder, owner, version, gw)
+		sign, err := gateway.SignPlainBatchOnboardMessage(chainID, onboarder, owner, version, gw)
 		if err != nil {
-			log.WithError(err).Fatal("unable to sign gateway onboard message")
+			logrus.WithError(err).Fatal("unable to sign gateway onboard message")
 		}
 
-		if err := store.AddGateway(gw.LocalGatewayID, gw.PrivateKey); err == nil {
-			logrus.Infof("imported gateway %s", gw.LocalGatewayID)
+		if _, err := store.Add(ctx, gw.LocalID, gw.PrivateKey); err == nil {
+			logrus.Infof("imported gateway %s", gw.LocalID)
 		} else {
-			logrus.Infof("gateway %s already in gateway store, skip", gw.LocalGatewayID)
+			logrus.Infof("gateway %s already in gateway store, skip", gw.LocalID)
 			continue
 		}
 
 		output = append(output, outputGw{
-			ID:        "0x" + hex.EncodeToString(gw.CompressedPublicKeyBytes),
+			ID:        "0x" + hex.EncodeToString(gw.ThingsIxID[:]),
 			Version:   version,
-			Local:     gw.LocalGatewayID,
-			Network:   gw.NetworkGatewayID,
+			Local:     gw.LocalID,
+			Network:   gw.NetID,
 			ChainID:   chainID.Uint64(),
 			Address:   gw.Address(),
 			Signature: fmt.Sprintf("0x%x", sign),
@@ -201,13 +197,18 @@ func importGatewayStore(cmd *cobra.Command, args []string) {
 		if err := json.NewEncoder(os.Stdout).Encode(output); err != nil {
 			logrus.WithError(err).Fatal("unable to write gateway onboard message!")
 		}
+		logrus.Infof("imported %d gateways, don't forget to onboard these with the above JSON message", len(output))
+	} else {
+		logrus.Infof("imported 0 gateways")
 	}
-	logrus.Infof("imported %d gateways, don't forget to onboard these", len(output))
 }
 
 func listGatewayStore(cmd *cobra.Command, args []string) {
-	var registry *gateway_registry.GatewayRegistry
-	store, err := LoadGatewayYamlFileStore(args[0])
+	var (
+		registry   *gateway_registry.GatewayRegistry
+		cfg        = mustLoadConfig()
+		store, err = gateway.NewGatewayStore(context.Background(), &cfg.Forwarder.Gateways.Store)
+	)
 	if err != nil {
 		logrus.WithError(err).Fatal("unable to open gateway store")
 	}
@@ -224,31 +225,37 @@ func listGatewayStore(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	printGatewaysAsTable(store.Gateways(), registry)
+	var collector GatewayCollector
+	store.Range(&collector)
+	printGatewaysAsTable(collector.Gateways, registry)
 }
 
 func addGatewayToStore(cmd *cobra.Command, args []string) {
 	var (
-		store, err = LoadGatewayYamlFileStore(args[0])
-		localID    = mustDecodeGatewayID(args[1])
+		localID     = mustDecodeGatewayID(args[0])
+		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+		cfg         = mustLoadConfig()
+		store, err  = gateway.NewGatewayStore(context.Background(), &cfg.Forwarder.Gateways.Store)
 	)
+	if err != nil {
+		logrus.WithError(err).Fatal("unable to open gateway store")
+	}
+	defer cancel()
+
 	if err != nil {
 		logrus.WithError(err).Fatal("unable to open gateway store")
 	}
 
 	// generate new ThingsIX gateway key
-	gateway, err := GenerateNewGateway(localID)
+	newGateway, err := gateway.GenerateNewGateway(localID)
 	if err != nil {
 		logrus.WithError(err).Fatal("unable to generate gateway entry")
 	}
 
-	if err := store.AddGateway(gateway.LocalGatewayID, gateway.PrivateKey); err != nil {
+	gw, err := store.Add(ctx, newGateway.LocalID, newGateway.PrivateKey)
+	if err != nil {
 		logrus.WithError(err).Fatal("unable to add gateway to store")
 	}
 
-	gw, err := store.GatewayByLocalID(gateway.LocalGatewayID)
-	if err != nil {
-		logrus.WithError(err).Fatalf("unable to retrieve added gateway: %s", localID)
-	}
-	printGatewaysAsTable([]*Gateway{gw}, nil)
+	printGatewaysAsTable([]*gateway.Gateway{gw}, nil)
 }

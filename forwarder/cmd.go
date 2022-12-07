@@ -34,7 +34,7 @@ func Run(cmd *cobra.Command, args []string) {
 		cfg           = mustLoadConfig()
 		wg            sync.WaitGroup
 		sign          = make(chan os.Signal, 1)
-		exchange, err = NewExchange(cfg)
+		exchange, err = NewExchange(ctx, cfg)
 	)
 
 	if err != nil {

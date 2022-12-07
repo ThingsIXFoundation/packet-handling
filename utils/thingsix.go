@@ -32,7 +32,8 @@ func Eui64ToUint64(eui64 lorawan.EUI64) uint64 {
 	return binary.BigEndian.Uint64(eui64[:])
 }
 
-// Eui64FromString tries to read a lorawan.EUI64 from string. It returns an error if it doesn't succeed.
+// Eui64FromString tries to read a lorawan.EUI64 from string.
+// It returns an error if it doesn't succeed.
 func Eui64FromString(str string) (lorawan.EUI64, error) {
 	eui := lorawan.EUI64{}
 	err := eui.UnmarshalText([]byte(str))
@@ -66,8 +67,11 @@ func GeneratePrivateKey() (*ecdsa.PrivateKey, error) {
 	}
 }
 
-func CalculateCompressedPublicKeyBytes(pub *ecdsa.PublicKey) []byte {
-	return crypto.CompressPubkey(pub)[1:]
+func DeriveThingsIxID(pub *ecdsa.PublicKey) [32]byte {
+	var id [32]byte
+	raw := crypto.CompressPubkey(pub)[1:]
+	copy(id[:], raw)
+	return id
 }
 
 func CalculatePublicKeyBytes(pub *ecdsa.PublicKey) []byte {

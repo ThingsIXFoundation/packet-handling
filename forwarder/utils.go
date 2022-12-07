@@ -25,40 +25,40 @@ import (
 	"math/big"
 	"net/http"
 	"os"
-	"path"
+	"strings"
 	"time"
 
-	"github.com/brocaar/lorawan"
-
-	frequency_plan "github.com/ThingsIXFoundation/frequency-plan/go/frequency_plan"
 	gateway_registry "github.com/ThingsIXFoundation/gateway-registry-go"
+	h3light "github.com/ThingsIXFoundation/h3-light"
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	router_registry "github.com/ThingsIXFoundation/router-registry-go"
+	"github.com/brocaar/lorawan"
 	"github.com/chirpstack/chirpstack/api/go/v4/gw"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/olekukonko/tablewriter"
 	"github.com/sirupsen/logrus"
 )
 
 // localUplinkFrameToNetwork converts the given frame that was received from a gateway
 // into a frame that can be send onto the network on behalf of the given gw.
 func localUplinkFrameToNetwork(gw *gateway.Gateway, frame *gw.UplinkFrame) (*gw.UplinkFrame, error) {
-	frame.RxInfo.GatewayId = gw.NetworkGatewayID.String()
+	frame.RxInfo.GatewayId = gw.NetID.String()
 	return frame, nil
 }
 
 // localDownlinkTxAckToNetwork converts the given txack that was received from a gateway
 // into a txack that can be send onto the network on behalf of the given gw.
 func localDownlinkTxAckToNetwork(gw *gateway.Gateway, txack *gw.DownlinkTxAck) (*gw.DownlinkTxAck, error) {
-	txack.GatewayId = gw.NetworkGatewayID.String()
+	txack.GatewayId = gw.NetID.String()
 	return txack, nil
 }
 
 // networkDownlinkFrameToLocal converts the given frame received from gw into
 // a frame that can be forwarded onto the network.
 func networkDownlinkFrameToLocal(gw *gateway.Gateway, frame *gw.DownlinkFrame) *gw.DownlinkFrame {
-	frame.GatewayId = gw.LocalGatewayID.String()
+	frame.GatewayId = gw.LocalID.String()
 	return frame
 }
 
@@ -67,116 +67,6 @@ func GatewayIDBytesToLoraEUID(id []byte) lorawan.EUI64 {
 	var lid lorawan.EUI64
 	copy(lid[:], id)
 	return lid
-}
-
-// loadGatewayStore returns a gateway store that was configured in the given cfg.
-func loadGatewayStore(cfg *Config) (gateway.Store, error) {
-	var (
-		store gateway.Store
-		err   error
-	)
-
-	if cfg.Forwarder.Gateways.Store.YamlStorePath != nil {
-		logrus.WithField("path", *cfg.Forwarder.Gateways.Store.YamlStorePath).Info("use gateway store")
-		if store, err = gateway.LoadGatewayYamlFileStore(*cfg.Forwarder.Gateways.Store.YamlStorePath); err != nil {
-			logrus.WithError(err).Fatal("unable to load gateway store")
-		}
-	} else {
-		// no gateway store configured, fallback to default yaml gateway store
-		// in $HOME/gateway-store.yaml
-		home, err := os.UserHomeDir()
-		if err != nil {
-			logrus.Fatal("no gateway store configured")
-		}
-		storePath := path.Join(home, "gateway-store.yaml")
-		logrus.WithField("path", storePath).Warn("no gateway store configured, use file based store")
-		if store, err = gateway.LoadGatewayYamlFileStore(storePath); err != nil {
-			logrus.WithError(err).Fatal("unable to load gateway store")
-		}
-	}
-
-	return store, err
-}
-
-func acceptOnlyOnboardedAndRegistryGateways(cfg *Config, store gateway.Store) (map[lorawan.EUI64]*gateway.Gateway, map[lorawan.EUI64]*gateway.Gateway, error) {
-	client, err := ethclient.Dial(cfg.BlockChain.Polygon.Endpoint)
-	if err != nil {
-		logrus.WithError(err).Error("unable to dial blockchain RPC node")
-	}
-	defer client.Close()
-
-	registry, err := gateway_registry.NewGatewayRegistry(*cfg.Forwarder.Gateways.RegistryAddress, client)
-	if err != nil {
-		return nil, nil, fmt.Errorf("unable to instantiate gateway registry bindings")
-	}
-
-	var (
-		trustedGatewaysByLocalID   = make(map[lorawan.EUI64]*gateway.Gateway)
-		trustedGatewaysByNetworkID = make(map[lorawan.EUI64]*gateway.Gateway)
-	)
-
-	for _, gateway := range store.Gateways() {
-		// forwarder only forwards data for gateways that are onboarded and
-		// their details such as location are set in the registry. If not print
-		// a warning and ignore the gateway.
-		rgw, err := registry.Gateways(nil, gateway.ID())
-		if err != nil {
-			logrus.WithError(err).Error("unable to retrieve gateway details from registry")
-			continue
-		}
-
-		if rgw.AntennaGain != 0 {
-			gateway.Owner = rgw.Owner
-			trustedGatewaysByLocalID[gateway.LocalGatewayID] = gateway
-			trustedGatewaysByNetworkID[gateway.NetworkGatewayID] = gateway
-			logrus.WithFields(logrus.Fields{
-				"local-id":     gateway.LocalGatewayID,
-				"network-id":   gateway.NetworkGatewayID,
-				"location":     fmt.Sprintf("%x", rgw.Location),
-				"altitude":     rgw.Altitude * 3,
-				"antenna-gain": fmt.Sprintf("%.1f", (float32(rgw.AntennaGain) / 10.0)),
-				"owner":        gateway.Owner,
-				"freq-plan":    frequency_plan.FromBlockchain(frequency_plan.BlockchainFrequencyPlan(rgw.FrequencyPlan)),
-			}).Debug("loaded gateway from store")
-		} else {
-			l := logrus.WithFields(logrus.Fields{
-				"id":         fmt.Sprintf("%x", gateway.ID()),
-				"local_id":   gateway.LocalGatewayID,
-				"network_id": gateway.NetworkGatewayID,
-			})
-			if rgw.Owner != (common.Address{}) {
-				l.Warn("ingore gateway, details not set in gateway registry")
-			} else {
-				l.Warn("ignore gateway, gateway not onboarded and details not set in gateway registry")
-			}
-		}
-	}
-
-	return trustedGatewaysByLocalID, trustedGatewaysByNetworkID, err
-}
-
-func onboardedAndRegisteredGateways(cfg *Config, store gateway.Store) (map[lorawan.EUI64]*gateway.Gateway, map[lorawan.EUI64]*gateway.Gateway, error) {
-	// If gateway registry is not configured accept data from all gateways from the store.
-	// This is temporary until gateway onboards are made possible and ThingsIX moves from
-	// data-only to a network with rewards.
-	acceptOnlyRegisteredGateways := cfg.Forwarder.Gateways.RegistryAddress != nil
-
-	if !acceptOnlyRegisteredGateways {
-		logrus.Warn("accept all gateways in gateway store, including non-registered gateways")
-		var (
-			trustedGatewaysByLocalID   = make(map[lorawan.EUI64]*gateway.Gateway)
-			trustedGatewaysByNetworkID = make(map[lorawan.EUI64]*gateway.Gateway)
-		)
-
-		for _, gateway := range store.Gateways() {
-			trustedGatewaysByLocalID[gateway.LocalGatewayID] = gateway
-			trustedGatewaysByNetworkID[gateway.NetworkGatewayID] = gateway
-		}
-
-		return trustedGatewaysByLocalID, trustedGatewaysByNetworkID, nil
-	}
-
-	return acceptOnlyOnboardedAndRegistryGateways(cfg, store)
 }
 
 func fetchRoutersFromChain(cfg *Config, accounter Accounter) (RoutesUpdaterFunc, time.Duration, error) {
@@ -363,4 +253,78 @@ func DevAddrHasPrefix(devAddr lorawan.DevAddr, prefix uint32, mask uint8) bool {
 
 	tempAddr := SetDevAddrPrefix(devAddr, prefix, mask)
 	return tempAddr == devAddr
+}
+
+func mustDecodeGatewayID(input string) lorawan.EUI64 {
+	bytes, err := hex.DecodeString(input)
+	if err != nil {
+		logrus.WithError(err).Fatal("invalid gateway local id")
+	}
+
+	id, err := gateway.BytesToGatewayID(bytes)
+	if err != nil {
+		logrus.WithError(err).Fatal("invalid gateway local id")
+	}
+	return id
+}
+
+func mustDecodeThingsIXID(input string) [32]byte {
+	if strings.HasPrefix(input, "0x") || strings.HasPrefix(input, "0X") {
+		input = input[2:]
+	}
+	thingsIXID, err := hex.DecodeString(input)
+	if err != nil {
+		logrus.WithError(err).Fatal("invalid gateway ThingsIX id")
+	}
+	if len(thingsIXID) != 32 {
+		logrus.Fatal("invalid ThingsIX id")
+	}
+	var ret [32]byte
+	copy(ret[:], thingsIXID)
+	return ret
+}
+
+type GatewayCollector struct {
+	Gateways []*gateway.Gateway
+}
+
+func (c *GatewayCollector) Do(gw *gateway.Gateway) bool {
+	c.Gateways = append(c.Gateways, gw)
+	return true
+}
+
+func printGatewaysAsTable(gateways []*gateway.Gateway, registry *gateway_registry.GatewayRegistry) {
+	var (
+		table  = tablewriter.NewWriter(os.Stdout)
+		header = []string{"", "thingsix_id", "local_id", "network_id"}
+	)
+	if registry != nil {
+		header = append(header, "owner", "antenna_gain", "location", "altitude")
+	}
+	table.SetHeader(header)
+
+	for i, gw := range gateways {
+		row := []string{
+			fmt.Sprintf("%d", i+1),
+			hex.EncodeToString(gw.ThingsIxID[:]),
+			gw.LocalID.String(),
+			gw.NetID.String(),
+		}
+
+		if registry != nil {
+			if gateway, err := registry.Gateways(nil, gw.ThingsIxID); err == nil {
+				if gateway.Owner != (common.Address{}) {
+					row = append(row, gateway.Owner.Hex()) // guaranteed to be set
+					if gateway.AntennaGain != 0 {
+						location := h3light.Cell(gateway.Location)
+						row = append(row, fmt.Sprintf("%.1f", float32(gateway.AntennaGain)/10.0))
+						row = append(row, location.String())
+						row = append(row, fmt.Sprintf("%d", uint64(gateway.Altitude)*3))
+					}
+				}
+			}
+		}
+		table.Append(row)
+	}
+	table.Render()
 }

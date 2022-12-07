@@ -18,7 +18,6 @@ package main
 
 import (
 	"github.com/ThingsIXFoundation/packet-handling/forwarder"
-	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -46,5 +45,5 @@ func init() {
 		logrus.WithError(err).Fatal("could not bind command line flags")
 	}
 
-	rootCmd.AddCommand(gateway.Cmd)
+	rootCmd.AddCommand(forwarder.GatewayCmds)
 }
