@@ -40,15 +40,42 @@ forwarder:
             #
             # Full gateway store path on the file system
             file: /etc/thingsix-forwarder/gateways.yaml
+
+            # Postgresql bases gateway store. This store contains all gateways
+            # and their identity keys. Gateway records are store in the
+            # gateway_store table.
+            #
+            # Connection details are set on the root configuration level.
+            # postgresql: false
+
+            # Interval on which the forwarder reloads the gateways from the
+            # configured backend, file or postgresql.
+            #
+            # Set to 0m when the gateway store must not be hot reloaded. This is
+            # adviced when store is not expected to change.
+            #
+            # Default value is 1 minute.
+            refresh: 1m
         
         # Optionally record gateway local id's for unknown gateways to a file. 
         # This file can be imported into the gateway store later. This is
         # convenient if you have a lot of gateways that you would need to 
         # add to the store 1 by 1.
         record_unknown:
-            # path to file where unknown gateways are recorded, must be
-            # writeable by the forwarder.
+            # Path to file where unknown gateways are recorded, must be 
+            # writeable by the forwarder. If file and postgresql are not set the
+            # default is to use file /etc/thingsix-forwarder/unknown_gateways.yaml.
+            #
+            # Set to an empty string to disable recording.
             file: /etc/thingsix-forwarder/unknown_gateways.yaml
+
+            # Store local id's for unknown gateways in PostgreSQL. Database
+            # postgresql details are set on the root configuration level.
+            # Unknown gateways are recorded in the unknown_gateways table.
+            #
+            # Set to true to enable recording in postgresql, remove or set to
+            # false to disable.
+            # postgresql: false
 
     # Routers to forward gateway data to.
     routers:
@@ -94,11 +121,14 @@ forwarder:
 
 # Logging related configuration
 log:
+    # log level
     level: info      # [trace,debug,info,warn,error,fatal,panic]
+    # Include timestamp in logging
     timestamp: true  # [true, false]
 
 # Blockchain related configuration
 blockchain:
+    # Blockchain
     polygon:
         # Polygon node RPC endpoint
         endpoint: https://polygon-rpc.com
@@ -106,6 +136,28 @@ blockchain:
         chain_id: 137
         # Block confirmations, polygon blocks are final after 128 confirmations
         confirmations: 128
+
+# Database releated configuration
+database:
+    # Configure a Postgresql database
+    postgresql:
+        # uri: <uri>
+        # Postgresql database name
+        database: thingsix-gateways
+        # Driver name
+        drivername: postgres
+        # Database host
+        host: localhost
+        # Database username
+        user: thingsix-forwarder
+        # Database password
+        password: mypasswd
+        # Database port
+        port: 5432
+        # Enable sslmode
+        sslmode: disable
+        # Enable query logging
+        enableLogging: false
 
 # Optionally enable metrics
 metrics:

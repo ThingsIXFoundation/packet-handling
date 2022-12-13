@@ -180,7 +180,10 @@ func mustLoadConfig() (*Config, error) {
 	}
 
 	logrus.SetLevel(cfg.Log.Level)
-	logrus.SetFormatter(&logrus.TextFormatter{FullTimestamp: cfg.Log.Timestamp})
+	logrus.SetFormatter(&logrus.TextFormatter{
+		FullTimestamp:    true,
+		DisableTimestamp: !cfg.Log.Timestamp,
+	})
 
 	return &cfg, nil
 }

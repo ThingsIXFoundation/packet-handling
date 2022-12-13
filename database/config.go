@@ -14,17 +14,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package gateway
+package database
 
-import (
-	"errors"
-	"fmt"
-)
-
-var (
-	ErrStoreNotExists   = fmt.Errorf("gateway store doesn't exists")
-	ErrNotFound         = fmt.Errorf("not found")
-	ErrAlreadyExists    = fmt.Errorf("already exists")
-	ErrInvalidConfig    = errors.New("invalid gateway store config")
-	ErrInvalidGatewayID = errors.New("invalid gateway id")
-)
+type Config struct {
+	URI           string `mapstructure:"uri"`
+	Database      string
+	DriverName    string `mapstructure:"drivername"`
+	Host          string
+	User          string
+	Password      string
+	Port          string
+	SSLMode       string `mapstructure:"sslmode"`
+	EnableLogging bool   `mapstructure:"enableLogging"`
+}

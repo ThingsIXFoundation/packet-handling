@@ -19,6 +19,8 @@ package forwarder
 import (
 	"time"
 
+	"github.com/ThingsIXFoundation/packet-handling/database"
+	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/sirupsen/logrus"
 )
@@ -34,27 +36,13 @@ type ForwarderBackendConfig struct {
 	Concentratord *struct{}                         `mapstructure:"concentratord"`
 }
 
-type ForwarderGatewayStoreConfig struct {
-	// YamlStorePath indicates that gateways are stored in a
-	// YAML based file store located on the local file system.
-	// Only data for gateways in the store is forwarded.
-	YamlStorePath *string `mapstructure:"file"`
-}
-
-type ForwarderGatewayRecordUnknownConfig struct {
-	// File points to a file on the local file system where
-	// unknown gateways that connect are recorded.
-	File string
-}
-
 type ForwarderGatewayConfig struct {
 	// Store describes how gateways are stored/loaded in the forwarder.
-	Store ForwarderGatewayStoreConfig
-
+	Store gateway.StoreConfig
 	// RecordUnknown records gateways that connect to the forwarder but
 	// are not in the forwarders gateway store. Recorded gateways can
 	// be imported later if required.
-	RecordUnknown *ForwarderGatewayRecordUnknownConfig `mapstructure:"record_unknown"`
+	RecordUnknown *gateway.ForwarderGatewayRecordUnknownConfig `mapstructure:"record_unknown"`
 	// RegistryAddress holds the address where the gateway registry is
 	// deployed on chain. It is used to retrieve gateway details to
 	// determine which gateways in the store are onboarded on ThingsIX
@@ -136,11 +124,11 @@ type MetricsConfig struct {
 }
 
 type Config struct {
-	Forwarder ForwarderConfig
-
-	Log LogConfig
-
+	Forwarder  ForwarderConfig
+	Log        LogConfig
 	BlockChain BlockchainConfig
-
+	Database   *struct {
+		Postgresql *database.Config
+	}
 	Metrics *MetricsConfig
 }

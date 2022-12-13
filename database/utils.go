@@ -14,21 +14,18 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package gateway
+package database
 
 import (
-	"crypto/ecdsa"
+	"errors"
 
-	"github.com/brocaar/lorawan"
+	"github.com/jackc/pgconn"
 )
 
-// Store defines a gateway store.
-type Store interface {
-	Gateways() []*Gateway
-	GatewayByLocalID(id lorawan.EUI64) (*Gateway, error)
-	GatewayByLocalIDBytes(id []byte) (*Gateway, error)
-	GatewayByNetworkID(id lorawan.EUI64) (*Gateway, error)
-	GatewayByNetworkIDString(id string) (*Gateway, error)
-	GatewayByThingsIxID([32]byte) (*Gateway, error)
-	AddGateway(localID lorawan.EUI64, key *ecdsa.PrivateKey) error
+func IsErrUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "23505" // UniqueViolation
+	}
+	return false
 }

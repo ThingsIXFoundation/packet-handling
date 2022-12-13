@@ -16,7 +16,9 @@
 
 package broadcast
 
-import "github.com/sirupsen/logrus"
+import (
+	"github.com/sirupsen/logrus"
+)
 
 type Broadcaster[T any] struct {
 	message     chan T

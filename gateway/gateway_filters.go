@@ -16,15 +16,14 @@
 
 package gateway
 
-import (
-	"errors"
-	"fmt"
-)
+// GatewayFiltererFunc is used by gateway stores to filter out gateways that
+// are not (yet) suitable. For instance if these gateways have not yet been
+// onboarded. If the gateway must be added to the in-memory gateway store and
+// traffic must be exchanged between gateways and the ThingsIX network the
+// filterer must return true for the given gw.
+type GatewayFiltererFunc func(gw *Gateway) bool
 
-var (
-	ErrStoreNotExists   = fmt.Errorf("gateway store doesn't exists")
-	ErrNotFound         = fmt.Errorf("not found")
-	ErrAlreadyExists    = fmt.Errorf("already exists")
-	ErrInvalidConfig    = errors.New("invalid gateway store config")
-	ErrInvalidGatewayID = errors.New("invalid gateway id")
-)
+// NoFilterer doesn't filter.
+func NoGatewayFilterer(gw *Gateway) bool {
+	return true
+}

@@ -43,8 +43,8 @@ type Exchange struct {
 	// accounter is used to determine if a packet must be routed between a
 	// gateway and router because the router owner has paid for it.
 	accounter Accounter
-	// set with gateways that are allowed to use this exchange
-	trustedGateways *GatewaySet
+	// store with gateways that are allowed to use this exchange
+	gateways gateway.GatewayStore
 	// recordUnknownGateway is called each time a gateway connects that is not
 	// in the gateway store
 	recordUnknownGateway UnknownGatewayLoggerFunc
@@ -57,19 +57,14 @@ type Exchange struct {
 
 // NewExchange instantiates a new packet exchange where gateways and
 // routers can exchange packets.
-func NewExchange(cfg *Config) (*Exchange, error) {
-	store, err := loadGatewayStore(cfg)
+func NewExchange(ctx context.Context, cfg *Config) (*Exchange, error) {
+	// currently allow all gateways. Once the forwarders exchange only forwards
+	// packets for onboarded gateway we need to use a filtered gateway store
+	// that filters out gateways that are not onboarded.
+	store, err := gateway.NewGatewayStore(ctx, &cfg.Forwarder.Gateways.Store)
 	if err != nil {
 		logrus.WithError(err).Fatal("unable to load gateway store")
 	}
-
-	// filter out gateways that are not yet onboarded and/or have their details set.
-	trustedGatewaysByLocalID, trustedGatewaysByNetworkID, err := onboardedAndRegisteredGateways(cfg, store)
-	if err != nil {
-		return nil, err
-	}
-
-	logrus.WithField("#-gateways", len(trustedGatewaysByLocalID)).Info("loaded gateway store")
 
 	// create gateway backend
 	backend, err := buildBackend(cfg)
@@ -94,7 +89,7 @@ func NewExchange(cfg *Config) (*Exchange, error) {
 		backend:              backend,
 		accounter:            accounter,
 		routingTable:         routingTable,
-		trustedGateways:      NewGatewaySet(cfg, store, trustedGatewaysByLocalID, trustedGatewaysByNetworkID),
+		gateways:             store,
 		recordUnknownGateway: NewUnknownGatewayLogger(cfg),
 	}
 
@@ -122,11 +117,6 @@ func (e *Exchange) Run(ctx context.Context) {
 
 	// update the routing table periodically
 	go e.routingTable.Run(ctx)
-
-	// the exchange only operates on gateways that are onboarded on ThingsIX. Refresh
-	// polls checks periodically if there are gateways onboarded/offboarded and refreshes
-	// the trusted gateway set.
-	go e.trustedGateways.Refresh(ctx)
 
 	// wait for messages from the network and dispatch them to the chirpstack backend
 	for {
@@ -165,8 +155,8 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 	log := logrus.WithField("gw_local_id", gatewayLocalID)
 
 	// ensure that received frame is from a trusted gateway if not drop it
-	gw, ok := e.trustedGateways.ByLocalIDString(frame.RxInfo.GatewayId)
-	if !ok {
+	gw, err := e.gateways.ByLocalIDString(frame.RxInfo.GatewayId)
+	if err != nil {
 		uplinksCounter.WithLabelValues(lorawan.EUI64{}.String(), "failed").Inc()
 		log.Warn("uplink from unknown gateway, drop packet")
 		e.recordUnknownGateway(gatewayLocalID)
@@ -174,7 +164,7 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 	}
 
 	// log frame details
-	log = log.WithField("gw_network_id", gw.NetworkGatewayID)
+	log = log.WithField("gw_network_id", gw.NetworkID)
 	frameLog := log.WithFields(logrus.Fields{
 		"rssi":        frame.GetRxInfo().GetRssi(),
 		"snr":         frame.GetRxInfo().GetSnr(),
@@ -190,7 +180,7 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 	// convert the frame from its local format (gateway <-> exchange) into its network
 	// representation (exchange <-> router) so it can be broadcasted onto the network
 	if frame, err = localUplinkFrameToNetwork(gw, frame); err != nil {
-		uplinksCounter.WithLabelValues(gw.NetworkGatewayID.String(), "failed").Inc()
+		uplinksCounter.WithLabelValues(gw.NetworkID.String(), "failed").Inc()
 		frameLog.WithError(err).Error("update uplink frame to network format failed, drop packet")
 		return
 	}
@@ -198,7 +188,7 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 	// decode it into a lorawan packet to determine what needs to be done
 	var phy lorawan.PHYPayload
 	if err := phy.UnmarshalBinary(frame.PhyPayload); err != nil {
-		uplinksCounter.WithLabelValues(gw.NetworkGatewayID.String(), "failed").Inc()
+		uplinksCounter.WithLabelValues(gw.NetworkID.String(), "failed").Inc()
 		frameLog.WithError(err).Error("could not decode lorawan packet, drop packet")
 		return
 	}
@@ -215,7 +205,7 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 		// Filter by NetID
 		mac, ok := phy.MACPayload.(*lorawan.MACPayload)
 		if !ok {
-			uplinksCounter.WithLabelValues(gw.NetworkGatewayID.String(), "failed").Inc()
+			uplinksCounter.WithLabelValues(gw.NetworkID.String(), "failed").Inc()
 			frameLog.Error("invalid packet: data-up but no mac-payload, drop packet")
 			return
 		}
@@ -261,10 +251,10 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 			},
 			receivedFrom: gw,
 		}) {
-			uplinksCounter.WithLabelValues(gw.NetworkGatewayID.String(), "failed").Inc()
+			uplinksCounter.WithLabelValues(gw.NetworkID.String(), "failed").Inc()
 			frameLog.Warn("unable to broadcast uplink to routing table, drop packet")
 		} else {
-			uplinksCounter.WithLabelValues(gw.NetworkGatewayID.String(), "success").Inc()
+			uplinksCounter.WithLabelValues(gw.NetworkID.String(), "success").Inc()
 			frameLog.Info("received packet")
 		}
 	case lorawan.JoinRequest, lorawan.RejoinRequest:
@@ -308,28 +298,28 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 				jr.DevEUI, &event,
 			},
 		}) {
-			uplinksCounter.WithLabelValues(gw.NetworkGatewayID.String(), "failed").Inc()
+			uplinksCounter.WithLabelValues(gw.NetworkID.String(), "failed").Inc()
 			frameLog.Warn("unable to broadcast uplink to routing table, drop packet")
 		} else {
-			uplinksCounter.WithLabelValues(gw.NetworkGatewayID.String(), "success").Inc()
+			uplinksCounter.WithLabelValues(gw.NetworkID.String(), "success").Inc()
 			frameLog.Info("received packet")
 		}
 	}
 }
 
 func (e *Exchange) gatewayStats(stats *gw.GatewayStats) {
-	gw, ok := e.trustedGateways.ByLocalIDString(stats.GetGatewayId())
-	if !ok {
+	gw, err := e.gateways.ByLocalIDString(stats.GetGatewayId())
+	if err != nil {
 		logrus.Warn("gateway stats from unknown gateway, drop stats")
 		return
 	}
 
 	var (
 		log = logrus.WithFields(logrus.Fields{
-			"gw_network_id": gw.NetworkGatewayID,
-			"gw_local_id":   gw.LocalGatewayID,
+			"gw_network_id": gw.NetworkID,
+			"gw_local_id":   gw.LocalID,
 		})
-		gatewayNetworkID = gw.NetworkGatewayID.String()
+		gatewayNetworkID = gw.NetworkID.String()
 	)
 	log.Debug("received gateway stats")
 
@@ -380,34 +370,35 @@ func (e *Exchange) subscribeEvent(event events.Subscribe) {
 		log.Warn("event from gateway with invalid local id, drop event")
 		return
 	}
+
 	// ensure that received frame is from a trusted gateway if not drop it
-	gw, ok := e.trustedGateways.ByLocalID(localGatewayID)
-	if !ok {
+	gw, err := e.gateways.ByLocalID(localGatewayID)
+	if err != nil {
 		log.Warn("event from unknown gateway, drop event")
 		e.recordUnknownGateway(localGatewayID)
 		return
 	}
 
-	log = log.WithField("gw_network_id", gw.NetworkGatewayID)
+	log = log.WithField("gw_network_id", gw.NetworkID)
 	emitEvents := false
 
 	if event.Subscribe {
-		if !onlineGateways.Has(gw.LocalGatewayID) {
+		if !onlineGateways.Has(gw.LocalID) {
 			log.Info("gateway online")
 			emitEvents = true
 		}
-		onlineGateways.Put(gw.LocalGatewayID)
+		onlineGateways.Put(gw.LocalID)
 	} else {
-		if onlineGateways.Has(gw.LocalGatewayID) {
+		if onlineGateways.Has(gw.LocalID) {
 			log.Info("gateway offline")
 			emitEvents = true
 		}
-		onlineGateways.Remove(gw.LocalGatewayID)
+		onlineGateways.Remove(gw.LocalID)
 	}
 
 	// event is valid, router clients are subscribed to this uplink broadcaster
-	// and will receive it. If the router they are connected to is interested in
-	// the package it will send the packet to the router.
+	// and will receive it. If the router the client is connected to is
+	// interested in the package it will send the packet to the router.
 	if emitEvents {
 		if !e.routingTable.gatewayEvents.TryBroadcast(&GatewayEvent{
 			receivedFrom: gw,
@@ -440,9 +431,9 @@ func (e *Exchange) handleDownlinkFrame(event *router.DownlinkFrameEvent) {
 	}
 
 	log := logrus.WithField("gw_network_id", gwNetworkId)
-	sink, sinkOk := e.trustedGateways.byNetworkID[gwNetworkId]
+	sink, err := e.gateways.ByNetworkID(gwNetworkId)
 
-	if !sinkOk {
+	if err != nil {
 		downlinksCounter.WithLabelValues(gwNetworkId.String(), "failed").Inc()
 		log.WithFields(logrus.Fields{
 			"payload": base64.RawStdEncoding.EncodeToString(frame.Items[0].GetPhyPayload()),
@@ -450,7 +441,7 @@ func (e *Exchange) handleDownlinkFrame(event *router.DownlinkFrameEvent) {
 		return
 	}
 
-	log = log.WithField("gw_local_id", sink.LocalGatewayID)
+	log = log.WithField("gw_local_id", sink.LocalID)
 
 	// convert the network downlink frame into a local frame
 	frame = networkDownlinkFrameToLocal(sink, frame)
@@ -481,14 +472,14 @@ func (e *Exchange) downlinkTxAck(txack *gw.DownlinkTxAck) {
 	}
 
 	// ensure that received frame is from a trusted gateway if not drop it
-	gw, ok := e.trustedGateways.ByLocalID(localGatewayID)
-	if !ok {
+	gw, err := e.gateways.ByLocalID(localGatewayID)
+	if err != nil {
 		downlinkTxAckCounter.WithLabelValues(fmt.Sprintf("%x", txack.GetGatewayId()), "failed").Inc()
 		log.Warn("downlink tx ack from unknown gateway, drop packet")
 		e.recordUnknownGateway(localGatewayID)
 		return
 	}
-	log = log.WithField("gw_network_id", gw.NetworkGatewayID)
+	log = log.WithField("gw_network_id", gw.NetworkID)
 
 	// convert txack to network format
 	if txack, err = localDownlinkTxAckToNetwork(gw, txack); err != nil {

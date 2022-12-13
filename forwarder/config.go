@@ -19,6 +19,8 @@ package forwarder
 import (
 	"time"
 
+	"github.com/ThingsIXFoundation/packet-handling/database"
+	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/sirupsen/logrus"
@@ -56,9 +58,10 @@ func getNetConfig(net string) *Config {
 	cfg.Forwarder.Backend.SemtechUDP.UDPBind = utils.Ptr("0.0.0.0:1680")
 	cfg.Forwarder.Backend.SemtechUDP.FakeRxTime = utils.Ptr(false)
 	cfg.Forwarder.Gateways = ForwarderGatewayConfig{}
-	cfg.Forwarder.Gateways.Store = ForwarderGatewayStoreConfig{}
+	cfg.Forwarder.Gateways.Store = gateway.StoreConfig{}
+	cfg.Forwarder.Gateways.Store.RefreshInterval = utils.Ptr(time.Minute)
 	cfg.Forwarder.Gateways.Store.YamlStorePath = utils.Ptr("/etc/thingsix-forwarder/gateways.yaml")
-	cfg.Forwarder.Gateways.RecordUnknown = &ForwarderGatewayRecordUnknownConfig{}
+	cfg.Forwarder.Gateways.RecordUnknown = &gateway.ForwarderGatewayRecordUnknownConfig{}
 	cfg.Forwarder.Gateways.RecordUnknown.File = "/etc/thingsix-forwarder/unknown_gateways.yaml"
 	cfg.Forwarder.Routers = ForwarderRoutersConfig{}
 	cfg.Forwarder.Routers.ThingsIXApi = &ForwarderRoutersThingsIXAPIConfig{}
@@ -107,6 +110,8 @@ func mustLoadConfig() *Config {
 	if configFile := viper.GetString("config"); configFile != "" {
 		viper.SetConfigFile(configFile)
 
+		logrus.Infof("use config file %s", configFile)
+
 		if err := viper.ReadInConfig(); err != nil {
 			logrus.WithError(err).Fatal("unable to read config")
 		}
@@ -126,7 +131,10 @@ func mustLoadConfig() *Config {
 	}
 
 	logrus.SetLevel(cfg.Log.Level)
-	logrus.SetFormatter(&logrus.TextFormatter{FullTimestamp: cfg.Log.Timestamp})
+	logrus.SetFormatter(&logrus.TextFormatter{
+		FullTimestamp:    true,
+		DisableTimestamp: !cfg.Log.Timestamp,
+	})
 
 	if net != "" {
 		logrus.Infof("***Starting ThingsIX Forwarder connected to %snet***", net)
@@ -138,6 +146,17 @@ func mustLoadConfig() *Config {
 	// ensure user provided polygon blockchain config
 	if cfg.BlockChain.Polygon == nil {
 		logrus.Fatal("missing Polygon blockchain configuration")
+	}
+
+	// if one of the config options require postgresql ensure that the user
+	// configured postgresql.
+	useDB := (cfg.Forwarder.Gateways.Store.Postgresql != nil && *cfg.Forwarder.Gateways.Store.Postgresql) ||
+		(cfg.Forwarder.Gateways.RecordUnknown.Postgresql != nil && *cfg.Forwarder.Gateways.RecordUnknown.Postgresql)
+
+	if useDB && cfg.Database != nil && cfg.Database.Postgresql != nil {
+		database.MustInit(*cfg.Database.Postgresql)
+	} else if useDB {
+		logrus.Fatal("missing database postgresql configuration")
 	}
 
 	// set the Default flag on the defaultRouters to distinct them from routes
