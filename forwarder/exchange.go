@@ -164,7 +164,7 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 	}
 
 	// log frame details
-	log = log.WithField("gw_network_id", gw.NetID)
+	log = log.WithField("gw_network_id", gw.NetworkID)
 	frameLog := log.WithFields(logrus.Fields{
 		"rssi":        frame.GetRxInfo().GetRssi(),
 		"snr":         frame.GetRxInfo().GetSnr(),
@@ -180,7 +180,7 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 	// convert the frame from its local format (gateway <-> exchange) into its network
 	// representation (exchange <-> router) so it can be broadcasted onto the network
 	if frame, err = localUplinkFrameToNetwork(gw, frame); err != nil {
-		uplinksCounter.WithLabelValues(gw.NetID.String(), "failed").Inc()
+		uplinksCounter.WithLabelValues(gw.NetworkID.String(), "failed").Inc()
 		frameLog.WithError(err).Error("update uplink frame to network format failed, drop packet")
 		return
 	}
@@ -188,7 +188,7 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 	// decode it into a lorawan packet to determine what needs to be done
 	var phy lorawan.PHYPayload
 	if err := phy.UnmarshalBinary(frame.PhyPayload); err != nil {
-		uplinksCounter.WithLabelValues(gw.NetID.String(), "failed").Inc()
+		uplinksCounter.WithLabelValues(gw.NetworkID.String(), "failed").Inc()
 		frameLog.WithError(err).Error("could not decode lorawan packet, drop packet")
 		return
 	}
@@ -205,7 +205,7 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 		// Filter by NetID
 		mac, ok := phy.MACPayload.(*lorawan.MACPayload)
 		if !ok {
-			uplinksCounter.WithLabelValues(gw.NetID.String(), "failed").Inc()
+			uplinksCounter.WithLabelValues(gw.NetworkID.String(), "failed").Inc()
 			frameLog.Error("invalid packet: data-up but no mac-payload, drop packet")
 			return
 		}
@@ -251,10 +251,10 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 			},
 			receivedFrom: gw,
 		}) {
-			uplinksCounter.WithLabelValues(gw.NetID.String(), "failed").Inc()
+			uplinksCounter.WithLabelValues(gw.NetworkID.String(), "failed").Inc()
 			frameLog.Warn("unable to broadcast uplink to routing table, drop packet")
 		} else {
-			uplinksCounter.WithLabelValues(gw.NetID.String(), "success").Inc()
+			uplinksCounter.WithLabelValues(gw.NetworkID.String(), "success").Inc()
 			frameLog.Info("received packet")
 		}
 	case lorawan.JoinRequest, lorawan.RejoinRequest:
@@ -298,10 +298,10 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 				jr.DevEUI, &event,
 			},
 		}) {
-			uplinksCounter.WithLabelValues(gw.NetID.String(), "failed").Inc()
+			uplinksCounter.WithLabelValues(gw.NetworkID.String(), "failed").Inc()
 			frameLog.Warn("unable to broadcast uplink to routing table, drop packet")
 		} else {
-			uplinksCounter.WithLabelValues(gw.NetID.String(), "success").Inc()
+			uplinksCounter.WithLabelValues(gw.NetworkID.String(), "success").Inc()
 			frameLog.Info("received packet")
 		}
 	}
@@ -316,10 +316,10 @@ func (e *Exchange) gatewayStats(stats *gw.GatewayStats) {
 
 	var (
 		log = logrus.WithFields(logrus.Fields{
-			"gw_network_id": gw.NetID,
+			"gw_network_id": gw.NetworkID,
 			"gw_local_id":   gw.LocalID,
 		})
-		gatewayNetworkID = gw.NetID.String()
+		gatewayNetworkID = gw.NetworkID.String()
 	)
 	log.Debug("received gateway stats")
 
@@ -379,7 +379,7 @@ func (e *Exchange) subscribeEvent(event events.Subscribe) {
 		return
 	}
 
-	log = log.WithField("gw_network_id", gw.NetID)
+	log = log.WithField("gw_network_id", gw.NetworkID)
 	emitEvents := false
 
 	if event.Subscribe {
@@ -479,7 +479,7 @@ func (e *Exchange) downlinkTxAck(txack *gw.DownlinkTxAck) {
 		e.recordUnknownGateway(localGatewayID)
 		return
 	}
-	log = log.WithField("gw_network_id", gw.NetID)
+	log = log.WithField("gw_network_id", gw.NetworkID)
 
 	// convert txack to network format
 	if txack, err = localDownlinkTxAckToNetwork(gw, txack); err != nil {

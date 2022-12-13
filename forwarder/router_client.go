@@ -291,7 +291,7 @@ func (rc *RouterClient) run(ctx context.Context) error {
 					if rc.router.InterestedIn(ev.uplink.device) {
 						pktlog := log.WithFields(logrus.Fields{
 							"dev_addr":      ev.uplink.device,
-							"gw_network_id": ev.receivedFrom.NetID,
+							"gw_network_id": ev.receivedFrom.NetworkID,
 							"gw_local_id":   ev.receivedFrom.LocalID,
 							"uplink_id":     ev.uplink.event.GetUplinkFrameEvent().UplinkFrame.GetRxInfo().GetUplinkId(),
 						})
@@ -314,7 +314,7 @@ func (rc *RouterClient) run(ctx context.Context) error {
 					if rc.router.AcceptsJoin(ev.join.devEUI) {
 						pktlog := log.WithFields(logrus.Fields{
 							"dev_eui":       ev.join.devEUI,
-							"gw_network_id": ev.receivedFrom.NetID,
+							"gw_network_id": ev.receivedFrom.NetworkID,
 							"gw_local_id":   ev.receivedFrom.LocalID,
 							"uplink_id":     ev.join.event.GetUplinkFrameEvent().UplinkFrame.GetRxInfo().GetUplinkId(),
 						})
@@ -345,7 +345,7 @@ func (rc *RouterClient) run(ctx context.Context) error {
 
 						log.WithFields(logrus.Fields{
 							"downlink_id":   fmt.Sprintf("%x", downlinkID[:8]),
-							"gw_network_id": ev.receivedFrom.NetID,
+							"gw_network_id": ev.receivedFrom.NetworkID,
 							"gw_local_id":   ev.receivedFrom.LocalID,
 						}).Info("forwarded downlink-ack to router")
 					}

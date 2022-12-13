@@ -188,12 +188,12 @@ func (store *pgStore) Add(ctx context.Context, localID lorawan.EUI64, key *ecdsa
 
 	store.gwMapMu.Lock()
 	store.byLocalId[gw.LocalID] = gw
-	store.byNetId[gw.NetID] = gw
+	store.byNetId[gw.NetworkID] = gw
 	store.gwMapMu.Unlock()
 
 	logrus.WithFields(logrus.Fields{
-		"localID": gw.LocalID,
-		"netID":   gw.NetID,
+		"localID":   gw.LocalID,
+		"networkID": gw.NetworkID,
 	}).Debug("loaded new gateway")
 
 	return gw, nil
@@ -239,12 +239,12 @@ func (store *pgStore) loadFromPostgres(ctx context.Context) error {
 
 		if store.filterer(gw) {
 			byLocalId[gw.LocalID] = gw
-			byNetId[gw.NetID] = gw
+			byNetId[gw.NetworkID] = gw
 			byThingsIxID[gw.ThingsIxID] = gw
 		} else {
 			logrus.WithFields(logrus.Fields{
-				"localID": gw.LocalID,
-				"netID":   gw.NetID,
+				"localID":   gw.LocalID,
+				"networkID": gw.NetworkID,
 			}).Trace("gateway didn't pass filter")
 		}
 	}
@@ -282,7 +282,7 @@ func (gw pgGateway) asGateway() (*Gateway, error) {
 
 	return &Gateway{
 		LocalID:    gw.LocalID,
-		NetID:      GatewayIDFromPrivateKey(key),
+		NetworkID:  GatewayNetworkIDFromPrivateKey(key),
 		PrivateKey: key,
 		PublicKey:  &key.PublicKey,
 		ThingsIxID: utils.DeriveThingsIxID(&key.PublicKey),

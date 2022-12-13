@@ -192,7 +192,7 @@ func (store *yamlFileStore) Add(ctx context.Context, localID lorawan.EUI64, key 
 	// add new gateway to in memory cache
 	store.gwMapMu.Lock()
 	store.byLocalId[gw.LocalID] = gw
-	store.byNetId[gw.NetID] = gw
+	store.byNetId[gw.NetworkID] = gw
 	store.byThingsIxID[gw.ThingsIxID] = gw
 	store.gwMapMu.Unlock()
 
@@ -231,12 +231,12 @@ func (store *yamlFileStore) loadFromFile() error {
 
 		if store.filterer(gw) {
 			byLocalId[gw.LocalID] = gw
-			byNetId[gw.NetID] = gw
+			byNetId[gw.NetworkID] = gw
 			byThingsIxID[gw.ThingsIxID] = gw
 		} else {
 			logrus.WithFields(logrus.Fields{
-				"localID": gw.LocalID,
-				"netID":   gw.NetID,
+				"localID":   gw.LocalID,
+				"networkID": gw.NetworkID,
 			}).Trace("gateway didn't pass filter")
 		}
 	}
@@ -299,7 +299,7 @@ func (gw gatewayYAML) asGateway() (*Gateway, error) {
 
 	return &Gateway{
 		LocalID:    gw.LocalID,
-		NetID:      GatewayIDFromPrivateKey(key),
+		NetworkID:  GatewayNetworkIDFromPrivateKey(key),
 		PrivateKey: key,
 		PublicKey:  &key.PublicKey,
 		ThingsIxID: utils.DeriveThingsIxID(&key.PublicKey),

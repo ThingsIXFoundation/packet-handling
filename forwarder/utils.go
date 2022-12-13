@@ -44,14 +44,14 @@ import (
 // localUplinkFrameToNetwork converts the given frame that was received from a gateway
 // into a frame that can be send onto the network on behalf of the given gw.
 func localUplinkFrameToNetwork(gw *gateway.Gateway, frame *gw.UplinkFrame) (*gw.UplinkFrame, error) {
-	frame.RxInfo.GatewayId = gw.NetID.String()
+	frame.RxInfo.GatewayId = gw.NetworkID.String()
 	return frame, nil
 }
 
 // localDownlinkTxAckToNetwork converts the given txack that was received from a gateway
 // into a txack that can be send onto the network on behalf of the given gw.
 func localDownlinkTxAckToNetwork(gw *gateway.Gateway, txack *gw.DownlinkTxAck) (*gw.DownlinkTxAck, error) {
-	txack.GatewayId = gw.NetID.String()
+	txack.GatewayId = gw.NetworkID.String()
 	return txack, nil
 }
 
@@ -308,7 +308,7 @@ func printGatewaysAsTable(gateways []*gateway.Gateway, registry *gateway_registr
 			fmt.Sprintf("%d", i+1),
 			hex.EncodeToString(gw.ThingsIxID[:]),
 			gw.LocalID.String(),
-			gw.NetID.String(),
+			gw.NetworkID.String(),
 		}
 
 		if registry != nil {

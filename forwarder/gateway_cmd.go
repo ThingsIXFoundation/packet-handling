@@ -186,7 +186,7 @@ func importGatewayStore(cmd *cobra.Command, args []string) {
 			ID:        "0x" + hex.EncodeToString(gw.ThingsIxID[:]),
 			Version:   version,
 			Local:     gw.LocalID,
-			Network:   gw.NetID,
+			Network:   gw.NetworkID,
 			ChainID:   chainID.Uint64(),
 			Address:   gw.Address(),
 			Signature: fmt.Sprintf("0x%x", sign),

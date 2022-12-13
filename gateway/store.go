@@ -102,7 +102,7 @@ func NewGatewayStore(ctx context.Context, cfg *StoreConfig) (GatewayStore, error
 	return nil, ErrInvalidConfig
 }
 
-func GatewayIDFromPrivateKey(priv *ecdsa.PrivateKey) lorawan.EUI64 {
+func GatewayNetworkIDFromPrivateKey(priv *ecdsa.PrivateKey) lorawan.EUI64 {
 	pub := priv.PublicKey
 	thingsIxID := utils.DeriveThingsIxID(&pub)
 	h := sha256.Sum256(thingsIxID[:])
@@ -136,7 +136,7 @@ func BytesToGatewayID(id []byte) (lorawan.EUI64, error) {
 func NewGateway(LocalID lorawan.EUI64, priv *ecdsa.PrivateKey) (*Gateway, error) {
 	return &Gateway{
 		LocalID:        LocalID,
-		NetID:          GatewayIDFromPrivateKey(priv),
+		NetworkID:      GatewayNetworkIDFromPrivateKey(priv),
 		PrivateKey:     priv,
 		PublicKey:      &priv.PublicKey,
 		ThingsIxID:     utils.DeriveThingsIxID(&priv.PublicKey),
@@ -159,7 +159,7 @@ func printGatewayStoreChanges(old map[lorawan.EUI64]*Gateway, new map[lorawan.EU
 		if _, found := new[k]; !found {
 			logrus.WithFields(logrus.Fields{
 				"local_id":    gw.LocalID,
-				"net_id":      gw.NetID,
+				"network_id":  gw.NetworkID,
 				"thingsix_id": gw.ThingsIxID,
 			}).Info("gateway removed from store")
 
@@ -170,7 +170,7 @@ func printGatewayStoreChanges(old map[lorawan.EUI64]*Gateway, new map[lorawan.EU
 		if _, found := old[k]; !found {
 			logrus.WithFields(logrus.Fields{
 				"local_id":    gw.LocalID,
-				"net_id":      gw.NetID,
+				"network_id":  gw.NetworkID,
 				"thingsix_id": gw.ThingsIxID,
 			}).Info("gateway loaded from store")
 

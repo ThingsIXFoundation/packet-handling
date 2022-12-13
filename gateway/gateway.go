@@ -40,7 +40,7 @@ type Gateway struct {
 	LocalID lorawan.EUI64
 	// NetId is the gateway id as used in the communication between the
 	// forwarder and the ThingsIX network.
-	NetID lorawan.EUI64
+	NetworkID lorawan.EUI64
 	// PrivateKey is the gateways private key
 	PrivateKey *ecdsa.PrivateKey
 	// PublicKey is the gateways public key from which the ThingsIX is derived.
@@ -75,7 +75,7 @@ func GenerateNewGateway(localID lorawan.EUI64) (*Gateway, error) {
 
 	return &Gateway{
 		LocalID:    localID,
-		NetID:      GatewayIDFromPrivateKey(priv),
+		NetworkID:  GatewayNetworkIDFromPrivateKey(priv),
 		PrivateKey: priv,
 		PublicKey:  &priv.PublicKey,
 		ThingsIxID: utils.DeriveThingsIxID(&priv.PublicKey),
