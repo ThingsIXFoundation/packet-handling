@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/ThingsIXFoundation/packet-handling/external/chirpstack/gateway-bridge/integration"
@@ -53,9 +53,10 @@ type Router struct {
 	// their forwarder or can send packages back to gateways when required
 	integration integration.Integration
 
-	// gatways keeps track which gateways are online and are connected through
+	// gateways keeps track which gateways are online and are connected through
 	// which forwarder
-	gateways *GatewayPool
+	gatewaysMu sync.RWMutex
+	gateways   map[lorawan.EUI64]*forwarderManagedGateway
 
 	// joinFilterGenerator generates the join filter that is required by gateways
 	// to be able to route joins (that don't have NetIds) to the right router
@@ -74,11 +75,6 @@ func NewRouter(cfg *Config, in integration.Integration) (*Router, error) {
 		"router_id": identity.ID,
 	}).Info("keyfile loaded")
 
-	pool, err := NewGatewayPool()
-	if err != nil {
-		return nil, err
-	}
-
 	jfg, err := NewJoinFilterGenerator(cfg.Router)
 	if err != nil {
 		return nil, err
@@ -86,13 +82,14 @@ func NewRouter(cfg *Config, in integration.Integration) (*Router, error) {
 
 	r := &Router{
 		integration:         in,
-		gateways:            pool,
+		gatewaysMu:          sync.RWMutex{},
+		gateways:            make(map[lorawan.EUI64]*forwarderManagedGateway),
 		config:              cfg.Router,
 		joinFilterGenerator: jfg,
 	}
 
 	// callbacks called by the integration layer
-	in.SetDownlinkFrameFunc(pool.DownlinkFrame)
+	in.SetDownlinkFrameFunc(r.DownlinkFrame)
 	in.SetGatewayConfigurationFunc(r.GatewayConfigurationHandler)
 	in.SetRawPacketForwarderCommandFunc(r.RawPacketForwarderCommandHandler)
 	in.SetGatewayCommandExecRequestFunc(r.GatewayCommandExecHandler)
@@ -179,6 +176,20 @@ func (r *Router) Run(ctx context.Context) error {
 		}
 	}()
 
+	// Clean up timed-out gateways every minute
+	go func() {
+		cleanupTicker := time.NewTicker(time.Minute)
+		for {
+			select {
+			case <-cleanupTicker.C:
+				r.cleanupTimeOutGateways()
+			case <-ctx.Done():
+				logrus.Info("stopping timed-out gateways clean-up loop")
+				return
+			}
+		}
+	}()
+
 	// wait until the context expires and stop the service
 	<-ctx.Done()
 	grpcSrv.GracefulStop()
@@ -197,10 +208,6 @@ func (r *Router) JoinFilter(ctx context.Context, req *router.JoinFilterRequest) 
 	}
 	return &router.JoinFilterResponse{JoinFilter: filter}, nil
 }
-
-var (
-	connectedForwarders int32
-)
 
 // Called by the forwarder to start bi-directional communication stream on which
 // events from gateways are send through the forwarder to this router or in
@@ -223,8 +230,8 @@ func (r *Router) Events(forwarder router.RouterV1_EventsServer) error {
 	}
 	fwdlog.Info("forwarder connected")
 
-	connectedForwardersGauge.Set(float64(atomic.AddInt32(&connectedForwarders, 1)))
-	defer func() { connectedForwardersGauge.Set(float64(atomic.AddInt32(&connectedForwarders, -1))) }()
+	connectedForwardersGauge.Add(1)
+	defer func() { connectedForwardersGauge.Add(-1) }()
 
 	// turn forwarder into a readable event channel on which events from the
 	// forwarder can be read. It is closed when the connection closes. It is
@@ -241,7 +248,7 @@ func (r *Router) Events(forwarder router.RouterV1_EventsServer) error {
 		select {
 		case fwdEvent, ok := <-forwarderEvents: // wait for forwarder events
 			if !ok {
-				r.gateways.AllOffline(forwarderID)
+				r.allGatewaysOffline(forwarderID)
 				fwdlog.Info("forwarder disconnected")
 				return nil
 			}
@@ -265,10 +272,11 @@ func (r *Router) Events(forwarder router.RouterV1_EventsServer) error {
 
 			if uplink, ok := event.(*router.GatewayToRouterEvent_UplinkFrameEvent); ok {
 				r.handleUplink(log, gatewayNetworkID, uplink)
+				r.handleStatus(log, forwarderID, gatewayNetworkID, gatewayOwner, true, integrationEvents)
 			} else if downlinkAck, ok := event.(*router.GatewayToRouterEvent_DownlinkTXAckEvent); ok {
 				r.handleDownlinkTxAck(log, gatewayNetworkID, downlinkAck)
 			} else if status, ok := event.(*router.GatewayToRouterEvent_StatusEvent); ok {
-				r.handleStatus(log, forwarderID, gatewayNetworkID, gatewayOwner, status, integrationEvents)
+				r.handleStatus(log, forwarderID, gatewayNetworkID, gatewayOwner, status.StatusEvent.GetOnline(), integrationEvents)
 			} else {
 				log.Warn("received unsupported forwarder event")
 			}
@@ -276,7 +284,7 @@ func (r *Router) Events(forwarder router.RouterV1_EventsServer) error {
 			if !ok {
 				// TODO: determine if disconnecting is the right thing to do if the integrations layer stopped
 				fwdlog.Info("integration events stream closed, disconnect forwarder")
-				r.gateways.AllOffline(forwarderID)
+				r.allGatewaysOffline(forwarderID)
 				return status.Error(codes.Unavailable, "integration stopped")
 			}
 			if err := forwarder.Send(ev); err != nil {
@@ -316,19 +324,13 @@ func (r *Router) forwarderEventStream(id uuid.UUID, events router.RouterV1_Event
 	return receivedForwarderEvents
 }
 
-func (r *Router) handleStatus(log *logrus.Entry, forwarderID uuid.UUID, gatewayID lorawan.EUI64, gatewayOwner common.Address, status *router.GatewayToRouterEvent_StatusEvent, integrationEvents chan<- *router.RouterToGatewayEvent) {
+func (r *Router) handleStatus(log *logrus.Entry, forwarderID uuid.UUID, gatewayID lorawan.EUI64, gatewayOwner common.Address, online bool, integrationEvents chan<- *router.RouterToGatewayEvent) {
 	// forwarders send periodically (~30s) an indication if a gateway is still
 	// online or when a gateway goes offline
-	online := status.StatusEvent.GetOnline()
 	if online {
-		r.gateways.SetOnline(forwarderID, gatewayID, gatewayOwner, integrationEvents)
+		r.gatewayOnline(forwarderID, gatewayID, gatewayOwner, integrationEvents)
 	} else {
-		r.gateways.SetOffline(forwarderID, gatewayID)
-	}
-	log.WithField("online", online).Debug("gateway status")
-	err := r.integration.SetGatewaySubscription(online, gatewayID)
-	if err != nil {
-		logrus.WithError(err).Error("could not set gateway subscription")
+		r.gatewayOffline(forwarderID, gatewayID)
 	}
 }
 
@@ -395,4 +397,138 @@ func (r *Router) handleDownlinkTxAck(log *logrus.Entry, gatewayNetworkID lorawan
 	log.Info("send gateway downlink ACK to integration")
 
 	downlinksCounter.WithLabelValues(gatewayNetworkID.String(), "success").Inc()
+}
+
+func (r *Router) allGatewaysOffline(forwarderID uuid.UUID) {
+	r.gatewaysMu.Lock()
+	defer r.gatewaysMu.Unlock()
+
+	for gatewayID, gateway := range r.gateways {
+		if gateway.forwarderID == forwarderID {
+			// Disable the subscription
+			err := r.integration.SetGatewaySubscription(false, gatewayID)
+			if err != nil {
+				logrus.WithFields(logrus.Fields{
+					"forwarder": forwarderID,
+					"gateway":   gatewayID}).WithError(err).Error("unable to unsubscribe for gateway when it's offline")
+				return
+			}
+
+			connectedGatewaysGauge.Add(-1)
+
+			delete(r.gateways, gatewayID)
+			logrus.WithFields(logrus.Fields{
+				"forwarder": forwarderID,
+				"gateway":   gatewayID}).Info("gateway offline")
+		}
+	}
+}
+
+func (r *Router) gatewayOffline(forwarderID uuid.UUID, gatewayID lorawan.EUI64) {
+	r.gatewaysMu.Lock()
+	defer r.gatewaysMu.Unlock()
+
+	// Disable the subscription
+	err := r.integration.SetGatewaySubscription(false, gatewayID)
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"forwarder": forwarderID,
+			"gateway":   gatewayID}).WithError(err).Error("unable to unsubscribe for gateway when it's offline")
+		return
+	}
+
+	connectedGatewaysGauge.Add(-1)
+
+	delete(r.gateways, gatewayID)
+
+	logrus.WithFields(logrus.Fields{
+		"forwarder": forwarderID,
+		"gateway":   gatewayID}).Info("gateway offline")
+}
+
+func (r *Router) gatewayOnline(forwarderID uuid.UUID, gatewayID lorawan.EUI64, gatewayOwner common.Address, forwarderEventSender chan<- *router.RouterToGatewayEvent) {
+	r.gatewaysMu.Lock()
+	defer r.gatewaysMu.Unlock()
+
+	// Enable the subscription
+	err := r.integration.SetGatewaySubscription(true, gatewayID)
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"forwarder": forwarderID,
+			"gateway":   gatewayID}).WithError(err).Error("unable to subscribe for gateway when it's online")
+		return
+	}
+
+	connectedGatewaysGauge.Add(1)
+
+	r.gateways[gatewayID] = &forwarderManagedGateway{
+		forwarderID: forwarderID,
+		gatewayID:   gatewayID,
+		forwarder:   forwarderEventSender,
+		lastSeen:    time.Now(),
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"forwarder": forwarderID,
+		"gateway":   gatewayID}).Info("gateway online")
+}
+
+func (r *Router) cleanupTimeOutGateways() {
+	r.gatewaysMu.Lock()
+	defer r.gatewaysMu.Unlock()
+
+	for gatewayID, gateway := range r.gateways {
+		if time.Since(gateway.lastSeen) > 5*time.Minute {
+			// Disable the subscription
+			err := r.integration.SetGatewaySubscription(false, gatewayID)
+			if err != nil {
+				logrus.WithFields(logrus.Fields{
+					"forwarder": gateway.forwarderID,
+					"gateway":   gatewayID}).WithError(err).Error("unable to unsubscribe for gateway when it's offline")
+				return
+			}
+
+			connectedGatewaysGauge.Add(-1)
+
+			delete(r.gateways, gatewayID)
+			logrus.WithFields(logrus.Fields{
+				"forwarder": gateway.forwarderID,
+				"gateway":   gatewayID}).Info("gateway timed out")
+		}
+	}
+
+}
+
+func (r *Router) sendDownlinkFrame(addressedGatewayID string, event *router.RouterToGatewayEvent) {
+	r.gatewaysMu.RLock()
+	defer r.gatewaysMu.RUnlock()
+
+	gwId, err := utils.Eui64FromString(addressedGatewayID)
+	if err != nil {
+		logrus.WithError(err).
+			WithField("addressed_gw_id", fmt.Sprintf("%x", addressedGatewayID)).
+			Error("invalid gateway id")
+	}
+
+	for gatewayID, gateway := range r.gateways {
+		if gatewayID == gwId {
+			gateway.forwarder <- event
+			logrus.WithFields(logrus.Fields{
+				"gw_network_id": gatewayID,
+				"event_type":    fmt.Sprintf("%T", event.GetEvent()),
+				"forwarder_id":  gateway.forwarderID,
+			}).Info("sent downlink to forwarder")
+		}
+	}
+}
+
+func (r *Router) DownlinkFrame(frame *gw.DownlinkFrame) {
+	event := &router.RouterToGatewayEvent{
+		Event: &router.RouterToGatewayEvent_DownlinkFrameEvent{
+			DownlinkFrameEvent: &router.DownlinkFrameEvent{
+				DownlinkFrame: frame,
+			},
+		},
+	}
+	r.sendDownlinkFrame(frame.GatewayId, event)
 }

@@ -30,7 +30,6 @@ import (
 	"github.com/brocaar/lorawan"
 	"github.com/chirpstack/chirpstack/api/go/v4/gw"
 	"github.com/sirupsen/logrus"
-	"github.com/zyedidia/generic/mapset"
 )
 
 // Exchange has several tasks:
@@ -353,15 +352,7 @@ func (e *Exchange) gatewayStats(stats *gw.GatewayStats) {
 	gatewayTxPacketsReceivedGauge.WithLabelValues(gatewayNetworkID).Set(float64(stats.TxPacketsReceived))
 }
 
-var (
-	onlineGateways mapset.Set[lorawan.EUI64]
-)
-
-func init() {
-	onlineGateways = mapset.New[lorawan.EUI64]()
-}
-
-// subscribeEvent is called by the chirstack backend, currently only when a gateway
+// subscribeEvent is called by the chirpstack backend, currently only when a gateway
 // is online this callback is called.ys
 func (e *Exchange) subscribeEvent(event events.Subscribe) {
 	log := logrus.WithField("gw_local_id", hex.EncodeToString(event.GatewayID[:]))
@@ -380,46 +371,29 @@ func (e *Exchange) subscribeEvent(event events.Subscribe) {
 	}
 
 	log = log.WithField("gw_network_id", gw.NetworkID)
-	emitEvents := false
-
-	if event.Subscribe {
-		if !onlineGateways.Has(gw.LocalID) {
-			log.Info("gateway online")
-			emitEvents = true
-		}
-		onlineGateways.Put(gw.LocalID)
-	} else {
-		if onlineGateways.Has(gw.LocalID) {
-			log.Info("gateway offline")
-			emitEvents = true
-		}
-		onlineGateways.Remove(gw.LocalID)
-	}
 
 	// event is valid, router clients are subscribed to this uplink broadcaster
 	// and will receive it. If the router the client is connected to is
 	// interested in the package it will send the packet to the router.
-	if emitEvents {
-		if !e.routingTable.gatewayEvents.TryBroadcast(&GatewayEvent{
-			receivedFrom: gw,
-			subOnlineOfflineEvent: &struct {
-				event *router.GatewayToRouterEvent
-			}{
-				&router.GatewayToRouterEvent{
-					GatewayInformation: &router.GatewayInformation{
-						PublicKey: gw.CompressedPubKeyBytes(),
-						Owner:     gw.Owner.Bytes(),
-					},
-					Event: &router.GatewayToRouterEvent_StatusEvent{
-						StatusEvent: &router.StatusEvent{
-							Online: event.Subscribe,
-						},
+	if !e.routingTable.gatewayEvents.TryBroadcast(&GatewayEvent{
+		receivedFrom: gw,
+		subOnlineOfflineEvent: &struct {
+			event *router.GatewayToRouterEvent
+		}{
+			&router.GatewayToRouterEvent{
+				GatewayInformation: &router.GatewayInformation{
+					PublicKey: gw.CompressedPubKeyBytes(),
+					Owner:     gw.Owner.Bytes(),
+				},
+				Event: &router.GatewayToRouterEvent_StatusEvent{
+					StatusEvent: &router.StatusEvent{
+						Online: event.Subscribe,
 					},
 				},
 			},
-		}) {
-			log.Warn("unable to broadcast gateway event to routers, drop event")
-		}
+		},
+	}) {
+		log.Warn("unable to broadcast gateway event to routers, drop event")
 	}
 }
 
