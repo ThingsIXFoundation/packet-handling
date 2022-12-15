@@ -27,6 +27,11 @@ import (
 )
 
 var (
+	connectedGatewaysGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gateways",
+		Name:      "connected",
+		Help:      "number of connected gateways",
+	})
 	connectedForwardersGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace: "forwarders",
 		Name:      "connected",

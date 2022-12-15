@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/FastFilter/xorfilter"
+	"github.com/brocaar/lorawan"
 
 	"github.com/ThingsIXFoundation/packet-handling/forwarder/broadcast"
 	"github.com/ThingsIXFoundation/router-api/go/router"
@@ -65,6 +66,10 @@ type RouterClient struct {
 	// receives router details
 	routerDetails <-chan *RouterDetails
 
+	// Tracks the last time an event for a certain gateway was sent to the router
+	// this is used to send additional online events to prevent a timeout
+	lastGatewayEvent map[lorawan.EUI64]time.Time
+
 	// TODO: mapperForwarder *MapperForwarder
 
 }
@@ -86,6 +91,7 @@ func NewRouterClient(router *Router,
 		routerEvents:          routerEvents,
 		gatewayEvents:         gatewayEvents,
 		routerDetails:         routerDetails,
+		lastGatewayEvent:      make(map[lorawan.EUI64]time.Time),
 	}
 }
 
@@ -304,6 +310,10 @@ func (rc *RouterClient) run(ctx context.Context) error {
 							if err := eventStream.Send(ev.uplink.event); err != nil {
 								return fmt.Errorf("unable to send event to router: %w", err)
 							}
+
+							// Update the last gateway event because an event was successfully sent
+							rc.lastGatewayEvent[ev.receivedFrom.NetworkID] = time.Now()
+
 							pktlog.Info("forwarded uplink packet to router")
 						} else {
 							pktlog.Warn("accounting prevents forwarding uplink packet to router, drop packet")
@@ -327,6 +337,10 @@ func (rc *RouterClient) run(ctx context.Context) error {
 							if err := eventStream.Send(ev.join.event); err != nil {
 								return fmt.Errorf("unable to send event to router: %w", err)
 							}
+
+							// Update the last gateway event because an event was successfully sent
+							rc.lastGatewayEvent[ev.receivedFrom.NetworkID] = time.Now()
+
 							pktlog.Info("forwarded join packet to router")
 						} else {
 							pktlog.Warn("accounting prevents forwarding join packet to router, drop packet")
@@ -350,9 +364,32 @@ func (rc *RouterClient) run(ctx context.Context) error {
 						}).Info("forwarded downlink-ack to router")
 					}
 				} else if ev.IsOnlineOfflineEvent() {
-					// send to all connected routers
-					if err := eventStream.Send(ev.subOnlineOfflineEvent.event); err != nil {
-						return fmt.Errorf("unable to send event to router: %w", err)
+					if ev.subOnlineOfflineEvent.event.GetStatusEvent().Online {
+						if lastEvent, ok := rc.lastGatewayEvent[ev.receivedFrom.NetworkID]; !ok || time.Since(lastEvent) > 4*time.Minute {
+							if err := eventStream.Send(ev.subOnlineOfflineEvent.event); err != nil {
+								return fmt.Errorf("unable to send gateway online event to router: %w", err)
+							}
+
+							rc.lastGatewayEvent[ev.receivedFrom.NetworkID] = time.Now()
+
+							log.WithFields(logrus.Fields{
+								"gw_network_id": ev.receivedFrom.NetworkID,
+								"gw_local_id":   ev.receivedFrom.LocalID,
+							}).Info("sent online event to router")
+						}
+
+					} else {
+						if err := eventStream.Send(ev.subOnlineOfflineEvent.event); err != nil {
+							return fmt.Errorf("unable to send gateway offline event to router: %w", err)
+						}
+
+						// Delete last gateway event because gateway is now reported offline
+						delete(rc.lastGatewayEvent, ev.receivedFrom.NetworkID)
+
+						log.WithFields(logrus.Fields{
+							"gw_network_id": ev.receivedFrom.NetworkID,
+							"gw_local_id":   ev.receivedFrom.LocalID,
+						}).Info("sent offline event to router")
 					}
 				}
 			}
