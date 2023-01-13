@@ -92,7 +92,7 @@ func NewExchange(ctx context.Context, cfg *Config) (*Exchange, error) {
 		recordUnknownGateway: NewUnknownGatewayLogger(cfg),
 	}
 
-	if exchange.mapperForwarder, err = NewMapperForwarder(exchange); err != nil {
+	if exchange.mapperForwarder, err = NewMapperForwarder(exchange, store); err != nil {
 		return nil, err
 	}
 
@@ -213,11 +213,10 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 			"fcnt":     mac.FHDR.FCnt,
 		})
 
-		// TODO: Handle mapper mac and forward to mapping service
-		// if the packet was send by a mapper forward it to the mapper service
-		if IsMaybeMapperPacket(mac) {
-			frameLog.Warn("TODO: process received mapper packet (skip for now)")
-			//fw.mapperClient.HandleMapperPacket(frame, mac)
+		// check if the packet received could be a mapper packet and process it
+		if IsMaybeMapperPacket(frame, mac) {
+			frameLog.Info("received plausible mapper packet")
+			e.mapperForwarder.HandleMapperPacket(frame, mac)
 			return
 		}
 

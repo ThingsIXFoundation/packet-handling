@@ -24,7 +24,9 @@ import (
 	h3light "github.com/ThingsIXFoundation/h3-light"
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	"github.com/ThingsIXFoundation/packet-handling/utils"
+	"github.com/chirpstack/chirpstack/api/go/v4/common"
 	"github.com/chirpstack/chirpstack/api/go/v4/gw"
+	"github.com/google/uuid"
 
 	"github.com/ThingsIXFoundation/coverage-api/go/mapper"
 	"github.com/ThingsIXFoundation/packet-handling/mapperpacket"
@@ -40,19 +42,44 @@ type MapperForwarder struct {
 	exchange     *Exchange
 }
 
-func NewMapperForwarder(exchange *Exchange) (*MapperForwarder, error) {
-	return &MapperForwarder{exchange: exchange}, nil
+func NewMapperForwarder(exchange *Exchange, gatewayStore gateway.GatewayStore) (*MapperForwarder, error) {
+	return &MapperForwarder{exchange: exchange, gatewayStore: gatewayStore}, nil
 }
 
-func IsMaybeMapperPacket(payload *lorawan.MACPayload) bool {
-	return payload.FHDR.DevAddr[0] == 0x02
+func IsMaybeMapperPacket(frame *gw.UplinkFrame, payload *lorawan.MACPayload) bool {
+	if frame.TxInfo.GetModulation().GetLora().GetSpreadingFactor() != 7 {
+		logrus.Debug("wrong spreading factor")
+		return false
+	}
+
+	if frame.TxInfo.GetModulation().GetLora().GetBandwidth() != 125000 {
+		logrus.Debug("wrong bandwidth")
+		return false
+	}
+
+	if payload.FPort == nil {
+		logrus.Debug("wrong fport")
+		return false
+	}
+
+	if *payload.FPort != 0x01 && *payload.FPort != 0x02 {
+		logrus.Debug("wrong fport match")
+		return false
+	}
+
+	if payload.FHDR.DevAddr[0] != 0x02 {
+		logrus.Debug("wrong devaddr")
+		return false
+	}
+
+	return true
 }
 
-func (mc *MapperForwarder) HandleMapperPacket(frame *gw.UplinkFrame, mac *lorawan.MACPayload) {
+func (mc *MapperForwarder) handleDiscoveryPacket(frame *gw.UplinkFrame, mac *lorawan.MACPayload) {
 	gateway, err := mc.gatewayStore.ByNetworkIDString(frame.RxInfo.GatewayId)
 	if err != nil || gateway == nil {
 		logrus.WithFields(logrus.Fields{
-			"local_gateway_id": frame.RxInfo.GatewayId,
+			"network_gateway_id": frame.RxInfo.GatewayId,
 		}).Error("unknown gateway, dropping mapper packet")
 		return
 	}
@@ -84,7 +111,7 @@ func (mc *MapperForwarder) HandleMapperPacket(frame *gw.UplinkFrame, mac *lorawa
 		return
 	}
 	lat, lon := dp.LatLonFloat()
-	logrus.Infof("packet was mapped at: %f, %f", float64(lat)/1000000, float64(lon)/1000000)
+	logrus.Infof("packet was mapped at: %f, %f", lat, lon)
 
 	region := h3light.LatLonToRes0ToCell(lat, lon)
 	logrus.Infof("packet is for region: %s", region)
@@ -136,6 +163,26 @@ func (mc *MapperForwarder) HandleMapperPacket(frame *gw.UplinkFrame, mac *lorawa
 		}
 
 		dfi := gw.DownlinkFrameItem{
+			TxInfoLegacy: &gw.DownlinkTxInfoLegacy{
+				GatewayId: frame.RxInfoLegacy.GatewayId,
+				Context:   frame.RxInfoLegacy.Context,
+				Frequency: dtr.Frequency,
+				Power:     dtr.Power,
+				Timing:    gw.DownlinkTiming_IMMEDIATELY,
+				TimingInfo: &gw.DownlinkTxInfoLegacy_ImmediatelyTimingInfo{
+					ImmediatelyTimingInfo: &gw.ImmediatelyTimingInfo{},
+				},
+				Modulation: common.Modulation_LORA,
+				ModulationInfo: &gw.DownlinkTxInfoLegacy_LoraModulationInfo{
+					LoraModulationInfo: &gw.LoraModulationInfo{
+						Bandwidth:             dtr.Bandwidth,
+						SpreadingFactor:       dtr.SpreadingFactor,
+						CodeRateLegacy:        "4/5",
+						CodeRate:              gw.CodeRate_CR_4_5,
+						PolarizationInversion: true,
+					},
+				},
+			},
 			TxInfo: &gw.DownlinkTxInfo{
 				Frequency: dtr.Frequency,
 				Power:     dtr.Power,
@@ -147,8 +194,8 @@ func (mc *MapperForwarder) HandleMapperPacket(frame *gw.UplinkFrame, mac *lorawa
 				Modulation: &gw.Modulation{
 					Parameters: &gw.Modulation_Lora{
 						Lora: &gw.LoraModulationInfo{
-							Bandwidth:             125,
-							SpreadingFactor:       7,
+							Bandwidth:             dtr.Bandwidth,
+							SpreadingFactor:       dtr.SpreadingFactor,
 							CodeRateLegacy:        "4/5",
 							CodeRate:              gw.CodeRate_CR_4_5,
 							PolarizationInversion: true,
@@ -160,10 +207,13 @@ func (mc *MapperForwarder) HandleMapperPacket(frame *gw.UplinkFrame, mac *lorawa
 			PhyPayload: dtr.GetPhy(),
 		}
 
+		downlinkLegacyId := uuid.New()
+
 		df := gw.DownlinkFrame{
-			DownlinkId: utils.RandUint32(), //
-			Items:      []*gw.DownlinkFrameItem{&dfi},
-			GatewayId:  frame.RxInfo.GatewayId,
+			DownlinkId:       utils.RandUint32(), //
+			DownlinkIdLegacy: downlinkLegacyId[:],
+			Items:            []*gw.DownlinkFrameItem{&dfi},
+			GatewayId:        frame.RxInfo.GatewayId,
 		}
 
 		dfe := router.DownlinkFrameEvent{
@@ -172,6 +222,12 @@ func (mc *MapperForwarder) HandleMapperPacket(frame *gw.UplinkFrame, mac *lorawa
 
 		mc.exchange.handleDownlinkFrame(&dfe)
 	}()
+}
+
+func (mc *MapperForwarder) HandleMapperPacket(frame *gw.UplinkFrame, mac *lorawan.MACPayload) {
+	if *mac.FPort == 0x01 {
+		mc.handleDiscoveryPacket(frame, mac)
+	}
 }
 
 func (m *MapperForwarder) mapperClientForRegion(region h3light.Cell) (*CoverageClient, error) {
