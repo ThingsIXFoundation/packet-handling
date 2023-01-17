@@ -286,6 +286,8 @@ github.com/FastFilter/xorfilter v0.1.2 h1:R8oYYHRjZPQV1TmKPVK87QnruIsR2WWZbyEen5
 github.com/FastFilter/xorfilter v0.1.2/go.mod h1:RB6+tbWbRN163V4y7z10tNfZec6n1oTsOElP0Tu5hzU=
 github.com/GoogleCloudPlatform/cloudsql-proxy v1.33.1 h1:h1qByrLm6Q80nfvIGE5FHdJbvGloDOagO6o0N6QGPkk=
 github.com/GoogleCloudPlatform/cloudsql-proxy v1.33.1/go.mod h1:n3KDPrdaY2p9Nr0B1allAdjYArwIpXQcitNbsS/Qiok=
+github.com/Kl1mn/h3-go v0.0.4 h1:RtTSZuvbnLg3SZGYJRgY/LEt7Dm0sVHbhJa+/9o5dOA=
+github.com/Kl1mn/h3-go v0.0.4/go.mod h1:z7OGXqLd+5hur6EB8s3wFftUEzmfdZ0CMrExBxmes5U=
 github.com/Masterminds/semver v1.4.2 h1:WBLTQ37jOCzSLtXNdoo8bNM8876KhNqOKvrlGITgsTc=
 github.com/Masterminds/semver v1.4.2/go.mod h1:MB6lktGJrhw8PrUyiEoblNEGEQ+RzHPF078ddwwvV3Y=
 github.com/Masterminds/semver/v3 v3.1.1 h1:hLg3sBzpNErnxhQtUy/mmLR2I9foDujNK030IGemrRc=
@@ -300,6 +302,8 @@ github.com/ThingsIXFoundation/gateway-registry-go v1.0.0 h1:cRUoWP8d8HuE00frR1lS
 github.com/ThingsIXFoundation/gateway-registry-go v1.0.0/go.mod h1:/d0dfBbjyrZL1DU+Ct4ORT/dFBT7b+N9cH97r3M+wxo=
 github.com/ThingsIXFoundation/h3-light v0.0.0-20221122151216-69018e780344 h1:faZwv4wbQEytMIyLJ7MV/mQEeGXDvQLGLw1o6Z+BOUc=
 github.com/ThingsIXFoundation/h3-light v0.0.0-20221122151216-69018e780344/go.mod h1:jSChfHi3fbZIAHTaPSEy+ghN/kF32U/f+NZdQt6oDD8=
+github.com/ThingsIXFoundation/h3-light v0.0.0-20221207151356-8cedc96137c5 h1:0mHBlYB2tkpgmCqYkjeMou+HOIwgbd73g58ebe9m1lw=
+github.com/ThingsIXFoundation/h3-light v0.0.0-20221207151356-8cedc96137c5/go.mod h1:p3V5tlZH2oU4mShm6RufV5C+dPm4IvpryDAxq6U8bbU=
 github.com/ThingsIXFoundation/router-api v1.2.0 h1:f6B8BcX1BakGYYfRSknTtVPNtRgRX4hX+/Isb2L5TYA=
 github.com/ThingsIXFoundation/router-api v1.2.0/go.mod h1:jED1RkCsj3JM6I0rbjUTPTxOeJvPTYXqAu5E1uBSmVo=
 github.com/ThingsIXFoundation/router-registry-go v1.1.0 h1:zWZMhrc4ZuLVR5X2hsu1TVSpkQJo4xM/+oWMrW7bUK0=
@@ -559,6 +563,8 @@ github.com/hashicorp/go-bexpr v0.1.10 h1:9kuI5PFotCboP3dkDYFr/wi0gg0QVbSNz5oFRpx
 github.com/hashicorp/golang-lru v0.5.0/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ4Ao+sR/qLZy8=
 github.com/hashicorp/golang-lru v0.5.1/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ4Ao+sR/qLZy8=
 github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d h1:dg1dEPuWpEqDnvIw251EVy4zlP8gWbsGj4BsUKCRpYs=
+github.com/hashicorp/golang-lru/v2 v2.0.1 h1:5pv5N1lT1fjLg2VQ5KWc7kmucp2x/kvFOnxuVTqZ6x4=
+github.com/hashicorp/golang-lru/v2 v2.0.1/go.mod h1:QeFd9opnmA6QUJc5vARoKUSoFhyfM2/ZepoAG6RGpeM=
 github.com/hashicorp/hcl v1.0.0 h1:0Anlzjpi4vEasTeNFn2mLJgTSwt0+6sfsiTG8qcWGx4=
 github.com/hashicorp/hcl v1.0.0/go.mod h1:E5yfLk+7swimpb2L/Alb/PJmXilQ/rhwaUYs4T20WEQ=
 github.com/holiman/bloomfilter/v2 v2.0.3 h1:73e0e/V0tCydx14a0SCYS/EWCxgwLZ18CZcZKVu0fao=

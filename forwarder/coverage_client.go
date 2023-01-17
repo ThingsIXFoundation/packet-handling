@@ -64,3 +64,24 @@ func (cc *CoverageClient) DeliverDiscoveryPacketReceipt(ctx context.Context, dpr
 
 	return dprp, nil
 }
+
+func (cc *CoverageClient) DeliverDownlinkConfirmationPacketReceipt(ctx context.Context, dpr *mapper.DownlinkConfirmationPacketReceipt) error {
+	b, err := proto.Marshal(dpr)
+	if err != nil {
+		return err
+	}
+	r, err := http.NewRequestWithContext(ctx, "POST", "http://localhost:8090/mapping/confirmation", bytes.NewBuffer(b))
+	if err != nil {
+		return err
+	}
+
+	resp, err := http.DefaultClient.Do(r)
+	if err != nil {
+		return err
+	}
+
+	logrus.Debugf("got response from mapping server: %d", resp.StatusCode)
+
+	return nil
+
+}
