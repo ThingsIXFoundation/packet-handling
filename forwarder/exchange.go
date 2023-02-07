@@ -46,7 +46,7 @@ type Exchange struct {
 	gateways gateway.GatewayStore
 	// recordUnknownGateway is called each time a gateway connects that is not
 	// in the gateway store
-	recordUnknownGateway UnknownGatewayLoggerFunc
+	recordUnknownGateway gateway.UnknownGatewayLogger
 	// routes holds the required information to exchange data with
 	// external ThingsIX routers
 	routingTable *RoutingTable
@@ -60,7 +60,8 @@ func NewExchange(ctx context.Context, cfg *Config) (*Exchange, error) {
 	// currently allow all gateways. Once the forwarders exchange only forwards
 	// packets for onboarded gateway we need to use a filtered gateway store
 	// that filters out gateways that are not onboarded.
-	store, err := gateway.NewGatewayStore(ctx, &cfg.Forwarder.Gateways.Store)
+	store, err := gateway.NewGatewayStore(ctx,
+		&cfg.Forwarder.Gateways.Store, &cfg.Forwarder.Gateways.Registry)
 	if err != nil {
 		logrus.WithError(err).Fatal("unable to load gateway store")
 	}
@@ -83,13 +84,16 @@ func NewExchange(ctx context.Context, cfg *Config) (*Exchange, error) {
 		return nil, err
 	}
 
+	// create a logger that logs gateways that have not been seen earlier
+	recorder := gateway.NewUnknownGatewayLogger(cfg.Forwarder.Gateways.RecordUnknown)
+
 	// instantiate exchange
 	exchange := &Exchange{
 		backend:              backend,
 		accounter:            accounter,
 		routingTable:         routingTable,
 		gateways:             store,
-		recordUnknownGateway: NewUnknownGatewayLogger(cfg),
+		recordUnknownGateway: recorder,
 	}
 
 	if exchange.mapperForwarder, err = NewMapperForwarder(exchange); err != nil {
@@ -108,6 +112,9 @@ func NewExchange(ctx context.Context, cfg *Config) (*Exchange, error) {
 
 // Run the exchange until the given ctx expires.
 func (e *Exchange) Run(ctx context.Context) {
+	// run the gateway store background tasks
+	go e.gateways.Run(ctx)
+
 	// start backend and accept gateways
 	err := e.backend.Start()
 	if err != nil {
@@ -158,7 +165,7 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 	if err != nil {
 		uplinksCounter.WithLabelValues(lorawan.EUI64{}.String(), "failed").Inc()
 		log.Warn("uplink from unknown gateway, drop packet")
-		e.recordUnknownGateway(gatewayLocalID)
+		_ = e.recordUnknownGateway.Record(gatewayLocalID)
 		return
 	}
 
@@ -224,13 +231,13 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 		event := router.GatewayToRouterEvent{
 			GatewayInformation: &router.GatewayInformation{
 				PublicKey: gw.CompressedPubKeyBytes(),
-				Owner:     gw.Owner.Bytes(),
+				Owner:     gw.OwnerBytes(),
 			},
 			Event: &router.GatewayToRouterEvent_UplinkFrameEvent{
 				UplinkFrameEvent: &router.UplinkFrameEvent{
 					UplinkFrame: frame,
 					AirtimeReceipt: &router.AirtimeReceipt{
-						Owner:   gw.Owner.Bytes(),
+						Owner:   gw.OwnerBytes(),
 						Airtime: uint32(airtime.Milliseconds()),
 					},
 				},
@@ -272,13 +279,13 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 		event := router.GatewayToRouterEvent{
 			GatewayInformation: &router.GatewayInformation{
 				PublicKey: gw.CompressedPubKeyBytes(),
-				Owner:     gw.Owner.Bytes(),
+				Owner:     gw.OwnerBytes(),
 			},
 			Event: &router.GatewayToRouterEvent_UplinkFrameEvent{
 				UplinkFrameEvent: &router.UplinkFrameEvent{
 					UplinkFrame: frame,
 					AirtimeReceipt: &router.AirtimeReceipt{
-						Owner:   gw.Owner.Bytes(),
+						Owner:   gw.OwnerBytes(),
 						Airtime: uint32(airtime.Milliseconds()),
 					},
 				},
@@ -320,6 +327,7 @@ func (e *Exchange) gatewayStats(stats *gw.GatewayStats) {
 		})
 		gatewayNetworkID = gw.NetworkID.String()
 	)
+
 	log.Debug("received gateway stats")
 
 	for f, n := range stats.RxPacketsPerFrequency {
@@ -366,7 +374,7 @@ func (e *Exchange) subscribeEvent(event events.Subscribe) {
 	gw, err := e.gateways.ByLocalID(localGatewayID)
 	if err != nil {
 		log.Warn("event from unknown gateway, drop event")
-		e.recordUnknownGateway(localGatewayID)
+		_ = e.recordUnknownGateway.Record(localGatewayID)
 		return
 	}
 
@@ -383,7 +391,7 @@ func (e *Exchange) subscribeEvent(event events.Subscribe) {
 			&router.GatewayToRouterEvent{
 				GatewayInformation: &router.GatewayInformation{
 					PublicKey: gw.CompressedPubKeyBytes(),
-					Owner:     gw.Owner.Bytes(),
+					Owner:     gw.OwnerBytes(),
 				},
 				Event: &router.GatewayToRouterEvent_StatusEvent{
 					StatusEvent: &router.StatusEvent{
@@ -450,7 +458,7 @@ func (e *Exchange) downlinkTxAck(txack *gw.DownlinkTxAck) {
 	if err != nil {
 		downlinkTxAckCounter.WithLabelValues(fmt.Sprintf("%x", txack.GetGatewayId()), "failed").Inc()
 		log.Warn("downlink tx ack from unknown gateway, drop packet")
-		e.recordUnknownGateway(localGatewayID)
+		_ = e.recordUnknownGateway.Record(localGatewayID)
 		return
 	}
 	log = log.WithField("gw_network_id", gw.NetworkID)
@@ -465,13 +473,13 @@ func (e *Exchange) downlinkTxAck(txack *gw.DownlinkTxAck) {
 	event := router.GatewayToRouterEvent{
 		GatewayInformation: &router.GatewayInformation{
 			PublicKey: gw.CompressedPubKeyBytes(),
-			Owner:     gw.Owner.Bytes(),
+			Owner:     gw.OwnerBytes(),
 		},
 		Event: &router.GatewayToRouterEvent_DownlinkTXAckEvent{
 			DownlinkTXAckEvent: &router.DownlinkTXAckEvent{
 				DownlinkTXAck: txack,
 				AirtimeReceipt: &router.AirtimeReceipt{
-					Owner: gw.Owner.Bytes(),
+					Owner: gw.OwnerBytes(),
 					//TODO: Airtime: uint32(airtime.Milliseconds()),
 				},
 			},

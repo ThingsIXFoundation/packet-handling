@@ -17,20 +17,16 @@
 package forwarder
 
 import (
-	"context"
-	"encoding/hex"
+	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"math/big"
-	"os"
-	"time"
+	"io"
+	"net/http"
+	"strconv"
 
-	gateway_registry "github.com/ThingsIXFoundation/gateway-registry-go"
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
-	"github.com/brocaar/lorawan"
+	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -42,9 +38,9 @@ var (
 	}
 
 	importGatewayCmd = &cobra.Command{
-		Use:   "import <chain-id> <owner> <onboarder-address>",
-		Short: "Import recorded unknown gateways in gateway store",
-		Args:  cobra.ExactArgs(3),
+		Use:   "import <owner> <version>",
+		Short: "Import recorded unknown gateways in gateway store and generate onboard message",
+		Args:  cobra.ExactArgs(2),
 		Run:   importGatewayStore,
 	}
 
@@ -62,200 +58,220 @@ var (
 		Run:   addGatewayToStore,
 	}
 
+	onboardGatewayCmd = &cobra.Command{
+		Use:   "onboard <local-id> <version> <owner>",
+		Short: "Generate onboard message",
+		Args:  cobra.ExactArgs(3),
+		Run:   onboardGateway,
+	}
+
 	gatewayDetailsCmd = &cobra.Command{
-		Use:   "details <thingsix-id/local-id/network-id>",
+		Use:   "details <local-id>",
 		Short: "Show gateway details",
 		Args:  cobra.ExactArgs(1),
 		Run:   gatewayDetails,
 	}
-
-	rpcEndpoint     string
-	registryAddress string
 )
 
 func init() {
-	listGatewayCmd.PersistentFlags().StringVar(&rpcEndpoint, "rpc.endpoint", "", "RPC endpoint")
-	listGatewayCmd.PersistentFlags().StringVar(&registryAddress, "registry.address", "", "Gateway registry address")
-	gatewayDetailsCmd.PersistentFlags().StringVar(&rpcEndpoint, "rpc.endpoint", "", "RPC endpoint")
-	gatewayDetailsCmd.PersistentFlags().StringVar(&registryAddress, "registry.address", "", "Gateway registry address")
-
 	GatewayCmds.AddCommand(importGatewayCmd)
 	GatewayCmds.AddCommand(listGatewayCmd)
 	GatewayCmds.AddCommand(addGatewayCmd)
+	GatewayCmds.AddCommand(onboardGatewayCmd)
 	GatewayCmds.AddCommand(gatewayDetailsCmd)
 }
 
-func gatewayDetails(cmd *cobra.Command, args []string) {
+func onboardGateway(cmd *cobra.Command, args []string) {
 	var (
-		cfg        = mustLoadConfig()
-		store, err = gateway.NewGatewayStore(context.Background(), &cfg.Forwarder.Gateways.Store)
-		id         = args[0]
-		registry   *gateway_registry.GatewayRegistry
-		gw         *gateway.Gateway
+		cfg                 = mustLoadConfig()
+		localID, err        = utils.Eui64FromString(args[0])
+		version, versionErr = strconv.ParseUint(args[1], 0, 8)
+		owner               = common.HexToAddress(args[2])
 	)
-	if err != nil {
-		logrus.WithError(err).Fatal("unable to open gateway store")
-	}
-	if len(id) == 16 {
-		gw, err = store.ByLocalID(mustDecodeGatewayID(id))
-		if errors.Is(err, gateway.ErrNotFound) {
-			gw, err = store.ByNetworkID(mustDecodeGatewayID(id))
-		}
-	} else {
-		gw, err = store.ByThingsIxID(mustDecodeThingsIXID(id))
-	}
-	if err != nil {
-		logrus.WithError(err).Fatal("gateway not found in store")
-	}
-
-	if rpcEndpoint != "" {
-		client, err := ethclient.Dial(rpcEndpoint)
-		if err != nil {
-			logrus.WithError(err).Error("unable to dial RPC node")
-		}
-		defer client.Close()
-		registry, err = gateway_registry.NewGatewayRegistry(common.HexToAddress(registryAddress), client)
-		if err != nil {
-			logrus.WithError(err).Error("unable to instantiate gateway registry bindings")
-		}
-	}
-
-	printGatewaysAsTable([]*gateway.Gateway{gw}, registry)
-}
-
-func importGatewayStore(cmd *cobra.Command, args []string) {
-	var (
-		cfg         = mustLoadConfig()
-		store, err  = gateway.NewGatewayStore(context.Background(), &cfg.Forwarder.Gateways.Store)
-		owner       = common.HexToAddress(args[1])
-		onboarder   = common.HexToAddress(args[2])
-		version     = uint8(1)
-		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
-		gateways    []*gateway.Gateway
-	)
-	defer cancel()
 
 	if err != nil {
-		logrus.WithError(err).Fatal("unable to load gateway store")
+		logrus.WithError(versionErr).Fatal("invalid local id given")
+	}
+	if versionErr != nil {
+		logrus.WithError(versionErr).Fatal("invalid version given")
+	}
+	if cfg.Forwarder.Gateways.HttpAPI == nil {
+		logrus.Fatal("HTTP API endpoint missing")
 	}
 
-	chainID, ok := new(big.Int).SetString(args[0], 0)
-	if !ok {
-		logrus.Fatal("invalid chain id")
-	}
+	req, _ := json.Marshal(map[string]interface{}{
+		"localId": localID,
+		"version": version,
+		"owner":   owner,
+	})
 
-	recordedLocalIDs, err := GetAllRecordedUnknownGateways(cfg.Forwarder.Gateways.RecordUnknown)
+	resp, err := http.Post(
+		fmt.Sprintf("http://%s/v1/gateways/onboard", cfg.Forwarder.Gateways.HttpAPI.Address),
+		"application/json",
+		bytes.NewReader(req))
 	if err != nil {
 		logrus.WithError(err).Fatal("unable to retrieve recorded unknown gateways")
 	}
 
-	// generate for all recorded id's a new gateway key
-	for _, id := range recordedLocalIDs {
-		gw, err := gateway.GenerateNewGateway(id)
-		if err != nil {
-			logrus.WithError(err).Fatal("unable to generate new gateway")
+	switch resp.StatusCode {
+	case http.StatusOK, http.StatusCreated:
+		var reply OnboardGatewayReply
+		if err := json.NewDecoder(resp.Body).Decode(&reply); err != nil {
+			logrus.WithError(err).Fatal("unable to decode response")
 		}
-		gateways = append(gateways, gw)
+		printOnboardsAsTable([]*OnboardGatewayReply{&reply})
+	default:
+		msg, _ := io.ReadAll(resp.Body)
+		logrus.Errorf("unexpected reply from API: %d - %s",
+			resp.StatusCode, msg)
+	}
+}
+
+func gatewayDetails(cmd *cobra.Command, args []string) {
+	var (
+		cfg          = mustLoadConfig()
+		localID, err = utils.Eui64FromString(args[0])
+		gw           gateway.Gateway
+	)
+	if err != nil {
+		logrus.WithError(err).Fatal("invalid local id")
+	}
+	if cfg.Forwarder.Gateways.HttpAPI == nil {
+		logrus.Fatal("HTTP API endpoint missing")
 	}
 
-	type outputGw struct {
-		ID        string         `json:"gateway_id"`
-		Version   uint8          `json:"version"`
-		Local     lorawan.EUI64  `json:"local_id"`
-		Network   lorawan.EUI64  `json:"network_id"`
-		Address   common.Address `json:"address"`
-		ChainID   uint64         `json:"chain_id"`
-		Signature string         `json:"gateway_onboard_signature"`
+	resp, err := http.Get(fmt.Sprintf("http://%s/v1/gateways/%s",
+		cfg.Forwarder.Gateways.HttpAPI.Address, localID))
+	if err != nil {
+		logrus.WithError(err).Fatal("unable to retrieve gateway data")
 	}
 
-	var output []outputGw
-	for _, gw := range gateways {
-		sign, err := gateway.SignPlainBatchOnboardMessage(chainID, onboarder, owner, version, gw)
-		if err != nil {
-			logrus.WithError(err).Fatal("unable to sign gateway onboard message")
-		}
+	if err := json.NewDecoder(resp.Body).Decode(&gw); err != nil {
+		logrus.WithError(err).Fatal("unable to decode response")
+	}
 
-		if _, err := store.Add(ctx, gw.LocalID, gw.PrivateKey); err == nil {
-			logrus.Infof("imported gateway %s", gw.LocalID)
-		} else {
-			logrus.Infof("gateway %s already in gateway store, skip", gw.LocalID)
-			continue
-		}
+	printGatewaysAsTable([]*gateway.Gateway{&gw})
+}
 
-		output = append(output, outputGw{
-			ID:        "0x" + hex.EncodeToString(gw.ThingsIxID[:]),
-			Version:   version,
-			Local:     gw.LocalID,
-			Network:   gw.NetworkID,
-			ChainID:   chainID.Uint64(),
-			Address:   gw.Address(),
-			Signature: fmt.Sprintf("0x%x", sign),
+func importGatewayStore(cmd *cobra.Command, args []string) {
+	var (
+		cfg                 = mustLoadConfig()
+		owner               = common.HexToAddress(args[0])
+		version, versionErr = strconv.ParseUint(args[1], 0, 8)
+		unknown             []gateway.RecordedUnknownGateway
+	)
+	if versionErr != nil {
+		logrus.WithError(versionErr).Fatal("invalid version given")
+	}
+	if cfg.Forwarder.Gateways.HttpAPI == nil {
+		logrus.Fatal("HTTP API endpoint missing")
+	}
+
+	resp, err := http.Get(fmt.Sprintf("http://%s/v1/gateways/unknown", cfg.Forwarder.Gateways.HttpAPI.Address))
+	if err != nil {
+		logrus.WithError(err).Fatal("unable to retrieve recorded unknown gateways")
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		logrus.Fatalf("unable to retrieve recorded unknown gateways")
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&unknown); err != nil {
+		logrus.WithError(err).Fatal("unable to decode response")
+	}
+
+	var (
+		endpoint  = fmt.Sprintf("http://%s/v1/gateways/onboard", cfg.Forwarder.Gateways.HttpAPI.Address)
+		onboarded []*OnboardGatewayReply
+	)
+
+	for _, rec := range unknown {
+		payload, _ := json.Marshal(map[string]interface{}{
+			"localId": rec.LocalID,
+			"owner":   owner,
+			"version": version,
 		})
+
+		resp, err := http.Post(endpoint, "application/json", bytes.NewReader(payload))
+		if err != nil {
+			logrus.WithError(err).Fatal("unable to import gateway")
+		}
+
+		switch resp.StatusCode {
+		case http.StatusOK, http.StatusCreated:
+			var reply OnboardGatewayReply
+			if err := json.NewDecoder(resp.Body).Decode(&reply); err != nil {
+				logrus.WithError(err).Fatal("unable to decode response")
+			}
+			onboarded = append(onboarded, &reply)
+		default:
+			msg, _ := io.ReadAll(resp.Body)
+			logrus.Errorf("unexpected reply from API: %d - %s",
+				resp.StatusCode, msg)
+		}
 	}
 
-	if len(output) > 0 {
-		if err := json.NewEncoder(os.Stdout).Encode(output); err != nil {
-			logrus.WithError(err).Fatal("unable to write gateway onboard message!")
-		}
-		logrus.Infof("imported %d gateways, don't forget to onboard these with the above JSON message", len(output))
-	} else {
-		logrus.Infof("imported 0 gateways")
-	}
+	printOnboardsAsTable(onboarded)
 }
 
 func listGatewayStore(cmd *cobra.Command, args []string) {
 	var (
-		registry   *gateway_registry.GatewayRegistry
-		cfg        = mustLoadConfig()
-		store, err = gateway.NewGatewayStore(context.Background(), &cfg.Forwarder.Gateways.Store)
+		cfg      = mustLoadConfig()
+		gateways map[string][]*gateway.Gateway
 	)
+
+	if cfg.Forwarder.Gateways.HttpAPI == nil {
+		logrus.Fatal("HTTP API endpoint missing")
+	}
+
+	endpoint := fmt.Sprintf("http://%s/v1/gateways", cfg.Forwarder.Gateways.HttpAPI.Address)
+	resp, err := http.Get(endpoint)
 	if err != nil {
-		logrus.WithError(err).Fatal("unable to open gateway store")
+		logrus.WithError(err).Fatal("unable to retrieve gateways")
 	}
 
-	if rpcEndpoint != "" {
-		client, err := ethclient.Dial(rpcEndpoint)
-		if err != nil {
-			logrus.WithError(err).Error("unable to dial RPC node")
-		}
-		defer client.Close()
-		registry, err = gateway_registry.NewGatewayRegistry(common.HexToAddress(registryAddress), client)
-		if err != nil {
-			logrus.WithError(err).Error("unable to instantiate gateway registry bindings")
-		}
+	if err := json.NewDecoder(resp.Body).Decode(&gateways); err != nil {
+		logrus.WithError(err).Fatal("unable to decode gateways response")
 	}
 
-	var collector GatewayCollector
-	store.Range(&collector)
-	printGatewaysAsTable(collector.Gateways, registry)
+	all := append(gateways["onboarded"], gateways["pending"]...)
+	printGatewaysAsTable(all)
 }
 
 func addGatewayToStore(cmd *cobra.Command, args []string) {
 	var (
-		localID     = mustDecodeGatewayID(args[0])
-		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
-		cfg         = mustLoadConfig()
-		store, err  = gateway.NewGatewayStore(context.Background(), &cfg.Forwarder.Gateways.Store)
+		localID    = mustDecodeGatewayID(args[0])
+		cfg        = mustLoadConfig()
+		reqPayload = map[string]interface{}{
+			"localId": localID,
+		}
 	)
-	if err != nil {
-		logrus.WithError(err).Fatal("unable to open gateway store")
-	}
-	defer cancel()
 
-	if err != nil {
-		logrus.WithError(err).Fatal("unable to open gateway store")
+	if cfg.Forwarder.Gateways.HttpAPI == nil {
+		logrus.Fatal("HTTP API endpoint missing")
 	}
 
-	// generate new ThingsIX gateway key
-	newGateway, err := gateway.GenerateNewGateway(localID)
+	endpoint := fmt.Sprintf("http://%s/v1/gateways", cfg.Forwarder.Gateways.HttpAPI.Address)
+	payload, err := json.Marshal(reqPayload)
 	if err != nil {
-		logrus.WithError(err).Fatal("unable to generate gateway entry")
+		logrus.WithError(err).Fatal("unable to prepare request")
 	}
 
-	gw, err := store.Add(ctx, newGateway.LocalID, newGateway.PrivateKey)
+	resp, err := http.Post(endpoint, "application/json", bytes.NewReader(payload))
 	if err != nil {
-		logrus.WithError(err).Fatal("unable to add gateway to store")
+		logrus.WithError(err).Fatal("unable to add gateway")
 	}
 
-	printGatewaysAsTable([]*gateway.Gateway{gw}, nil)
+	switch resp.StatusCode {
+	case http.StatusOK, http.StatusCreated:
+		var gw gateway.Gateway
+		if err := json.NewDecoder(resp.Body).Decode(&gw); err != nil {
+			logrus.WithError(err).Fatal("unable to decode response")
+		}
+		printGatewaysAsTable([]*gateway.Gateway{&gw})
+	default:
+		msg, _ := io.ReadAll(resp.Body)
+		logrus.Errorf("unexpected reply from API: %d - %s",
+			resp.StatusCode, msg)
+	}
 }

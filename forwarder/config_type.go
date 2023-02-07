@@ -36,24 +36,30 @@ type ForwarderBackendConfig struct {
 	Concentratord *struct{}                         `mapstructure:"concentratord"`
 }
 
+type ForwarderHttpApiConfig struct {
+	Address string `mapstructure:"address"`
+}
+
 type ForwarderGatewayConfig struct {
+	// Onboarder configures the gateway onboarder smart contract plugin.
+	Onboarder struct {
+		// Address is the smart contract chain address
+		Address common.Address `mapstructure:"address"`
+	} `mapstructure:"onboarder"`
+
 	// Store describes how gateways are stored/loaded in the forwarder.
 	Store gateway.StoreConfig
 	// RecordUnknown records gateways that connect to the forwarder but
 	// are not in the forwarders gateway store. Recorded gateways can
 	// be imported later if required.
 	RecordUnknown *gateway.ForwarderGatewayRecordUnknownConfig `mapstructure:"record_unknown"`
-	// RegistryAddress holds the address where the gateway registry is
-	// deployed on chain. It is used to retrieve gateway details to
-	// determine which gateways in the store are onboarded on ThingsIX
-	// and have their details. Once token support is integrated to ThingsIX
-	// only data for these gateways will be forwarded.
-	RegistryAddress *common.Address `mapstructure:"gateway_registry"`
 
-	// Refresh indicates the interval in which the gateway registry is
-	// used to check if gateways from the forwarders store are onboarded
-	// have their gateways set.
-	Refresh *time.Duration
+	// Registry describes how gateway data is retrieved from the ThingsIX
+	// gateway registry.
+	Registry gateway.RegistrySyncConfig `mapstructure:"registry"`
+
+	// HttpAPI configures the private Forwarder HTTP API
+	HttpAPI *ForwarderHttpApiConfig `mapstructure:"api"`
 }
 
 type ForwarderRoutersOnChainConfig struct {

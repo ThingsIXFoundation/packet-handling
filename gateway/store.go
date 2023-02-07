@@ -41,6 +41,9 @@ func (fn GatewayRangerFunc) Do(gw *Gateway) bool {
 }
 
 type GatewayStore interface {
+	// Run the background tasks in the store until the given ctx expires.
+	Run(ctx context.Context)
+
 	// Count returns the number of gateways in the store.
 	Count() int
 
@@ -79,15 +82,24 @@ type GatewayStore interface {
 	// Add creates a net gateway record based on the given localID and key and
 	// adds it to the store.
 	Add(ctx context.Context, localID lorawan.EUI64, key *ecdsa.PrivateKey) (*Gateway, error)
+
+	// SyncGatewayByLocalID syncs the gateway identified by the given local id
+	// and returns it after sync.
+	SyncGatewayByLocalID(ctx context.Context, localID lorawan.EUI64, force bool) (*Gateway, error)
 }
 
 // NewGatewayStore returns a gateway store that was configured in the given cfg.
-func NewGatewayStore(ctx context.Context, cfg *StoreConfig) (GatewayStore, error) {
-	switch cfg.Type() {
+func NewGatewayStore(ctx context.Context, storeCfg *StoreConfig, registryCfg *RegistrySyncConfig) (GatewayStore, error) {
+	registery, err := NewThingsIXGatewayRegistry(registryCfg)
+	if err != nil {
+		return nil, err
+	}
+
+	switch storeCfg.Type() {
 	case YamlFileGatewayStore:
-		return NewYamlFileStore(ctx, *cfg.YamlStorePath, cfg.RefreshInterval)
+		return NewYamlFileStore(ctx, *storeCfg.YamlStorePath, registery)
 	case PostgresqlGatewayStore:
-		return NewPostgresStore(ctx, cfg.RefreshInterval)
+		return NewPostgresStore(ctx, storeCfg.RefreshInterval, registery)
 	case NoGatewayStoreType:
 		// no gateway store configured, fallback to default yaml gateway store
 		// in $HOME/gateway-store.yaml
@@ -96,7 +108,7 @@ func NewGatewayStore(ctx context.Context, cfg *StoreConfig) (GatewayStore, error
 			logrus.Fatal("no gateway store configured")
 		}
 		storePath := filepath.Join(home, "gateway-store.yaml")
-		return NewYamlFileStore(ctx, storePath, cfg.RefreshInterval)
+		return NewYamlFileStore(ctx, storePath, registery)
 	}
 
 	return nil, ErrInvalidConfig
@@ -141,7 +153,19 @@ func NewGateway(LocalID lorawan.EUI64, priv *ecdsa.PrivateKey) (*Gateway, error)
 		PublicKey:      &priv.PublicKey,
 		ThingsIxID:     utils.DeriveThingsIxID(&priv.PublicKey),
 		PublicKeyBytes: utils.CalculatePublicKeyBytes(&priv.PublicKey),
-		Owner:          common.Address{}, // TODO: set once gateway onboard are required
+	}, nil
+}
+
+func NewOnboardedGateway(LocalID lorawan.EUI64, priv *ecdsa.PrivateKey, owner common.Address, version uint8) (*Gateway, error) {
+	return &Gateway{
+		LocalID:        LocalID,
+		NetworkID:      GatewayNetworkIDFromPrivateKey(priv),
+		PrivateKey:     priv,
+		PublicKey:      &priv.PublicKey,
+		ThingsIxID:     utils.DeriveThingsIxID(&priv.PublicKey),
+		PublicKeyBytes: utils.CalculatePublicKeyBytes(&priv.PublicKey),
+		Owner:          &owner,
+		Version:        &version,
 	}, nil
 }
 

@@ -25,11 +25,8 @@ import (
 	"math/big"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
-	gateway_registry "github.com/ThingsIXFoundation/gateway-registry-go"
-	h3light "github.com/ThingsIXFoundation/h3-light"
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	router_registry "github.com/ThingsIXFoundation/router-registry-go"
 	"github.com/brocaar/lorawan"
@@ -180,7 +177,6 @@ func fetchRoutersFromThingsIXAPI(cfg *Config, accounter Accounter) (RoutesUpdate
 		if err != nil {
 			return nil, err
 		}
-		defer resp.Body.Close()
 
 		snapshot := struct {
 			BlockNumber uint64
@@ -196,8 +192,11 @@ func fetchRoutersFromThingsIXAPI(cfg *Config, accounter Accounter) (RoutesUpdate
 		}{}
 
 		if err := json.NewDecoder(resp.Body).Decode(&snapshot); err != nil {
+			_ = resp.Body.Close()
 			return nil, err
 		}
+		_ = resp.Body.Close()
+
 		if snapshot.ChainID != cfg.BlockChain.Polygon.ChainID {
 			return nil, fmt.Errorf("router snapshot from wrong chain, got %d, want %d", snapshot.ChainID, cfg.BlockChain.Polygon.ChainID)
 		}
@@ -268,22 +267,6 @@ func mustDecodeGatewayID(input string) lorawan.EUI64 {
 	return id
 }
 
-func mustDecodeThingsIXID(input string) [32]byte {
-	if strings.HasPrefix(input, "0x") || strings.HasPrefix(input, "0X") {
-		input = input[2:]
-	}
-	thingsIXID, err := hex.DecodeString(input)
-	if err != nil {
-		logrus.WithError(err).Fatal("invalid gateway ThingsIX id")
-	}
-	if len(thingsIXID) != 32 {
-		logrus.Fatal("invalid ThingsIX id")
-	}
-	var ret [32]byte
-	copy(ret[:], thingsIXID)
-	return ret
-}
-
 type GatewayCollector struct {
 	Gateways []*gateway.Gateway
 }
@@ -293,36 +276,64 @@ func (c *GatewayCollector) Do(gw *gateway.Gateway) bool {
 	return true
 }
 
-func printGatewaysAsTable(gateways []*gateway.Gateway, registry *gateway_registry.GatewayRegistry) {
+func printOnboardsAsTable(onboards []*OnboardGatewayReply) {
 	var (
 		table  = tablewriter.NewWriter(os.Stdout)
-		header = []string{"", "thingsix_id", "local_id", "network_id"}
+		header = []string{"", "gateway_id", "local_id",
+			"owner", "version", "gateway_onboard_signature"}
 	)
-	if registry != nil {
-		header = append(header, "owner", "antenna_gain", "location", "altitude")
+
+	table.SetHeader(header)
+
+	for i, onb := range onboards {
+		table.Append([]string{
+			fmt.Sprintf("%d", i+1),
+			onb.GatewayID.String(),
+			onb.LocalID.String(),
+			onb.Owner.String(),
+			fmt.Sprintf("%d", onb.Version),
+			onb.GatewayOnboardSignature,
+		})
 	}
+
+	table.Render()
+}
+
+func printGatewaysAsTable(gateways []*gateway.Gateway) {
+	var (
+		table  = tablewriter.NewWriter(os.Stdout)
+		header = []string{"", "thingsix_id", "local_id", "network_id", "owner", "version", "antenna_gain", "location", "altitude"}
+	)
+
 	table.SetHeader(header)
 
 	for i, gw := range gateways {
+		var (
+			owner       = ""
+			version     = ""
+			antennaGain = ""
+			location    = ""
+			altitude    = ""
+		)
+		if gw.Owner != nil {
+			owner = gw.Owner.String()
+			version = fmt.Sprintf("%d", *gw.Version)
+		}
+		if gw.Details != nil {
+			antennaGain = *gw.Details.AntennaGain
+			location = *gw.Details.Location
+			altitude = fmt.Sprintf("%d", *gw.Details.Altitude)
+		}
 		row := []string{
 			fmt.Sprintf("%d", i+1),
 			hex.EncodeToString(gw.ThingsIxID[:]),
 			gw.LocalID.String(),
 			gw.NetworkID.String(),
-		}
-
-		if registry != nil {
-			if gateway, err := registry.Gateways(nil, gw.ThingsIxID); err == nil {
-				if gateway.Owner != (common.Address{}) {
-					row = append(row, gateway.Owner.Hex()) // guaranteed to be set
-					if gateway.AntennaGain != 0 {
-						location := h3light.Cell(gateway.Location)
-						row = append(row, fmt.Sprintf("%.1f", float32(gateway.AntennaGain)/10.0))
-						row = append(row, location.String())
-						row = append(row, fmt.Sprintf("%d", uint64(gateway.Altitude)*3))
-					}
-				}
-			}
+			owner,
+			version,
+			antennaGain,
+			location,
+			altitude,
 		}
 		table.Append(row)
 	}

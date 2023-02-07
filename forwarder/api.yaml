@@ -1,0 +1,329 @@
+openapi: 3.0.3
+
+info:
+  title: ThingsIX forwarder API
+  version: "0.1"
+  description: Private ThingsIX forwarder API
+
+servers:
+  - url: http://localhost:8080
+    description: local ThingsIX forwarder
+
+components:
+  schemas:
+    NetworkID:
+      type: string
+      description: gateway id as used between forwarder and routers
+      example: "cd3b14a603d6cac3"
+
+    LocalID:
+      type: string
+      description: gateway id as used between gateway and forwarder
+      example: "0016c001f1500812"
+
+    GatewayID:
+      description: |
+        derived from the gateway key and the identity used in the ThingsIX gateway registry.
+        Prefix it with 0x02 to get the compressed ecdsa public key to verify signatures created by the gateway.
+      type: string
+      example: "0x822f1da9d3889ee8c5fcb3cc935a230e00d427ec369db8b57fa8e3f64dd92dc2"
+
+    PendingGateway:
+      type: object
+      properties:
+        localId:
+          $ref: "#/components/schemas/LocalID"
+        networkId:
+          $ref: "#/components/schemas/NetworkID"
+        gatewayId:
+          $ref: "#/components/schemas/GatewayID"
+      required:
+        - localId
+        - networkId
+        - gatewayId
+
+    OnboardedGateway:
+      type: object
+      description: Gateway that have been onboarded in ThingsIX
+      properties:
+        localId:
+          $ref: "#/components/schemas/LocalID"
+        networkId:
+          $ref: "#/components/schemas/NetworkID"
+        gatewayId:
+          $ref: "#/components/schemas/GatewayID"
+        owner:
+            description: |
+              owner wallet address, available after the gateway was onboarded
+              and the forwarder synced with the ThingsIX registry
+            type: string
+            example: "0xdb3082bcd200e598367ee6aa89706e82a39aa64b"
+        version:
+              description: |
+                version as given when adding the gateway in the store, ThingsIX
+                doesn't use this value. Only available when gateway was
+                onboarded and the forwarder synced with the ThingsIX registry.
+              type: integer
+              example: 1
+              minimum: 0
+              maximum: 255
+        details:
+          description: details set by the gateway owner
+          type: object
+          properties:
+            antennaGain:
+              description: antenna gain (dBi)
+              type: string
+              example: "3.6"
+            band:
+              description: frequency plan
+              type: string
+              example: EU868
+            location:
+              description: h3 cell index (resolution 10)
+              type: string
+              example: "8a1969ce2197fff"
+            altitude:
+              description: altitude (meters) of the gateway above the earth's surface
+              type: integer
+              example: 15
+          required:
+            - antennaGain
+            - band
+            - location
+            - altitude
+      required:
+        - localId
+        - networkId
+        - gatewayId
+        - owner
+        - version
+
+    Gateway:
+      type: object
+      description: Gateway in forwarders store
+      properties:
+          localId:
+              $ref: "#/components/schemas/LocalID"
+          networkId:
+              $ref: "#/components/schemas/NetworkID"
+          gatewayId:
+              $ref: "#/components/schemas/GatewayID"
+          owner:
+            description: |
+              owner wallet address, available after the gateway was onboarded
+              and the forwarder synced with the ThingsIX registry
+              type: string
+              example: "0xdb3082bcd200e598367ee6aa89706e82a39aa64b"
+          version:
+              description: |
+                version as given when adding the gateway in the store, ThingsIX
+                doesn't use this value. Only available when gateway was
+                onboarded and the forwarder synced with the ThingsIX registry.
+              type: integer
+              example: 1
+              minimum: 0
+              maximum: 255
+          details:
+              description: details set by the gateway owner after onboarding.
+              type: object
+              properties:
+                  antennaGain:
+                    description: antenna gain (dBi)
+                    type: string
+                    example: "3.6"
+                  band:
+                      description: frequency plan
+                      type: string
+                      example: EU868
+                  location:
+                      description: h3 cell index (resolution 10)
+                      type: string
+                      example: "8a1969ce2197fff"
+                  altitude:
+                      description: altitude (meters) of the gateway above the earth's surface
+                      type: integer
+                      example: 15
+              required:
+                  - antennaGain
+                  - band
+                  - location
+                  - altitude
+      required:
+        - localId
+        - networkId
+        - gatewayId
+
+    RecordedUnknownGateway:
+      type: object
+      properties:
+        localId:
+          $ref: "#/components/schemas/LocalID"
+        firstSeen:
+          description: unix timestamp when the gateway was recorded (missing for legacy recorded gateways)
+          type: integer
+          format: unix timestamp
+          example: 1675250761
+      required:
+        - localId
+
+    OnboardGatewayReq:
+      type: object
+      properties:
+        localId:
+          $ref: "#/components/schemas/LocalID"
+        owner:
+          description: owner wallet address
+          type: string
+          example: "0xdb3082bcd200e598367ee6aa89706e82a39aa64b"
+        version:
+          description: user defined value, ThingsIX doesn't use this value
+          type: integer
+          minimum: 0
+          maximum: 255
+          example: 1
+      required:
+        - localId
+        - owner
+        - version
+
+    GatewayOnboardMessage:
+      type: object
+      properties:
+        gatewayId:
+          $ref: "#/components/schemas/GatewayID"
+        owner:
+          description: owner wallet address
+          type: string
+          example: "0xdb3082bcd200e598367ee6aa89706e82a39aa64b"
+        version:
+          description: user defined value, ThingsIX doesn't use this value
+          type: integer
+          minimum: 0
+          maximum: 255
+          example: 1
+        chainId:
+          description: blockchain number
+          type: integer
+          minimum: 1
+          example: 137
+        localId:
+          description: gateway id as used between gateway and forwarder
+          $ref: "#/components/schemas/LocalID"
+        networkId:
+          description: gateway id that the forwarder will use when exchanging packets upstream
+          $ref: "#/components/schemas/NetworkID"
+        address:
+          description: gateway EVM address derived from its key
+          type: string
+          example: "0xb9362d934f73da7f06e18ba5e15ba0025ec29516"
+        onboarder:
+          description: ThingsIX gateway onboarder smart contract address
+          type: string
+          example: "0x904be50eb82e97c42afe49e088d44ce727f6a921"
+        gatewayOnboardSignature:
+          type: string
+          example: "0x601398899eb2038246bb75f171eb5141c90d682e2cce55d91fac4ab6fc4da15f7d179c746d62f2e5a20ce578449edd5706e4c1339c2e07f3ebafd5456346fbd21b"
+      required:
+        - gatewayId
+        - version
+        - localId
+        - networkId
+        - address
+        - chainId
+        - gatewayOnboardSignature
+
+paths:
+  /v1/gateways:
+    get:
+      summary: gateways in the store
+      responses:
+        200:
+          description: gateways in store
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pending:
+                    description: Gateways in store that are not (yet) onboarded
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PendingGateway"
+                  onboarded:
+                    description: Gateways in store that have been onboarded
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/OnboardedGateway"
+  
+  /v1/gateways/onboard:
+    post:
+      summary: generate onboarding message
+      description: |
+        Generate onboard message. If the gateway isn't yet in the store it will
+        be added. The response contains all information required to onboard the 
+        gateway in ThingsIX. It is safe to call this for a gateway multiple
+        times.
+      requestBody:
+        description: gateway onboard details
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OnboardGatewayReq"
+      responses:
+        200:
+          description: gateway was already in gateway, onboard message generated with existing gateway key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GatewayOnboardMessage"
+        201:
+          description: gateway added to store with new generated gateway key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GatewayOnboardMessage"
+        400:
+          description: invalid request
+        500:
+          description: internal unspecified error
+
+  /v1/gateways/unknown:
+    get:
+      summary: gateways that have connected and have been recorded but have not been imported in the store
+      responses:
+        200:
+          description: seen gateways that are not in the store
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RecordedUnknownGateway"
+        500:
+          description: internal unspecified error
+        503:
+          description: forwarder not configured to record unknown gateways that connect
+
+  /v1/gateways/{local_id}/sync:
+    get:
+      summary: order the forwarder to sync gateway info with the ThingsIX gateway registry
+      parameters:
+        - in: path
+          name: local_id
+          schema:
+            $ref: "#/components/schemas/LocalID"
+          required: true
+          description: gateways local id
+      responses:
+        200:
+          description: forwarder will sync with the ThingsIX gateway registry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Gateway"
+        500:
+          description: internal unspecified error
+        502:
+          description: unable to retrieve gateway data from the ThingsIX registry

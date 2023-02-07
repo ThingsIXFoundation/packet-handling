@@ -28,7 +28,6 @@ import (
 
 	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/brocaar/lorawan"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
@@ -36,9 +35,6 @@ import (
 
 // yamlFileStore is gateway store that uses a yaml file on disk for persistency.
 type yamlFileStore struct {
-	// refreshInterval indicates how often the store must be loaded from disk
-	// if nil the store won't do hot reloads.
-	refreshInterval *time.Duration
 	// path contains the full path to where the yaml gateway store is on disk
 	path string
 	// guards byLocalId and byNetId
@@ -49,40 +45,48 @@ type yamlFileStore struct {
 	byNetId map[lorawan.EUI64]*Gateway
 	// collectio of gateways indexed by their ThingsIX ID
 	byThingsIxID map[ThingsIxID]*Gateway
-	// filters gateways retrieved from the backend before adding them to this
-	// store. Can be used to filter out not onboarded gateways
-	filterer GatewayFiltererFunc
+	// thingsix gateway registry
+	registry ThingsIXRegistry
 }
 
-func NewYamlFileStore(ctx context.Context, path string, refreshInterval *time.Duration) (*yamlFileStore, error) {
-	return NewYamlFileStoreWithFilterer(ctx, path, refreshInterval, NoGatewayFilterer)
-}
-
-func NewYamlFileStoreWithFilterer(ctx context.Context, path string, refreshInterval *time.Duration, filterer GatewayFiltererFunc) (*yamlFileStore, error) {
+func NewYamlFileStore(ctx context.Context, path string, registry ThingsIXRegistry) (*yamlFileStore, error) {
 	if path == "" {
 		return nil, fmt.Errorf("invalid gateway store file")
 	}
 
-	logrus.WithFields(logrus.Fields{
-		"file": path,
-	}).Info("use file based gateway store")
+	logrus.WithField("file", path).Info("use file based gateway store")
 
 	store := &yamlFileStore{
-		refreshInterval: refreshInterval,
-		path:            path,
-		byLocalId:       make(map[lorawan.EUI64]*Gateway),
-		byNetId:         make(map[lorawan.EUI64]*Gateway),
-		byThingsIxID:    make(map[ThingsIxID]*Gateway),
-		filterer:        filterer,
+		path:         path,
+		byLocalId:    make(map[lorawan.EUI64]*Gateway),
+		byNetId:      make(map[lorawan.EUI64]*Gateway),
+		byThingsIxID: make(map[ThingsIxID]*Gateway),
+		registry:     registry,
 	}
 
 	if err := store.loadFromFile(); err != nil {
 		logrus.WithError(err).Fatal("unable to load gateways from disk")
 	}
 
-	go store.run(ctx)
-
 	return store, nil
+}
+
+// run a loop in the background that periodically refreshes the in-memory
+// gateway store with the gateway store file on disk and executes commando's
+// that mutate the store. This ensures that mutations are synchronized.
+func (store *yamlFileStore) Run(ctx context.Context) {
+	// sync immediatly with registry
+	_ = store.syncAllGatewaysWithRegistry(ctx)
+
+	for {
+		select {
+		case <-time.NewTimer(30 * time.Minute).C:
+			_ = store.syncAllGatewaysWithRegistry(ctx)
+		case <-ctx.Done(): // forwarder issues to stop
+			logrus.Info("stop gateway store")
+			return
+		}
+	}
 }
 
 func (store *yamlFileStore) Count() int {
@@ -156,13 +160,35 @@ func (store *yamlFileStore) ByThingsIxID(id ThingsIxID) (*Gateway, error) {
 	return nil, ErrNotFound
 }
 
-// Add gateway to the gateway store file on disk.
-func (store *yamlFileStore) Add(ctx context.Context, localID lorawan.EUI64, key *ecdsa.PrivateKey) (*Gateway, error) {
-	// ensure that gateway doesn't already exists in store
-	if store.ContainsByLocalID(localID) {
-		return nil, ErrAlreadyExists
+func (store *yamlFileStore) SyncGatewayByLocalID(ctx context.Context, localID lorawan.EUI64, force bool) (*Gateway, error) {
+	gw, err := store.ByLocalID(localID)
+	if err != nil {
+		return nil, err
 	}
 
+	owner, version, details, err := store.registry.GatewayDetails(ctx, gw.ThingsIxID, force)
+	if err != nil {
+		logrus.WithError(err).Debug("unable to sync gateway with gateway registry")
+		return gw, nil
+	}
+
+	synced, err := NewOnboardedGateway(gw.LocalID, gw.PrivateKey, owner, version)
+	if err == nil {
+		synced.Details = details
+	} else {
+		synced = gw
+	}
+
+	store.gwMapMu.Lock()
+	store.byLocalId[synced.LocalID] = synced
+	store.byNetId[synced.NetworkID] = synced
+	store.byThingsIxID[synced.ThingsIxID] = synced
+	store.gwMapMu.Unlock()
+
+	return synced, nil
+}
+
+func (store *yamlFileStore) Add(ctx context.Context, localID lorawan.EUI64, key *ecdsa.PrivateKey) (*Gateway, error) {
 	// generate gateway instance
 	gw, err := NewGateway(localID, key)
 	if err != nil {
@@ -178,25 +204,54 @@ func (store *yamlFileStore) Add(ctx context.Context, localID lorawan.EUI64, key 
 		return nil, fmt.Errorf("unable to encode gateway: %w", err)
 	}
 
+	store.gwMapMu.Lock()
+	defer store.gwMapMu.Unlock()
+
+	if _, ok := store.byLocalId[gw.LocalID]; ok {
+		return nil, ErrAlreadyExists
+	}
+
 	// append gateway to store
 	f, err := os.OpenFile(store.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
 
 	if _, err := f.Write(encoded); err != nil {
+		_ = f.Close()
 		return nil, err
 	}
 
-	// add new gateway to in memory cache
-	store.gwMapMu.Lock()
+	_ = f.Sync()
+	_ = f.Close()
+
+	// add new gateway to memory cache
 	store.byLocalId[gw.LocalID] = gw
 	store.byNetId[gw.NetworkID] = gw
 	store.byThingsIxID[gw.ThingsIxID] = gw
-	store.gwMapMu.Unlock()
 
 	return gw, nil
+}
+
+func (store *yamlFileStore) syncAllGatewaysWithRegistry(ctx context.Context) error {
+	var collector Collector
+	store.Range(&collector)
+
+	var gateways = collector.Gateways
+
+	lctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+
+	// fetch latest gateway details for gateway
+	for _, gw := range gateways {
+		if _, err := store.SyncGatewayByLocalID(lctx, gw.LocalID, false); err != nil {
+			logrus.WithError(err).
+				WithField("gw_local_id", gw.LocalID).
+				Warn("unable to sync gateway")
+		}
+	}
+
+	return nil
 }
 
 // loadFromFile loads the gateway store from disk into this in-memory store.
@@ -209,7 +264,7 @@ func (store *yamlFileStore) loadFromFile() error {
 			if err != nil {
 				return ErrStoreNotExists
 			}
-			f.Close()
+			_ = f.Close()
 			printGatewayStoreChanges(nil, nil)
 			return nil
 		}
@@ -234,16 +289,9 @@ func (store *yamlFileStore) loadFromFile() error {
 			return fmt.Errorf("unable to load gateway (localID=%s) from database", ygw.LocalID)
 		}
 
-		if store.filterer(gw) {
-			byLocalId[gw.LocalID] = gw
-			byNetId[gw.NetworkID] = gw
-			byThingsIxID[gw.ThingsIxID] = gw
-		} else {
-			logrus.WithFields(logrus.Fields{
-				"localID":   gw.LocalID,
-				"networkID": gw.NetworkID,
-			}).Trace("gateway didn't pass filter")
-		}
+		byLocalId[gw.LocalID] = gw
+		byNetId[gw.NetworkID] = gw
+		byThingsIxID[gw.ThingsIxID] = gw
 	}
 
 	oldByLocalId := store.byLocalId
@@ -257,28 +305,6 @@ func (store *yamlFileStore) loadFromFile() error {
 	printGatewayStoreChanges(oldByLocalId, byLocalId)
 
 	return nil
-}
-
-// run a loop in the background that periodically refreshes the in-memory
-// gateway store with the gateway store file on disk.
-func (store *yamlFileStore) run(ctx context.Context) {
-	if store.refreshInterval == nil || *store.refreshInterval == 0 {
-		logrus.Info("don't refresh gateway store from disk periodically")
-		return
-	}
-
-	// fetch periodically gateways from file until the given ctx expired
-	logrus.Infof("refresh gateway store from disk every %s", store.refreshInterval)
-	for {
-		select {
-		case <-time.NewTimer(*store.refreshInterval).C:
-			if err := store.loadFromFile(); err != nil {
-				logrus.WithError(err).Error("unable to load gateways from disk")
-			}
-		case <-ctx.Done():
-			return
-		}
-	}
 }
 
 // gatewayYAML is a helper type to serialize gateway store entires.
@@ -308,6 +334,5 @@ func (gw gatewayYAML) asGateway() (*Gateway, error) {
 		PrivateKey: key,
 		PublicKey:  &key.PublicKey,
 		ThingsIxID: utils.DeriveThingsIxID(&key.PublicKey),
-		Owner:      common.Address{}, // TODO: set once gateway onboard are required
 	}, nil
 }
