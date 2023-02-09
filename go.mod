@@ -7,6 +7,7 @@ require (
 	github.com/GoogleCloudPlatform/cloudsql-proxy v1.33.1
 	github.com/ThingsIXFoundation/bitoffset v1.0.0
 	github.com/ThingsIXFoundation/coverage-api v1.0.1
+	github.com/ThingsIXFoundation/frequency-plan v1.2.0
 	github.com/ThingsIXFoundation/gateway-registry-go v1.0.0
 	github.com/ThingsIXFoundation/router-api v1.2.0
 	github.com/brocaar/lorawan v0.0.0-20220715134808-3b283dda1534
@@ -15,6 +16,8 @@ require (
 	github.com/dlmiddlecote/sqlstats v1.0.2
 	github.com/eclipse/paho.mqtt.golang v1.4.1
 	github.com/ethereum/go-ethereum v1.10.26
+	github.com/go-chi/chi/v5 v5.0.8
+	github.com/go-chi/cors v1.2.1
 	github.com/go-zeromq/zmq4 v0.7.0
 	github.com/gofrs/uuid v4.3.0+incompatible
 	github.com/golang-jwt/jwt/v4 v4.4.2
@@ -31,7 +34,6 @@ require (
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/viper v1.13.0
 	github.com/stretchr/testify v1.8.1
-	github.com/zyedidia/generic v1.2.0
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616
 	google.golang.org/grpc v1.50.1
 	gorm.io/driver/postgres v1.4.5
@@ -41,6 +43,7 @@ require (
 require (
 	cloud.google.com/go/compute v1.12.1 // indirect
 	cloud.google.com/go/compute/metadata v0.2.1 // indirect
+	github.com/biter777/countries v1.5.6 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.2.0 // indirect
@@ -69,7 +72,6 @@ require (
 require (
 	github.com/ThingsIXFoundation/router-registry-go v1.1.0
 	github.com/rivo/uniseg v0.4.2 // indirect
-	golang.org/x/exp v0.0.0-20221028150844-83b7d23a625f // indirect
 )
 
 require (
@@ -77,7 +79,7 @@ require (
 	github.com/ThingsIXFoundation/h3-light v0.0.0-20221122151216-69018e780344
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d // indirect
-	github.com/apex/log v1.1.0 // indirect
+	github.com/apex/log v1.1.0
 	github.com/aws/aws-sdk-go v1.27.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blakesmith/ar v0.0.0-20150311145944-8bd4349a67f2 // indirect

@@ -22,9 +22,12 @@ import (
 )
 
 var (
-	ErrStoreNotExists   = fmt.Errorf("gateway store doesn't exists")
-	ErrNotFound         = fmt.Errorf("not found")
-	ErrAlreadyExists    = fmt.Errorf("already exists")
-	ErrInvalidConfig    = errors.New("invalid gateway store config")
-	ErrInvalidGatewayID = errors.New("invalid gateway id")
+	ErrStoreNotExists               = fmt.Errorf("gateway store doesn't exists")
+	ErrNotFound                     = fmt.Errorf("not found")
+	ErrServiceNotAvailable          = fmt.Errorf("service not available")
+	ErrAlreadyExists                = fmt.Errorf("already exists")
+	ErrInvalidConfig                = errors.New("invalid gateway store config")
+	ErrInvalidGatewayID             = errors.New("invalid gateway id")
+	ErrGatewayRegistryConfigMissing = errors.New("gateway ThingsIX registry config missing")
+	ErrTooManySyncRequests          = errors.New("too fast gateway sync request")
 )

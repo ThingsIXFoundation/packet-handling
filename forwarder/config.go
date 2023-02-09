@@ -22,6 +22,7 @@ import (
 	"github.com/ThingsIXFoundation/packet-handling/database"
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	"github.com/ThingsIXFoundation/packet-handling/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/mitchellh/mapstructure"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -59,7 +60,7 @@ func getNetConfig(net string) *Config {
 	cfg.Forwarder.Backend.SemtechUDP.FakeRxTime = utils.Ptr(false)
 	cfg.Forwarder.Gateways = ForwarderGatewayConfig{}
 	cfg.Forwarder.Gateways.Store = gateway.StoreConfig{}
-	cfg.Forwarder.Gateways.Store.RefreshInterval = utils.Ptr(time.Minute)
+	cfg.Forwarder.Gateways.Store.RefreshInterval = utils.Ptr(30 * time.Minute)
 	cfg.Forwarder.Gateways.Store.YamlStorePath = utils.Ptr("/etc/thingsix-forwarder/gateways.yaml")
 	cfg.Forwarder.Gateways.RecordUnknown = &gateway.ForwarderGatewayRecordUnknownConfig{}
 	cfg.Forwarder.Gateways.RecordUnknown.File = "/etc/thingsix-forwarder/unknown_gateways.yaml"
@@ -78,18 +79,24 @@ func getNetConfig(net string) *Config {
 	cfg.Metrics.Prometheus.Path = "/metrics"
 
 	if net == "main" {
+		cfg.Forwarder.Gateways.Onboarder.Address = common.Address{} // TODO, once available
+		cfg.Forwarder.Gateways.Registry.ThingsIxApi.Endpoint = "https://api.thingsix.com/gateways/v1/{id}"
 		cfg.Forwarder.Routers.ThingsIXApi.Endpoint = utils.Ptr("https://api.thingsix.com/routers/v1/snapshot")
 		cfg.BlockChain.Polygon.Endpoint = "https://polygon-rpc.com"
 		cfg.BlockChain.Polygon.ChainID = 137
 		return &cfg
 	}
 	if net == "test" {
+		cfg.Forwarder.Gateways.Onboarder.Address = common.Address{} // TODO, once available
+		cfg.Forwarder.Gateways.Registry.ThingsIxApi.Endpoint = "https://api-testnet.thingsix.com/gateways/v1/{id}"
 		cfg.Forwarder.Routers.ThingsIXApi.Endpoint = utils.Ptr("https://api-testnet.thingsix.com/routers/v1/snapshot")
 		cfg.BlockChain.Polygon.Endpoint = "https://rpc.ankr.com/polygon_mumbai"
 		cfg.BlockChain.Polygon.ChainID = 80001
 		return &cfg
 	}
 	if net == "dev" {
+		cfg.Forwarder.Gateways.Onboarder.Address = common.HexToAddress("0xEA24d0483269F35B0fD54943026c79E41451f54C")
+		cfg.Forwarder.Gateways.Registry.ThingsIxApi.Endpoint = "https://api-devnet.thingsix.com/gateways/v1/{id}"
 		cfg.Forwarder.Routers.ThingsIXApi.Endpoint = utils.Ptr("https://api-devnet.thingsix.com/routers/v1/snapshot")
 		cfg.BlockChain.Polygon.Endpoint = "https://rpc.ankr.com/polygon_mumbai"
 		cfg.BlockChain.Polygon.ChainID = 80001
@@ -163,6 +170,13 @@ func mustLoadConfig() *Config {
 	// loaded from ThingsIX
 	for _, r := range cfg.Forwarder.Routers.Default {
 		r.Default = true
+	}
+
+	// work-around to prevent circular dependencies
+	if cfg.BlockChain.Polygon != nil && cfg.Forwarder.Gateways.Registry.OnChain != nil {
+		cfg.Forwarder.Gateways.Registry.OnChain.Endpoint = cfg.BlockChain.Polygon.Endpoint
+		cfg.Forwarder.Gateways.Registry.OnChain.Confirmation = cfg.BlockChain.Polygon.Confirmations
+		cfg.Forwarder.Gateways.Registry.OnChain.ChainID = cfg.BlockChain.Polygon.ChainID
 	}
 
 	return cfg

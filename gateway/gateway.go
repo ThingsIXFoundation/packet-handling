@@ -18,6 +18,7 @@ package gateway
 
 import (
 	"crypto/ecdsa"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/ThingsIXFoundation/packet-handling/utils"
@@ -30,36 +31,92 @@ import (
 type ThingsIxID [32]byte
 
 func (id ThingsIxID) String() string {
-	return fmt.Sprintf("%x", id[:])
+	return fmt.Sprintf("0x%x", id[:])
+}
+
+func (tid ThingsIxID) MarshalText() ([]byte, error) {
+	return []byte(tid.String()), nil
+}
+
+func (tid *ThingsIxID) UnmarshalText(raw []byte) error {
+	input := string(raw)
+	if len(input) < 2 {
+		return fmt.Errorf("invalid gateway id")
+	}
+	if input[0] == '0' && (input[1] == 'x' || input[1] == 'X') {
+		input = input[2:]
+	}
+	id, err := hex.DecodeString(input)
+	if err != nil {
+		return fmt.Errorf("invalid gateway id")
+	}
+	if len(id) != len(*tid) {
+		return fmt.Errorf("invalid gateway id")
+	}
+	var r [32]byte
+	copy(r[:], id)
+
+	*tid = r
+
+	return nil
+}
+
+// Details are available after the owner set gateway details
+type GatewayDetails struct {
+	AntennaGain *string `json:"antennaGain,omitempty"`
+	Band        *string `json:"band,omitempty"`
+	Location    *string `json:"location,omitempty"`
+	Altitude    *uint16 `json:"altitude,omitempty"`
 }
 
 // Gateway represents a ThingsIX gateway
 type Gateway struct {
 	// LocalID is the gateway ID as used in the communication between gateway
 	// and ThingsIX forwarder and is usually derived from the gateways hardware.
-	LocalID lorawan.EUI64
+	LocalID lorawan.EUI64 `json:"localId"`
 	// NetId is the gateway id as used in the communication between the
 	// forwarder and the ThingsIX network.
-	NetworkID lorawan.EUI64
+	NetworkID lorawan.EUI64 `json:"networkId"`
 	// PrivateKey is the gateways private key
-	PrivateKey *ecdsa.PrivateKey
+	PrivateKey *ecdsa.PrivateKey `json:"-"`
 	// PublicKey is the gateways public key from which the ThingsIX is derived.
-	PublicKey *ecdsa.PublicKey
+	PublicKey *ecdsa.PublicKey `json:"-"`
 	// PublicKeyBytes
-	PublicKeyBytes []byte
+	PublicKeyBytes []byte `json:"-"`
 	// ThingsIxID is the gateway id as used when onboarding the gateway in
 	// ThingsIX. It is the gateways public key without the `0x02` prefix.
-	ThingsIxID ThingsIxID
+	ThingsIxID ThingsIxID `json:"gatewayId"`
 	// Owner is the gateways owner if the gateway is onboarded in ThingsIX. If
-	// nil it means the gateway is in the store but it is not onboarded in
-	// ThingsIX (yet).
-	Owner common.Address
+	// nil the gateway is in the store but it is not onboarded in the ThingsIX
+	// gateway registry.
+	Owner *common.Address `json:"owner,omitempty"`
+	// Version can be freely set when importing the gateway in the store. If nil
+	// it means the gateway is in the store but it is not onboarded in the
+	// ThingsIX gateway registry. ThingsIX doesn't use this value.
+	Version *uint8 `json:"version,omitempty"`
+	// Details set by the gateway owner. Can be empty when the details are not
+	// set or the details are not yet retrieved.
+	Details *GatewayDetails `json:"details,omitempty"`
 }
 
 // ID is the identifier as which the gateway is registered in the gateway
 // registry.
 func (gw Gateway) ID() ThingsIxID {
 	return gw.ThingsIxID
+}
+
+// Onboarded returns an indication if the gateway is onboarded.
+func (gw Gateway) Onboarded() bool {
+	return gw.Owner != nil
+}
+
+// OwnerBytes returns the owner bytes or if the gateway isn't onboarded the
+// zero address bytes.
+func (gw Gateway) OwnerBytes() []byte {
+	if gw.Owner == nil {
+		return (common.Address{}).Bytes()
+	}
+	return gw.Owner.Bytes()
 }
 
 // CompressedPubKeyBytes returns the compressed public key with 0x02 prefix
@@ -79,10 +136,18 @@ func GenerateNewGateway(localID lorawan.EUI64) (*Gateway, error) {
 		PrivateKey: priv,
 		PublicKey:  &priv.PublicKey,
 		ThingsIxID: utils.DeriveThingsIxID(&priv.PublicKey),
-		Owner:      common.Address{}, // TODO: set once gateway onboard are required
 	}, nil
 }
 
 func (gw *Gateway) Address() common.Address {
 	return crypto.PubkeyToAddress(*gw.PublicKey)
+}
+
+type Collector struct {
+	Gateways []*Gateway
+}
+
+func (c *Collector) Do(gw *Gateway) bool {
+	c.Gateways = append(c.Gateways, gw)
+	return true
 }

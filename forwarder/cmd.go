@@ -48,6 +48,14 @@ func Run(cmd *cobra.Command, args []string) {
 		wg.Done()
 	}()
 
+	// run the forwarders http api if configured
+	wg.Add(1)
+	go func() {
+		// run the forwarders private api if configured
+		runAPI(ctx, cfg, exchange.gateways, exchange.recordUnknownGateway)
+		wg.Done()
+	}()
+
 	// enable prometheus endpoint if configured
 	if cfg.PrometheusEnabled() {
 		wg.Add(1)

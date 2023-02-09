@@ -31,12 +31,34 @@ forwarder:
     
     # Gateways that can use this forwarder
     gateways:
-        # Gateway store
+        # Smart contract that verifies the onboarding message and if valid
+        # registers the gateway in the ThingsIX gateway registry.
+        onboarder:
+            # Onboarder smart contract address.
+            address: "0x0000000000000000000000000000000000000000"
+
+        # ThingsIX gateway registry.
         #
-        # Gateway
+        # The registry contains all onboarded gateways with optional details set
+        # by their owner. The forwarder periodically synces with the registry to
+        # retrieve owner and extra gateway details.
+        registry:
+            # Retrieve gateway data from the registry through the API ThingsIX.
+            # thingsix_api:
+            # API endpoint
+            endpoint: https://api.thingsix.com/gateways/v1/{id}
+            
+            # Retrieve gateway data direct from the ThingsIX gateway registry
+            # smart contract. This requires blockchain.polygon configuration.
+            # on_chain:
+            #     # ThingsIX gateway registry address.
+            #     address: "0x0000000000000000000000000000000000000000"
+
+        # Forwarder gateway store
         store:
             # File based gateway store. This store contains all gateways and
-            # their identity keys.
+            # their identity keys. Recommended for situations where the
+            # forwarder only has a few gateways in its store.
             #
             # Full gateway store path on the file system
             file: /etc/thingsix-forwarder/gateways.yaml
@@ -48,19 +70,16 @@ forwarder:
             # Connection details are set on the root configuration level.
             # postgresql: false
 
-            # Interval on which the forwarder reloads the gateways from the
-            # configured backend, file or postgresql.
-            #
-            # Set to 0m when the gateway store must not be hot reloaded. This is
-            # adviced when store is not expected to change.
-            #
-            # Default value is 1 minute.
-            refresh: 1m
+            # Interval on which the forwarder syncs with the ThingsIX gateway
+            # registry. Since gateway data is typically very static setting this
+            # interval too short will lead to additional data traffic without
+            # much benefit.
+            refresh: 1h
         
         # Optionally record gateway local id's for unknown gateways to a file. 
         # This file can be imported into the gateway store later. This is
-        # convenient if you have a lot of gateways that you would need to 
-        # add to the store 1 by 1.
+        # convenient if you have a lot of gateways that you would otherwise need
+        # to add to the store 1 by 1.
         record_unknown:
             # Path to file where unknown gateways are recorded, must be 
             # writeable by the forwarder. If file and postgresql are not set the
@@ -77,6 +96,13 @@ forwarder:
             # false to disable.
             # postgresql: false
 
+        # Internal Forwarder HTTP API
+        #
+        # API to interact with the forwarder. This should not be public
+        # accessible since it provides direct access to gateway management!
+        # api:
+        #     address: 127.0.0.1:8080
+
     # Routers to forward gateway data to.
     routers:
         # List with default routers
@@ -87,19 +113,6 @@ forwarder:
         #default:
         #    - endpoint: localhost:3200
         #      name: v47
-        
-        # Fetch routers from the ThingsIX router registry smart contract.
-        #
-        # This address is environment specific, see the ThingsIX
-        # documentation for a list of router registry addresses per
-        # environment. This requires blockchain.polygon configuration.
-
-        #on_chain:
-            #registry: 0xd6bcc904C2B312f9a3893d9D2f5f2b6b0e86f9a1
-
-            # retrieve router list from registry every interval
-
-            #interval: 30m
 
         # Retrieve routers from the ThingsIX API.
         thingsix_api:
@@ -116,8 +129,19 @@ forwarder:
             # API.
             #
             # Routes don't frequently change and are cached. There is no point
-            # in setting this interval to a very small value.
-            interval: 30m
+            # in setting this interval to a very small value. Set to 0m to
+            # disable syncing.
+            interval: 1h
+        
+        # Fetch routers from the ThingsIX router registry smart contract.
+        #
+        # This address is environment specific, see the ThingsIX
+        # documentation for a list of router registry addresses per
+        # environment. This requires blockchain.polygon configuration.
+        # on_chain:
+        #     registry: 0xd6bcc904C2B312f9a3893d9D2f5f2b6b0e86f9a1
+        #     # retrieve router list from registry every interval
+        #     interval: 1h
 
 # Logging related configuration
 log:
@@ -126,9 +150,9 @@ log:
     # Include timestamp in logging
     timestamp: true  # [true, false]
 
-# Blockchain related configuration
+# Blockchain configuration
 blockchain:
-    # Blockchain
+    # Polygon configuration.
     polygon:
         # Polygon node RPC endpoint
         endpoint: https://polygon-rpc.com
