@@ -37,8 +37,8 @@ import (
 )
 
 func runAPI(ctx context.Context, cfg *Config, store gateway.GatewayStore, unknownGateways gateway.UnknownGatewayLogger) {
-	if cfg.Forwarder.Gateways.HttpAPI == nil || cfg.Forwarder.Gateways.HttpAPI.Address == "" {
-		logrus.Debug("forwarder HTTP API disabled")
+	if cfg.Forwarder.Gateways.HttpAPI.Address == "" {
+		logrus.Info("forwarder HTTP API disabled")
 		return
 	}
 

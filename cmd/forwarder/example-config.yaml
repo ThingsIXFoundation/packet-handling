@@ -154,8 +154,10 @@ forwarder:
         #
         # API to interact with the forwarder. This should not be public
         # accessible since it provides direct access to gateway management!
+        # By default is binds on 127.0.0.1:8080, set to an empty string "" to
+        # disable the API.
         # api:
-        #     address: 127.0.0.1:8080
+        #     address: "127.0.0.1:8080"
 
     # Routers to forward gateway data to.
     routers:

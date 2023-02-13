@@ -69,6 +69,7 @@ func getNetConfig(net string) *Config {
 	cfg.Forwarder.Backend.BasicStation.ReadTimeout = utils.Ptr(65 * time.Second)
 	cfg.Forwarder.Backend.BasicStation.WriteTimeout = utils.Ptr(time.Second)
 	cfg.Forwarder.Gateways = ForwarderGatewayConfig{}
+	cfg.Forwarder.Gateways.HttpAPI.Address = "127.0.0.1:8080"
 	cfg.Forwarder.Gateways.Store = gateway.StoreConfig{}
 	cfg.Forwarder.Gateways.Store.RefreshInterval = utils.Ptr(30 * time.Minute)
 	cfg.Forwarder.Gateways.Store.YamlStorePath = utils.Ptr("/etc/thingsix-forwarder/gateways.yaml")

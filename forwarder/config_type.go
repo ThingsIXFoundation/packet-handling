@@ -72,7 +72,7 @@ type ForwarderGatewayConfig struct {
 	Registry gateway.RegistrySyncConfig `mapstructure:"registry"`
 
 	// HttpAPI configures the private Forwarder HTTP API
-	HttpAPI *ForwarderHttpApiConfig `mapstructure:"api"`
+	HttpAPI ForwarderHttpApiConfig `mapstructure:"api"`
 }
 
 type ForwarderRoutersOnChainConfig struct {
