@@ -201,6 +201,9 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 
 	airtime, _ := airtime.UplinkAirtime(frame)
 
+	// Add some metadata to the frame that will be forwarded to end-applications
+	setChaindataInFrameMetadata(frame, gw, airtime)
+
 	frameLog = frameLog.WithFields(logrus.Fields{
 		"type":    phy.MHDR.MType,
 		"airtime": airtime,
