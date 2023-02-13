@@ -18,6 +18,8 @@ package router
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"sync"
@@ -256,6 +258,7 @@ func (r *Router) Events(forwarder router.RouterV1_EventsServer) error {
 			var (
 				info                  = fwdEvent.GetGatewayInformation()
 				pubKey                = info.GetPublicKey()
+				gatewayID             = hex.EncodeToString(pubKey[1:33])
 				gatewayNetworkID, err = gateway.GatewayPublicKeyToID(pubKey)
 				gatewayOwner          = common.BytesToAddress(info.GetOwner())
 				event                 = fwdEvent.GetEvent()
@@ -266,8 +269,9 @@ func (r *Router) Events(forwarder router.RouterV1_EventsServer) error {
 				continue
 			}
 			log := fwdlog.WithFields(logrus.Fields{
+				"gateway_id":    gatewayID,
 				"gw_network_id": gatewayNetworkID,
-				"gw_owner":      gatewayOwner,
+				"owner":         gatewayOwner,
 			})
 
 			if uplink, ok := event.(*router.GatewayToRouterEvent_UplinkFrameEvent); ok {
@@ -341,7 +345,16 @@ func (r *Router) handleUplink(log *logrus.Entry, gatewayNetworkID lorawan.EUI64,
 		uplinkID                       = frame.GetRxInfo().GetUplinkId()
 	)
 	log = log.WithFields(logrus.Fields{
-		"uplink_id": uplinkID,
+		"uplink_id":   uplinkID,
+		"rssi":        frame.GetRxInfo().GetRssi(),
+		"snr":         frame.GetRxInfo().GetSnr(),
+		"freq":        frame.GetTxInfo().GetFrequency(),
+		"sf":          frame.GetTxInfo().GetModulation().GetLora().GetSpreadingFactor(),
+		"pol":         frame.GetTxInfo().GetModulation().GetLora().GetPolarizationInversion(),
+		"coderate":    frame.GetTxInfo().GetModulation().GetLora().GetCodeRate(),
+		"bandwidth":   frame.GetTxInfo().GetModulation().GetLora().GetBandwidth(),
+		"payload":     base64.RawStdEncoding.EncodeToString(frame.GetPhyPayload()),
+		"payload_len": len(frame.GetPhyPayload()),
 	})
 
 	if err != nil {
@@ -350,7 +363,7 @@ func (r *Router) handleUplink(log *logrus.Entry, gatewayNetworkID lorawan.EUI64,
 	}
 
 	if gatewayNetworkID != gatewayNetworkIDFromFrame {
-		log.WithField("frame_gw_network-id", gatewayNetworkIDFromFrame).Error("received uplink with gateway info id != frame gateway id, drop uplink")
+		log.WithField("frame_gw_network_id", gatewayNetworkIDFromFrame).Error("received uplink with gateway info id != frame gateway id, drop uplink")
 		return
 	}
 
@@ -383,7 +396,7 @@ func (r *Router) handleDownlinkTxAck(log *logrus.Entry, gatewayNetworkID lorawan
 		return
 	}
 	if gatewayNetworkID != gatewayNetworkIDFromFrame {
-		log.WithField("frame_gw_network-id", gatewayNetworkIDFromFrame).
+		log.WithField("frame_gw_network_id", gatewayNetworkIDFromFrame).
 			Error("received downlink ack with gateway info id != frame gateway id, drop downlink-tx-ack")
 		return
 	}
@@ -409,8 +422,8 @@ func (r *Router) allGatewaysOffline(forwarderID uuid.UUID) {
 			err := r.integration.SetGatewaySubscription(false, gatewayID)
 			if err != nil {
 				logrus.WithFields(logrus.Fields{
-					"forwarder": forwarderID,
-					"gateway":   gatewayID}).WithError(err).Error("unable to unsubscribe for gateway when it's offline")
+					"forwarder":     forwarderID,
+					"gw_network_id": gatewayID}).WithError(err).Error("unable to unsubscribe for gateway when it's offline")
 				return
 			}
 
@@ -418,8 +431,8 @@ func (r *Router) allGatewaysOffline(forwarderID uuid.UUID) {
 
 			delete(r.gateways, gatewayID)
 			logrus.WithFields(logrus.Fields{
-				"forwarder": forwarderID,
-				"gateway":   gatewayID}).Info("gateway offline")
+				"forwarder":     forwarderID,
+				"gw_network_id": gatewayID}).Info("gateway offline")
 		}
 	}
 }
@@ -432,8 +445,8 @@ func (r *Router) gatewayOffline(forwarderID uuid.UUID, gatewayID lorawan.EUI64) 
 	err := r.integration.SetGatewaySubscription(false, gatewayID)
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
-			"forwarder": forwarderID,
-			"gateway":   gatewayID}).WithError(err).Error("unable to unsubscribe for gateway when it's offline")
+			"forwarder":     forwarderID,
+			"gw_network_id": gatewayID}).WithError(err).Error("unable to unsubscribe for gateway when it's offline")
 		return
 	}
 
@@ -442,8 +455,8 @@ func (r *Router) gatewayOffline(forwarderID uuid.UUID, gatewayID lorawan.EUI64) 
 	delete(r.gateways, gatewayID)
 
 	logrus.WithFields(logrus.Fields{
-		"forwarder": forwarderID,
-		"gateway":   gatewayID}).Info("gateway offline")
+		"forwarder":     forwarderID,
+		"gw_network_id": gatewayID}).Info("gateway offline")
 }
 
 func (r *Router) gatewayOnline(forwarderID uuid.UUID, gatewayID lorawan.EUI64, gatewayOwner common.Address, forwarderEventSender chan<- *router.RouterToGatewayEvent) {
@@ -454,8 +467,8 @@ func (r *Router) gatewayOnline(forwarderID uuid.UUID, gatewayID lorawan.EUI64, g
 	err := r.integration.SetGatewaySubscription(true, gatewayID)
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
-			"forwarder": forwarderID,
-			"gateway":   gatewayID}).WithError(err).Error("unable to subscribe for gateway when it's online")
+			"forwarder":     forwarderID,
+			"gw_network_id": gatewayID}).WithError(err).Error("unable to subscribe for gateway when it's online")
 		return
 	}
 
@@ -469,8 +482,8 @@ func (r *Router) gatewayOnline(forwarderID uuid.UUID, gatewayID lorawan.EUI64, g
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"forwarder": forwarderID,
-		"gateway":   gatewayID}).Info("gateway online")
+		"forwarder":     forwarderID,
+		"gw_network_id": gatewayID}).Info("gateway online")
 }
 
 func (r *Router) cleanupTimeOutGateways() {
@@ -483,8 +496,8 @@ func (r *Router) cleanupTimeOutGateways() {
 			err := r.integration.SetGatewaySubscription(false, gatewayID)
 			if err != nil {
 				logrus.WithFields(logrus.Fields{
-					"forwarder": gateway.forwarderID,
-					"gateway":   gatewayID}).WithError(err).Error("unable to unsubscribe for gateway when it's offline")
+					"forwarder":     gateway.forwarderID,
+					"gw_network_id": gatewayID}).WithError(err).Error("unable to unsubscribe for gateway when it's offline")
 				return
 			}
 
@@ -492,8 +505,8 @@ func (r *Router) cleanupTimeOutGateways() {
 
 			delete(r.gateways, gatewayID)
 			logrus.WithFields(logrus.Fields{
-				"forwarder": gateway.forwarderID,
-				"gateway":   gatewayID}).Info("gateway timed out")
+				"forwarder":     gateway.forwarderID,
+				"gw_network_id": gatewayID}).Info("gateway timed out")
 		}
 	}
 
@@ -506,7 +519,7 @@ func (r *Router) sendDownlinkFrame(addressedGatewayID string, event *router.Rout
 	gwId, err := utils.Eui64FromString(addressedGatewayID)
 	if err != nil {
 		logrus.WithError(err).
-			WithField("addressed_gw_id", fmt.Sprintf("%x", addressedGatewayID)).
+			WithField("gw_network_id", fmt.Sprintf("%x", addressedGatewayID)).
 			Error("invalid gateway id")
 	}
 
@@ -516,7 +529,7 @@ func (r *Router) sendDownlinkFrame(addressedGatewayID string, event *router.Rout
 			logrus.WithFields(logrus.Fields{
 				"gw_network_id": gatewayID,
 				"event_type":    fmt.Sprintf("%T", event.GetEvent()),
-				"forwarder_id":  gateway.forwarderID,
+				"forwarder":     gateway.forwarderID,
 			}).Info("sent downlink to forwarder")
 		}
 	}
