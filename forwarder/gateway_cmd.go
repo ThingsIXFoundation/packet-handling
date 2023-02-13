@@ -95,7 +95,7 @@ func onboardGateway(cmd *cobra.Command, args []string) {
 	if versionErr != nil {
 		logrus.WithError(versionErr).Fatal("invalid version given")
 	}
-	if cfg.Forwarder.Gateways.HttpAPI == nil {
+	if cfg.Forwarder.Gateways.HttpAPI.Address == "" {
 		logrus.Fatal("HTTP API endpoint missing")
 	}
 
@@ -136,7 +136,7 @@ func gatewayDetails(cmd *cobra.Command, args []string) {
 	if err != nil {
 		logrus.WithError(err).Fatal("invalid local id")
 	}
-	if cfg.Forwarder.Gateways.HttpAPI == nil {
+	if cfg.Forwarder.Gateways.HttpAPI.Address == "" {
 		logrus.Fatal("HTTP API endpoint missing")
 	}
 
@@ -163,7 +163,7 @@ func importGatewayStore(cmd *cobra.Command, args []string) {
 	if versionErr != nil {
 		logrus.WithError(versionErr).Fatal("invalid version given")
 	}
-	if cfg.Forwarder.Gateways.HttpAPI == nil {
+	if cfg.Forwarder.Gateways.HttpAPI.Address == "" {
 		logrus.Fatal("HTTP API endpoint missing")
 	}
 
@@ -220,7 +220,7 @@ func listGatewayStore(cmd *cobra.Command, args []string) {
 		gateways map[string][]*gateway.Gateway
 	)
 
-	if cfg.Forwarder.Gateways.HttpAPI == nil {
+	if cfg.Forwarder.Gateways.HttpAPI.Address == "" {
 		logrus.Fatal("HTTP API endpoint missing")
 	}
 
@@ -247,7 +247,7 @@ func addGatewayToStore(cmd *cobra.Command, args []string) {
 		}
 	)
 
-	if cfg.Forwarder.Gateways.HttpAPI == nil {
+	if cfg.Forwarder.Gateways.HttpAPI.Address == "" {
 		logrus.Fatal("HTTP API endpoint missing")
 	}
 
