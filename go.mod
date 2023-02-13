@@ -10,7 +10,7 @@ require (
 	github.com/ThingsIXFoundation/frequency-plan v1.3.0
 	github.com/ThingsIXFoundation/router-api v1.2.0
 	github.com/brocaar/lorawan v0.0.0-20230210103351-84b137ed1908
-	github.com/chirpstack/chirpstack/api/go/v4 v4.0.2
+	github.com/chirpstack/chirpstack/api/go/v4 v4.2.0
 	github.com/cockroachdb/cockroach-go/v2 v2.2.19
 	github.com/dlmiddlecote/sqlstats v1.0.2
 	github.com/eclipse/paho.mqtt.golang v1.4.1
@@ -118,7 +118,7 @@ require (
 	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/prometheus/common v0.37.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
-	github.com/rjeczalik/notify v0.9.2 // indirect
+	github.com/rjeczalik/notify v0.9.3 // indirect
 	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
 	github.com/smartystreets/assertions v1.0.0 // indirect
 	github.com/spf13/afero v1.9.2 // indirect
@@ -133,7 +133,7 @@ require (
 	golang.org/x/net v0.3.0 // indirect
 	golang.org/x/oauth2 v0.0.0-20221014153046-6fdb5e3db783 // indirect
 	golang.org/x/sync v0.1.0 // indirect
-	golang.org/x/sys v0.3.0 // indirect
+	golang.org/x/sys v0.5.0 // indirect
 	golang.org/x/text v0.5.0 // indirect
 	golang.org/x/tools v0.2.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
