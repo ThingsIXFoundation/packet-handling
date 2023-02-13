@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 
@@ -46,18 +45,24 @@ type RecordedUnknownGateway struct {
 	FirstSeen *int64 `yaml:"first_seen" json:"firstSeen,omitempty"`
 }
 
-func (unkn *RecordedUnknownGateway) UnmarshalText(raw []byte) error {
+func (unkn *RecordedUnknownGateway) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var val map[string]interface{}
-	if err := yaml.Unmarshal(raw, &val); err == nil {
+	if err := unmarshal(&val); err == nil {
 		localID, err := utils.Eui64FromString(val["local_id"].(string))
 		if err != nil {
 			return fmt.Errorf("invalid local_id")
 		}
 		var firstSeen int64
 		if val, ok := val["first_seen"]; ok {
-			firstSeen, err = strconv.ParseInt(val.(string), 10, 0)
-			if err != nil {
-				return fmt.Errorf("invalid first seen")
+			switch v := val.(type) {
+			case int:
+				firstSeen = int64(v)
+			case int32:
+				firstSeen = int64(v)
+			case int64:
+				firstSeen = v
+			default:
+				return fmt.Errorf("invalid last seen")
 			}
 		}
 
@@ -70,7 +75,7 @@ func (unkn *RecordedUnknownGateway) UnmarshalText(raw []byte) error {
 
 	// support legacy
 	var s string
-	if err := yaml.Unmarshal(raw, &s); err == nil {
+	if err := unmarshal(&s); err == nil {
 		localID, err := utils.Eui64FromString(s)
 		if err != nil {
 			return fmt.Errorf("invalid local_id")
