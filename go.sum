@@ -296,10 +296,8 @@ github.com/ThingsIXFoundation/bitoffset v1.0.0 h1:d1aiMjxiSGG+unH1DM9HXt+4+pEbbq
 github.com/ThingsIXFoundation/bitoffset v1.0.0/go.mod h1:r6KO5Gspfei9BMgBUgdJoKFWiar847wKgZcu5SnJ7As=
 github.com/ThingsIXFoundation/coverage-api v1.0.1 h1:Xq4/NDmEUDA49vXyWaFjZpuAXC/oaHhAKsJEcgr54c4=
 github.com/ThingsIXFoundation/coverage-api v1.0.1/go.mod h1:JmjclCrOxQhDUZ3wM0RY/UH9LJPcIwupW8IQBLbu/oI=
-github.com/ThingsIXFoundation/frequency-plan v1.2.0 h1:LI3oLRyU6SyZJ+Fg4dsIdW2OPK+o4jtRWRJlXLklBQY=
-github.com/ThingsIXFoundation/frequency-plan v1.2.0/go.mod h1:uJMGzPlH63M2cAi8gOFgqJOzXvj7CwbEASOV8F8cKAU=
-github.com/ThingsIXFoundation/gateway-registry-go v1.0.0 h1:cRUoWP8d8HuE00frR1lSZPHlMaW44Kr/lavavzHkEOg=
-github.com/ThingsIXFoundation/gateway-registry-go v1.0.0/go.mod h1:/d0dfBbjyrZL1DU+Ct4ORT/dFBT7b+N9cH97r3M+wxo=
+github.com/ThingsIXFoundation/frequency-plan v1.3.0 h1:QbnQqbVqxxuE/4WKZCroIb3aykGCDiZmVY3irwFBtE8=
+github.com/ThingsIXFoundation/frequency-plan v1.3.0/go.mod h1:4WhDxSybRnd2stWSGtTOGjC1Zh6ZNcoRLnXYHEGqy4Q=
 github.com/ThingsIXFoundation/h3-light v0.0.0-20221122151216-69018e780344 h1:faZwv4wbQEytMIyLJ7MV/mQEeGXDvQLGLw1o6Z+BOUc=
 github.com/ThingsIXFoundation/h3-light v0.0.0-20221122151216-69018e780344/go.mod h1:jSChfHi3fbZIAHTaPSEy+ghN/kF32U/f+NZdQt6oDD8=
 github.com/ThingsIXFoundation/router-api v1.2.0 h1:f6B8BcX1BakGYYfRSknTtVPNtRgRX4hX+/Isb2L5TYA=
@@ -331,8 +329,8 @@ github.com/biter777/countries v1.5.6 h1:YdvI0OYZR4gmI8BO+LrAuKmoZgiv4RrMdGBj6iOR
 github.com/biter777/countries v1.5.6/go.mod h1:1HSpZ526mYqKJcpT5Ti1kcGQ0L0SrXWIaptUWjFfv2E=
 github.com/blakesmith/ar v0.0.0-20150311145944-8bd4349a67f2 h1:oMCHnXa6CCCafdPDbMh/lWRhRByN0VFLvv+g+ayx1SI=
 github.com/blakesmith/ar v0.0.0-20150311145944-8bd4349a67f2/go.mod h1:PkYb9DJNAwrSvRx5DYA+gUcOIgTGVMNkfSCbZM8cWpI=
-github.com/brocaar/lorawan v0.0.0-20220715134808-3b283dda1534 h1:vqq/suBJc3KWCDOfJFEMx3t83cBdjldR5yLGps/3DWo=
-github.com/brocaar/lorawan v0.0.0-20220715134808-3b283dda1534/go.mod h1:Vlf3gOwizqX4y3snWe/i2EqRT83HvYuwBjRu39PevW0=
+github.com/brocaar/lorawan v0.0.0-20230210103351-84b137ed1908 h1:lW8wqZvE1hoqq9hBEf02UmoKudWwQWWDncC4cQmi/s0=
+github.com/brocaar/lorawan v0.0.0-20230210103351-84b137ed1908/go.mod h1:Vlf3gOwizqX4y3snWe/i2EqRT83HvYuwBjRu39PevW0=
 github.com/btcsuite/btcd/btcec/v2 v2.3.2 h1:5n0X6hX0Zk+6omWcihdYvdAlGf2DfasC0GMf7DClJ3U=
 github.com/btcsuite/btcd/btcec/v2 v2.3.2/go.mod h1:zYzJ8etWJQIv1Ogk7OzpWjowwOdXY1W/17j2MW85J04=
 github.com/btcsuite/btcd/chaincfg/chainhash v1.0.1 h1:q0rUy8C/TYNBQS1+CGKw68tLOFYSNEs0TFnxxnS9+4U=
@@ -942,6 +940,8 @@ golang.org/x/exp v0.0.0-20191227195350-da58074b4299/go.mod h1:2RIsYlXP63K8oxa1u0
 golang.org/x/exp v0.0.0-20200119233911-0405dc783f0a/go.mod h1:2RIsYlXP63K8oxa1u096TMicItID8zy7Y6sNkU49FU4=
 golang.org/x/exp v0.0.0-20200207192155-f17229e696bd/go.mod h1:J/WKrq2StrnmMY6+EHIKF9dgMWnmCNThgcyBT1FY9mM=
 golang.org/x/exp v0.0.0-20200224162631-6cc2880d07d6/go.mod h1:3jZMyOhIsHpP37uCMkUooju7aAi5cS1Q23tOzKc+0MU=
+golang.org/x/exp v0.0.0-20230206171751-46f607a40771 h1:xP7rWLUr1e1n2xkK5YB4LI0hPEy3LJC6Wk+D4pGlOJg=
+golang.org/x/exp v0.0.0-20230206171751-46f607a40771/go.mod h1:CxIveKay+FTh1D0yPZemJVgC/95VzuuOLq5Qi4xnoYc=
 golang.org/x/image v0.0.0-20190227222117-0694c2d4d067/go.mod h1:kZ7UVZpmo3dzQBMxlp+ypCbDeSB+sBbTgSJuh5dn5js=
 golang.org/x/image v0.0.0-20190802002840-cff245a6509b/go.mod h1:FeLwcggjj3mMvU+oOTbSwawSJRM1uh48EjtB4UJZlP0=
 golang.org/x/lint v0.0.0-20181026193005-c67002cb31c3/go.mod h1:UVdnD1Gm6xHRNCYTkRU2/jEulfH38KcIWyp/GAMgvoE=

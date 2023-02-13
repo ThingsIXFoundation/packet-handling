@@ -30,9 +30,22 @@ type ForwarderBackendSemtechUDPConfig struct {
 	FakeRxTime *bool   `mapstructure:"fake_rx_time"`
 }
 
+type BasicStationBackendConfig struct {
+	Bind             *string        `mapstructure:"bind"`
+	TLSCert          *string        `mapstructure:"tls_cert"`
+	TLSKey           *string        `mapstructure:"tls_key"`
+	CACert           *string        `mapstructure:"ca_cert"`
+	StatsInterval    *time.Duration `mapstructure:"stats_interval"`
+	PingInterval     *time.Duration `mapstructure:"ping_interval"`
+	TimesyncInterval *time.Duration `mapstructure:"timesync_interval"`
+	ReadTimeout      *time.Duration `mapstructure:"read_timeout"`
+	WriteTimeout     *time.Duration `mapstructure:"write_timeout"`
+	Region           string         `mapstructure:"region"`
+}
+
 type ForwarderBackendConfig struct {
 	SemtechUDP    *ForwarderBackendSemtechUDPConfig `mapstructure:"semtech_udp"`
-	BasicStation  *struct{}                         `mapstructure:"basic_station"`
+	BasicStation  *BasicStationBackendConfig        `mapstructure:"basic_station"`
 	Concentratord *struct{}                         `mapstructure:"concentratord"`
 }
 

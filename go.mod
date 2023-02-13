@@ -7,10 +7,9 @@ require (
 	github.com/GoogleCloudPlatform/cloudsql-proxy v1.33.1
 	github.com/ThingsIXFoundation/bitoffset v1.0.0
 	github.com/ThingsIXFoundation/coverage-api v1.0.1
-	github.com/ThingsIXFoundation/frequency-plan v1.2.0
-	github.com/ThingsIXFoundation/gateway-registry-go v1.0.0
+	github.com/ThingsIXFoundation/frequency-plan v1.3.0
 	github.com/ThingsIXFoundation/router-api v1.2.0
-	github.com/brocaar/lorawan v0.0.0-20220715134808-3b283dda1534
+	github.com/brocaar/lorawan v0.0.0-20230210103351-84b137ed1908
 	github.com/chirpstack/chirpstack/api/go/v4 v4.0.2
 	github.com/cockroachdb/cockroach-go/v2 v2.2.19
 	github.com/dlmiddlecote/sqlstats v1.0.2
@@ -63,6 +62,7 @@ require (
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.23.0 // indirect
+	golang.org/x/exp v0.0.0-20230206171751-46f607a40771 // indirect
 	golang.org/x/time v0.2.0 // indirect
 	google.golang.org/api v0.103.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
@@ -79,7 +79,7 @@ require (
 	github.com/ThingsIXFoundation/h3-light v0.0.0-20221122151216-69018e780344
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d // indirect
-	github.com/apex/log v1.1.0
+	github.com/apex/log v1.1.0 // indirect
 	github.com/aws/aws-sdk-go v1.27.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blakesmith/ar v0.0.0-20150311145944-8bd4349a67f2 // indirect

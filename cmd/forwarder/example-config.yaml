@@ -28,6 +28,60 @@ forwarder:
             # Fake the RX time when the gateways do not have GPS, in which case
             # the time would otherwise be unset.
             fake_rx_time: false
+        
+        # Use Basic Station forwarder backend
+        # basic_station:
+        #     # Address to listen for gateway connections
+        #     #
+        #     # Default: 0.0.0.0:3001
+        #     bind: 0.0.0.0:3001
+            
+        #     # forwarder certificate
+        #     #
+        #     # default /etc/thingsix-forwarder/basic_station/cert.pem
+        #     tls_cert: "/etc/thingsix-forwarder/basic_station/cert.pem"
+            
+        #     # forwarder private key
+        #     #
+        #     # Default: /etc/thingsix-forwarder/basic_station/private_key.pem
+        #     tls_key: "/etc/thingsix-forwarder/basic_station/private_key.pem"
+            
+        #     # root certificate
+        #     #
+        #     # Default: /etc/thingsix-forwarder/basic_station/ca_cert.pem
+        #     ca_cert: "/etc/thingsix-forwarder/basic_station/ca_cert.pem"            
+            
+        #     # Stats interval
+        #     #
+        #     # This defines the interval in which uplink / downlink statistics
+        #     # are forwarded. Default 30s.
+        #     stats_interval: 30s
+
+        #     # Ping interval
+        #     # default 1m
+        #     ping_interval: 1m
+            
+        #     # Timesync interval
+        #     #
+        #     # This defines the interval in which a timesync request is send to
+        #     # the gateway. Setting this to 0 disables sending timesync requests.
+        #     timesync_interval: 1h
+
+        #     # Read timeout.
+        #     #
+        #     # This interval must be greater than the configured ping interval.    
+        #     # default 65s
+        #     read_timeout: 1m5s
+
+        #     # Write timeout
+        #     # default: 1s
+        #     write_timeout: 1s
+
+        #     # Region, mandatory to enable basic station
+        #     #
+        #     # Valid values are: EU868, US915, CN470, AU915, AS923, AS923-2, 
+        #     #                   AS923-3, AS923-4, RU864
+        #     region: EU868
     
     # Gateways that can use this forwarder
     gateways:

@@ -58,6 +58,16 @@ func getNetConfig(net string) *Config {
 	cfg.Forwarder.Backend.SemtechUDP = &ForwarderBackendSemtechUDPConfig{}
 	cfg.Forwarder.Backend.SemtechUDP.UDPBind = utils.Ptr("0.0.0.0:1680")
 	cfg.Forwarder.Backend.SemtechUDP.FakeRxTime = utils.Ptr(false)
+	cfg.Forwarder.Backend.BasicStation = &BasicStationBackendConfig{}
+	cfg.Forwarder.Backend.BasicStation.Bind = utils.Ptr("0.0.0.0:8887")
+	cfg.Forwarder.Backend.BasicStation.TLSCert = utils.Ptr("/etc/thingsix-forwarder/basic_station/cert.pem")
+	cfg.Forwarder.Backend.BasicStation.TLSKey = utils.Ptr("/etc/thingsix-forwarder/basic_station/private_key.pem")
+	cfg.Forwarder.Backend.BasicStation.CACert = utils.Ptr("/etc/thingsix-forwarder/basic_station/ca_cert.pem")
+	cfg.Forwarder.Backend.BasicStation.StatsInterval = utils.Ptr(30 * time.Second)
+	cfg.Forwarder.Backend.BasicStation.PingInterval = utils.Ptr(time.Minute)
+	cfg.Forwarder.Backend.BasicStation.TimesyncInterval = utils.Ptr(time.Hour)
+	cfg.Forwarder.Backend.BasicStation.ReadTimeout = utils.Ptr(65 * time.Second)
+	cfg.Forwarder.Backend.BasicStation.WriteTimeout = utils.Ptr(time.Second)
 	cfg.Forwarder.Gateways = ForwarderGatewayConfig{}
 	cfg.Forwarder.Gateways.Store = gateway.StoreConfig{}
 	cfg.Forwarder.Gateways.Store.RefreshInterval = utils.Ptr(30 * time.Minute)
