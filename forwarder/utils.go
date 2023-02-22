@@ -33,7 +33,6 @@ import (
 	"github.com/chirpstack/chirpstack/api/go/v4/gw"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/olekukonko/tablewriter"
 	"github.com/sirupsen/logrus"
@@ -208,9 +207,9 @@ func fetchRoutersFromThingsIXAPI(cfg *Config, accounter Accounter) (RoutesUpdate
 			var (
 				id [32]byte
 			)
-			rID, err := hexutil.Decode(r.ID)
-			if err != nil {
-				logrus.WithError(err).Error("unable to decode router id")
+			rID := common.FromHex(r.ID)
+			if len(rID) != 32 {
+				logrus.WithError(err).Error("invalid router id")
 				continue
 			}
 
