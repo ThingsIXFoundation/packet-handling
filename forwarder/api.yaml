@@ -192,16 +192,9 @@ components:
           description: owner wallet address
           type: string
           example: "0xdb3082bcd200e598367ee6aa89706e82a39aa64b"
-        version:
-          description: user defined value, ThingsIX doesn't use this value
-          type: integer
-          minimum: 0
-          maximum: 255
-          example: 1
       required:
         - localId
         - owner
-        - version
 
     ImportGatewayReq:
       type: object
@@ -210,15 +203,8 @@ components:
           description: owner wallet address
           type: string
           example: "0xdb3082bcd200e598367ee6aa89706e82a39aa64b"
-        version:
-          description: user defined value, ThingsIX doesn't use this value
-          type: integer
-          minimum: 0
-          maximum: 255
-          example: 1
       required:
         - owner
-        - version
 
     GatewayOnboardMessage:
       type: object
