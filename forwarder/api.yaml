@@ -203,6 +203,23 @@ components:
         - owner
         - version
 
+    ImportGatewayReq:
+      type: object
+      properties:
+        owner:
+          description: owner wallet address
+          type: string
+          example: "0xdb3082bcd200e598367ee6aa89706e82a39aa64b"
+        version:
+          description: user defined value, ThingsIX doesn't use this value
+          type: integer
+          minimum: 0
+          maximum: 255
+          example: 1
+      required:
+        - owner
+        - version
+
     GatewayOnboardMessage:
       type: object
       properties:
@@ -296,6 +313,37 @@ paths:
                 $ref: "#/components/schemas/GatewayOnboardMessage"
         201:
           description: gateway added to store with new generated gateway key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GatewayOnboardMessage"
+        400:
+          description: invalid request
+        500:
+          description: internal unspecified error
+
+  /v1/gateways/import:
+    post:
+      summary: import all recorded unknown gateways and generate onboarding messages
+      description: Generate onboard messages for all recorded unknown gateways.
+      requestBody:
+        description: gateway onboard details
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportGatewayReq"
+      responses:
+        200:
+          description: gateway was already in gateway, onboard message generated with existing gateway key
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GatewayOnboardMessage"
+        201:
+          description: recorded unknown gateways added to store
           content:
             application/json:
               schema:

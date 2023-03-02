@@ -276,6 +276,31 @@ func (c *GatewayCollector) Do(gw *gateway.Gateway) bool {
 	return true
 }
 
+func printOnboards(json bool, onboards []*OnboardGatewayReply) {
+	if json {
+		printOnboardsAsJSON(onboards)
+	} else {
+		printOnboardsAsTable(onboards)
+	}
+}
+
+func printOnboardsAsJSON(onboards []*OnboardGatewayReply) {
+	var res []map[string]interface{}
+	for _, onb := range onboards {
+		res = append(res, map[string]interface{}{
+			"owner":                     onb.Owner,
+			"gateway_id":                onb.GatewayID,
+			"version":                   onb.Version,
+			"local_id":                  onb.LocalID,
+			"network_id":                onb.NetworkID,
+			"address":                   onb.Address,
+			"chain_id":                  onb.ChainID,
+			"gateway_onboard_signature": onb.GatewayOnboardSignature,
+		})
+	}
+	_ = json.NewEncoder(os.Stdout).Encode(res)
+}
+
 func printOnboardsAsTable(onboards []*OnboardGatewayReply) {
 	var (
 		table  = tablewriter.NewWriter(os.Stdout)
