@@ -19,6 +19,7 @@ package forwarder
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -52,10 +53,11 @@ func runAPI(ctx context.Context, cfg *Config, store gateway.GatewayStore, unknow
 	}))
 
 	apiCtx := apiContext{
-		gateways:         store,
-		chainID:          new(big.Int).SetUint64(cfg.BlockChain.Polygon.ChainID),
-		onboarderAddress: cfg.Forwarder.Gateways.Onboarder.Address,
-		unknown:          unknownGateways,
+		gateways:              store,
+		chainID:               new(big.Int).SetUint64(cfg.BlockChain.Polygon.ChainID),
+		onboarderAddress:      cfg.Forwarder.Gateways.Onboarder.Address,
+		batchOnboarderAddress: cfg.Forwarder.Gateways.BatchOnboarder.Address,
+		unknown:               unknownGateways,
 	}
 
 	l := logrus.WithFields(logrus.Fields{
@@ -73,6 +75,7 @@ func runAPI(ctx context.Context, cfg *Config, store gateway.GatewayStore, unknow
 		r.Route("/gateways", func(r chi.Router) {
 			r.Post("/", withApiContext(AddGateway, &apiCtx))
 			r.Post("/onboard", withApiContext(OnboardGatewayMessage, &apiCtx))
+			r.Post("/import", withApiContext(ImportGateways, &apiCtx))
 			r.Get("/", withApiContext(ListGateways, &apiCtx))
 			r.Get("/unknown", withApiContext(ListUnknownGateways, &apiCtx))
 			r.Get("/{local_id}", withApiContext(Gateway, &apiCtx))
@@ -109,10 +112,11 @@ func replyJSON(w http.ResponseWriter, statusCode int, message interface{}) {
 }
 
 type apiContext struct {
-	gateways         gateway.GatewayStore
-	chainID          *big.Int
-	onboarderAddress common.Address
-	unknown          gateway.UnknownGatewayLogger
+	gateways              gateway.GatewayStore
+	chainID               *big.Int
+	onboarderAddress      common.Address
+	batchOnboarderAddress common.Address
+	unknown               gateway.UnknownGatewayLogger
 }
 
 func withApiContext(h func(w http.ResponseWriter, r *http.Request, ctx *apiContext), ctx *apiContext) http.HandlerFunc {
@@ -161,6 +165,75 @@ func AddGateway(w http.ResponseWriter, r *http.Request, ctx *apiContext) {
 		logrus.WithError(err).Error("unable to determine if gateway is in store")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
+	}
+}
+
+func ImportGateways(w http.ResponseWriter, r *http.Request, ctx *apiContext) {
+	var (
+		req struct {
+			Owner   common.Address `json:"owner"`
+			Version uint8          `json:"version"`
+		}
+
+		statusCode = http.StatusOK
+		reply      = make([]OnboardGatewayReply, 0)
+	)
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if req.Owner == (common.Address{}) {
+		http.Error(w, "missing owner", http.StatusBadRequest)
+		return
+	}
+
+	recg, err := ctx.unknown.Recorded()
+	if err == nil {
+		for _, rec := range recg {
+			if !ctx.gateways.ContainsByLocalID(rec.LocalID) {
+				gw, err := gateway.GenerateNewGateway(rec.LocalID)
+				if err != nil {
+					logrus.WithError(err).Error("unable to generate new gateway entry")
+					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+					return
+				}
+
+				gw, err = ctx.gateways.Add(r.Context(), gw.LocalID, gw.PrivateKey)
+				if err != nil {
+					logrus.WithError(err).Error("unable to add new gateway entry to store")
+					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+					return
+				}
+
+				signature, err := gateway.SignPlainBatchOnboardMessage(ctx.chainID, ctx.batchOnboarderAddress, req.Owner, req.Version, gw)
+				if err != nil {
+					logrus.WithError(err).Error("unable to sign onboard message")
+					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+					return
+				}
+
+				statusCode = http.StatusCreated
+
+				reply = append(reply, OnboardGatewayReply{
+					Owner:                   req.Owner,
+					Address:                 gw.Address(),
+					ChainID:                 ctx.chainID.Uint64(),
+					GatewayID:               gw.ID(),
+					GatewayOnboardSignature: "0x" + hex.EncodeToString(signature),
+					LocalID:                 gw.LocalID,
+					NetworkID:               gw.NetworkID,
+					Version:                 req.Version,
+					Onboarder:               ctx.batchOnboarderAddress,
+				})
+			}
+		}
+		replyJSON(w, statusCode, reply)
+	} else if errors.Is(err, gateway.ErrRecordingUnknownGatewaysDisabled) {
+		http.Error(w, "recording unknown gateways disabled", http.StatusServiceUnavailable)
+	} else {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 	}
 }
 

@@ -90,7 +90,8 @@ func getNetConfig(net string) *Config {
 	cfg.Metrics.Prometheus.Path = "/metrics"
 
 	if net == "main" {
-		cfg.Forwarder.Gateways.Onboarder.Address = common.Address{} // TODO, once available
+		cfg.Forwarder.Gateways.Onboarder.Address = common.Address{}      // TODO, once available
+		cfg.Forwarder.Gateways.BatchOnboarder.Address = common.Address{} // TODO, once available
 		cfg.Forwarder.Gateways.Registry.ThingsIxApi.Endpoint = "https://api.thingsix.com/gateways/v1/{id}"
 		cfg.Forwarder.Routers.ThingsIXApi.Endpoint = utils.Ptr("https://api.thingsix.com/routers/v1/snapshot")
 		cfg.BlockChain.Polygon.Endpoint = "https://polygon-rpc.com"
@@ -99,6 +100,7 @@ func getNetConfig(net string) *Config {
 	}
 	if net == "test" {
 		cfg.Forwarder.Gateways.Onboarder.Address = common.HexToAddress("0xa9f2F4f130541E32209cE04950b6978e8Dd97043")
+		cfg.Forwarder.Gateways.BatchOnboarder.Address = common.HexToAddress("0xe685A0826419Bc982c9278eA7798143Fe7CF9f11")
 		cfg.Forwarder.Gateways.Registry.ThingsIxApi.Endpoint = "https://api-testnet.thingsix.com/gateways/v1/{id}"
 		cfg.Forwarder.Routers.ThingsIXApi.Endpoint = utils.Ptr("https://api-testnet.thingsix.com/routers/v1/snapshot")
 		cfg.BlockChain.Polygon.Endpoint = "https://rpc.ankr.com/polygon_mumbai"
@@ -107,6 +109,7 @@ func getNetConfig(net string) *Config {
 	}
 	if net == "dev" {
 		cfg.Forwarder.Gateways.Onboarder.Address = common.HexToAddress("0x692a23dB0e2aDe9FE8C3c234758aCC7C65e815E2")
+		cfg.Forwarder.Gateways.BatchOnboarder.Address = common.HexToAddress("0xC7Dc48Ae9ED3e095f58ecF5320dE33F43A06cfC1")
 		cfg.Forwarder.Gateways.Registry.ThingsIxApi.Endpoint = "https://api-devnet.thingsix.com/gateways/v1/{id}"
 		cfg.Forwarder.Routers.ThingsIXApi.Endpoint = utils.Ptr("https://api-devnet.thingsix.com/routers/v1/snapshot")
 		cfg.BlockChain.Polygon.Endpoint = "https://rpc.ankr.com/polygon_mumbai"

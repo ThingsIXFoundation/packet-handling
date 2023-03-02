@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
@@ -71,9 +72,13 @@ var (
 		Args:  cobra.ExactArgs(1),
 		Run:   gatewayDetails,
 	}
+
+	jsonOutput bool
 )
 
 func init() {
+	GatewayCmds.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Output in json format")
+
 	GatewayCmds.AddCommand(importGatewayCmd)
 	GatewayCmds.AddCommand(listGatewayCmd)
 	GatewayCmds.AddCommand(addGatewayCmd)
@@ -119,7 +124,7 @@ func onboardGateway(cmd *cobra.Command, args []string) {
 		if err := json.NewDecoder(resp.Body).Decode(&reply); err != nil {
 			logrus.WithError(err).Fatal("unable to decode response")
 		}
-		printOnboardsAsTable([]*OnboardGatewayReply{&reply})
+		printOnboards(jsonOutput, []*OnboardGatewayReply{&reply})
 	default:
 		msg, _ := io.ReadAll(resp.Body)
 		logrus.Errorf("unexpected reply from API: %d - %s",
@@ -150,7 +155,11 @@ func gatewayDetails(cmd *cobra.Command, args []string) {
 		logrus.WithError(err).Fatal("unable to decode response")
 	}
 
-	printGatewaysAsTable([]*gateway.Gateway{&gw})
+	if jsonOutput {
+		_ = json.NewEncoder(os.Stdout).Encode(gw)
+	} else {
+		printGatewaysAsTable([]*gateway.Gateway{&gw})
+	}
 }
 
 func importGatewayStore(cmd *cobra.Command, args []string) {
@@ -158,7 +167,6 @@ func importGatewayStore(cmd *cobra.Command, args []string) {
 		cfg                 = mustLoadConfig()
 		owner               = common.HexToAddress(args[0])
 		version, versionErr = strconv.ParseUint(args[1], 0, 8)
-		unknown             []gateway.RecordedUnknownGateway
 	)
 	if versionErr != nil {
 		logrus.WithError(versionErr).Fatal("invalid version given")
@@ -167,51 +175,31 @@ func importGatewayStore(cmd *cobra.Command, args []string) {
 		logrus.Fatal("HTTP API endpoint missing")
 	}
 
-	resp, err := http.Get(fmt.Sprintf("http://%s/v1/gateways/unknown", cfg.Forwarder.Gateways.HttpAPI.Address))
-	if err != nil {
-		logrus.WithError(err).Fatal("unable to retrieve recorded unknown gateways")
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		logrus.Fatalf("unable to retrieve recorded unknown gateways")
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&unknown); err != nil {
-		logrus.WithError(err).Fatal("unable to decode response")
-	}
-
 	var (
-		endpoint  = fmt.Sprintf("http://%s/v1/gateways/onboard", cfg.Forwarder.Gateways.HttpAPI.Address)
-		onboarded []*OnboardGatewayReply
-	)
-
-	for _, rec := range unknown {
-		payload, _ := json.Marshal(map[string]interface{}{
-			"localId": rec.LocalID,
+		endpoint   = fmt.Sprintf("http://%s/v1/gateways/import", cfg.Forwarder.Gateways.HttpAPI.Address)
+		onboarded  []*OnboardGatewayReply
+		payload, _ = json.Marshal(map[string]interface{}{
 			"owner":   owner,
 			"version": version,
 		})
+	)
 
-		resp, err := http.Post(endpoint, "application/json", bytes.NewReader(payload))
-		if err != nil {
-			logrus.WithError(err).Fatal("unable to import gateway")
-		}
-
-		switch resp.StatusCode {
-		case http.StatusOK, http.StatusCreated:
-			var reply OnboardGatewayReply
-			if err := json.NewDecoder(resp.Body).Decode(&reply); err != nil {
-				logrus.WithError(err).Fatal("unable to decode response")
-			}
-			onboarded = append(onboarded, &reply)
-		default:
-			msg, _ := io.ReadAll(resp.Body)
-			logrus.Errorf("unexpected reply from API: %d - %s",
-				resp.StatusCode, msg)
-		}
+	resp, err := http.Post(endpoint, "application/json", bytes.NewReader(payload))
+	if err != nil {
+		logrus.WithError(err).Fatal("unable to import gateway")
 	}
 
-	printOnboardsAsTable(onboarded)
+	switch resp.StatusCode {
+	case http.StatusOK, http.StatusCreated:
+		if err := json.NewDecoder(resp.Body).Decode(&onboarded); err != nil {
+			logrus.WithError(err).Fatal("unable to decode response")
+		}
+		printOnboards(true, onboarded)
+	default:
+		msg, _ := io.ReadAll(resp.Body)
+		logrus.Errorf("unexpected reply from API: %d - %s",
+			resp.StatusCode, msg)
+	}
 }
 
 func listGatewayStore(cmd *cobra.Command, args []string) {
@@ -235,7 +223,11 @@ func listGatewayStore(cmd *cobra.Command, args []string) {
 	}
 
 	all := append(gateways["onboarded"], gateways["pending"]...)
-	printGatewaysAsTable(all)
+	if jsonOutput {
+		_ = json.NewEncoder(os.Stdout).Encode(all)
+	} else {
+		printGatewaysAsTable(all)
+	}
 }
 
 func addGatewayToStore(cmd *cobra.Command, args []string) {
@@ -268,7 +260,12 @@ func addGatewayToStore(cmd *cobra.Command, args []string) {
 		if err := json.NewDecoder(resp.Body).Decode(&gw); err != nil {
 			logrus.WithError(err).Fatal("unable to decode response")
 		}
-		printGatewaysAsTable([]*gateway.Gateway{&gw})
+
+		if jsonOutput {
+			_ = json.NewEncoder(os.Stdout).Encode(gw)
+		} else {
+			printGatewaysAsTable([]*gateway.Gateway{&gw})
+		}
 	default:
 		msg, _ := io.ReadAll(resp.Body)
 		logrus.Errorf("unexpected reply from API: %d - %s",
