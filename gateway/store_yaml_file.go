@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -259,6 +260,12 @@ func (store *yamlFileStore) loadFromFile() error {
 	rawGateways, err := os.ReadFile(store.path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
+			// try to create the directory if it doesn't yet exist
+			dir := filepath.Dir(store.path)
+			if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+				return ErrStoreNotExists
+			}
+
 			// try to create it, on success return empty store
 			f, err := os.OpenFile(store.path, os.O_CREATE, 0600)
 			if err != nil {
