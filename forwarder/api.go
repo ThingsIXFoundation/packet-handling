@@ -171,8 +171,7 @@ func AddGateway(w http.ResponseWriter, r *http.Request, ctx *apiContext) {
 func ImportGateways(w http.ResponseWriter, r *http.Request, ctx *apiContext) {
 	var (
 		req struct {
-			Owner   common.Address `json:"owner"`
-			Version uint8          `json:"version"`
+			Owner common.Address `json:"owner"`
 		}
 
 		statusCode = http.StatusOK
@@ -207,7 +206,7 @@ func ImportGateways(w http.ResponseWriter, r *http.Request, ctx *apiContext) {
 					return
 				}
 
-				signature, err := gateway.SignPlainBatchOnboardMessage(ctx.chainID, ctx.batchOnboarderAddress, req.Owner, req.Version, gw)
+				signature, err := gateway.SignPlainBatchOnboardMessage(ctx.chainID, ctx.batchOnboarderAddress, req.Owner, 0, gw)
 				if err != nil {
 					logrus.WithError(err).Error("unable to sign onboard message")
 					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -224,7 +223,7 @@ func ImportGateways(w http.ResponseWriter, r *http.Request, ctx *apiContext) {
 					GatewayOnboardSignature: "0x" + hex.EncodeToString(signature),
 					LocalID:                 gw.LocalID,
 					NetworkID:               gw.NetworkID,
-					Version:                 req.Version,
+					Version:                 0,
 					Onboarder:               ctx.batchOnboarderAddress,
 				})
 			}
@@ -242,7 +241,6 @@ func OnboardGatewayMessage(w http.ResponseWriter, r *http.Request, ctx *apiConte
 		req struct {
 			LocalID lorawan.EUI64  `json:"localId"`
 			Owner   common.Address `json:"owner"`
-			Version uint8          `json:"version"`
 		}
 		statusCode = http.StatusOK
 	)
@@ -292,7 +290,7 @@ func OnboardGatewayMessage(w http.ResponseWriter, r *http.Request, ctx *apiConte
 		return
 	}
 
-	signature, err := gateway.SignPlainBatchOnboardMessage(ctx.chainID, ctx.onboarderAddress, req.Owner, req.Version, gw)
+	signature, err := gateway.SignPlainBatchOnboardMessage(ctx.chainID, ctx.onboarderAddress, req.Owner, 0, gw)
 	if err != nil {
 		logrus.WithError(err).Error("unable to sign onboard message")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -307,7 +305,7 @@ func OnboardGatewayMessage(w http.ResponseWriter, r *http.Request, ctx *apiConte
 		GatewayOnboardSignature: fmt.Sprintf("0x%x", signature),
 		LocalID:                 gw.LocalID,
 		NetworkID:               gw.NetworkID,
-		Version:                 req.Version,
+		Version:                 0,
 		Onboarder:               ctx.onboarderAddress,
 	})
 }

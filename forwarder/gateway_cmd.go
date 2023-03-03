@@ -23,7 +23,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strconv"
 
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	"github.com/ThingsIXFoundation/packet-handling/utils"
@@ -39,9 +38,9 @@ var (
 	}
 
 	importGatewayCmd = &cobra.Command{
-		Use:   "import <owner> <version>",
+		Use:   "import <owner>",
 		Short: "Import recorded unknown gateways in gateway store and generate onboard message",
-		Args:  cobra.ExactArgs(2),
+		Args:  cobra.ExactArgs(1),
 		Run:   importGatewayStore,
 	}
 
@@ -60,9 +59,9 @@ var (
 	}
 
 	onboardGatewayCmd = &cobra.Command{
-		Use:   "onboard <local-id> <version> <owner>",
+		Use:   "onboard <local-id> <owner>",
 		Short: "Generate onboard message",
-		Args:  cobra.ExactArgs(3),
+		Args:  cobra.ExactArgs(2),
 		Run:   onboardGateway,
 	}
 
@@ -88,17 +87,13 @@ func init() {
 
 func onboardGateway(cmd *cobra.Command, args []string) {
 	var (
-		cfg                 = mustLoadConfig()
-		localID, err        = utils.Eui64FromString(args[0])
-		version, versionErr = strconv.ParseUint(args[1], 0, 8)
-		owner               = common.HexToAddress(args[2])
+		cfg          = mustLoadConfig()
+		localID, err = utils.Eui64FromString(args[0])
+		owner        = common.HexToAddress(args[1])
 	)
 
 	if err != nil {
-		logrus.WithError(versionErr).Fatal("invalid local id given")
-	}
-	if versionErr != nil {
-		logrus.WithError(versionErr).Fatal("invalid version given")
+		logrus.WithError(err).Fatal("invalid local id given")
 	}
 	if cfg.Forwarder.Gateways.HttpAPI.Address == "" {
 		logrus.Fatal("HTTP API endpoint missing")
@@ -106,7 +101,6 @@ func onboardGateway(cmd *cobra.Command, args []string) {
 
 	req, _ := json.Marshal(map[string]interface{}{
 		"localId": localID,
-		"version": version,
 		"owner":   owner,
 	})
 
@@ -164,13 +158,10 @@ func gatewayDetails(cmd *cobra.Command, args []string) {
 
 func importGatewayStore(cmd *cobra.Command, args []string) {
 	var (
-		cfg                 = mustLoadConfig()
-		owner               = common.HexToAddress(args[0])
-		version, versionErr = strconv.ParseUint(args[1], 0, 8)
+		cfg   = mustLoadConfig()
+		owner = common.HexToAddress(args[0])
 	)
-	if versionErr != nil {
-		logrus.WithError(versionErr).Fatal("invalid version given")
-	}
+
 	if cfg.Forwarder.Gateways.HttpAPI.Address == "" {
 		logrus.Fatal("HTTP API endpoint missing")
 	}
@@ -179,8 +170,7 @@ func importGatewayStore(cmd *cobra.Command, args []string) {
 		endpoint   = fmt.Sprintf("http://%s/v1/gateways/import", cfg.Forwarder.Gateways.HttpAPI.Address)
 		onboarded  []*OnboardGatewayReply
 		payload, _ = json.Marshal(map[string]interface{}{
-			"owner":   owner,
-			"version": version,
+			"owner": owner,
 		})
 	)
 
