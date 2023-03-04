@@ -364,3 +364,10 @@ func printGatewaysAsTable(gateways []*gateway.Gateway) {
 	}
 	table.Render()
 }
+
+func mustParseAddress(addr string) common.Address {
+	if !common.IsHexAddress(addr) {
+		logrus.Fatalf("invalid address %s", addr)
+	}
+	return common.HexToAddress(addr)
+}

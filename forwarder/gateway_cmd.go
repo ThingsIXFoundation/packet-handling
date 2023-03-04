@@ -25,8 +25,6 @@ import (
 	"os"
 
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
-	"github.com/ThingsIXFoundation/packet-handling/utils"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -87,14 +85,11 @@ func init() {
 
 func onboardGateway(cmd *cobra.Command, args []string) {
 	var (
-		cfg          = mustLoadConfig()
-		localID, err = utils.Eui64FromString(args[0])
-		owner        = common.HexToAddress(args[1])
+		cfg     = mustLoadConfig()
+		localID = mustDecodeGatewayID(args[0])
+		owner   = mustParseAddress(args[1])
 	)
 
-	if err != nil {
-		logrus.WithError(err).Fatal("invalid local id given")
-	}
 	if cfg.Forwarder.Gateways.HttpAPI.Address == "" {
 		logrus.Fatal("HTTP API endpoint missing")
 	}
@@ -128,13 +123,11 @@ func onboardGateway(cmd *cobra.Command, args []string) {
 
 func gatewayDetails(cmd *cobra.Command, args []string) {
 	var (
-		cfg          = mustLoadConfig()
-		localID, err = utils.Eui64FromString(args[0])
-		gw           gateway.Gateway
+		cfg     = mustLoadConfig()
+		localID = mustDecodeGatewayID(args[0])
+		gw      gateway.Gateway
 	)
-	if err != nil {
-		logrus.WithError(err).Fatal("invalid local id")
-	}
+
 	if cfg.Forwarder.Gateways.HttpAPI.Address == "" {
 		logrus.Fatal("HTTP API endpoint missing")
 	}
@@ -159,7 +152,7 @@ func gatewayDetails(cmd *cobra.Command, args []string) {
 func importGatewayStore(cmd *cobra.Command, args []string) {
 	var (
 		cfg   = mustLoadConfig()
-		owner = common.HexToAddress(args[0])
+		owner = mustParseAddress(args[0])
 	)
 
 	if cfg.Forwarder.Gateways.HttpAPI.Address == "" {
