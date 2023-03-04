@@ -25,7 +25,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ThingsIXFoundation/frequency-plan/go/frequency_plan"
 	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/sirupsen/logrus"
@@ -90,7 +89,7 @@ func (sync *GatewayThingsIXAPI) GatewayDetails(ctx context.Context, gatewayID Th
 			Altitude      uint16
 			Version       uint8
 			AntennaGain   float32
-			FrequencyPlan uint
+			FrequencyPlan string
 			Location      string
 			Owner         common.Address
 		}{}
@@ -113,7 +112,7 @@ func (sync *GatewayThingsIXAPI) GatewayDetails(ctx context.Context, gatewayID Th
 			return reply.Owner, reply.Version, nil, nil
 		}
 
-		band := string(frequency_plan.FromBlockchain(frequency_plan.BlockchainFrequencyPlan(reply.FrequencyPlan)))
+		band := reply.FrequencyPlan
 		antennaGain := fmt.Sprintf("%.1f", reply.AntennaGain)
 		sync.cache.Store(gatewayID, &cachedData{
 			When:    time.Now(),
