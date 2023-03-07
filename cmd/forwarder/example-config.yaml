@@ -130,6 +130,18 @@ forwarder:
             # much benefit.
             refresh: 1h
         
+            # Set a default frequency plan for gateways that are not onboarded.
+            #
+            # By default the forwarder will only forward data for gateways in its
+            # store that are onboarded and have their location and frequency plan
+            # set. With this option the forwarder will use the default frequency
+            # plan for gateways in its store that are not fully onboarded and
+            # forwards their data.
+            #
+            # Valid values are: EU868, US915, CN779, EU433, AU915, CN470, AS923,
+            #                   AS923-2, AS923-3, KR920, IN865, RU864, AS923-4
+            # default_frequency_plan: EU868
+        
         # Optionally record gateway local id's for unknown gateways to a file. 
         # This file can be imported into the gateway store later. This is
         # convenient if you have a lot of gateways that you would otherwise need

@@ -19,6 +19,7 @@ package gateway
 import (
 	"time"
 
+	"github.com/ThingsIXFoundation/frequency-plan/go/frequency_plan"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -52,6 +53,10 @@ type StoreConfig struct {
 	// RefreshInterval indicates how often the gateway store is reloaded from
 	// the backend store. If this is a nil ptr hot reloads are disabled.
 	RefreshInterval *time.Duration `mapstructure:"refresh"`
+
+	// DefaultGatewayFrequencyPlan contains if valid a default frequency plan
+	// that is used for gateways that are not fully onboarded.
+	DefaultGatewayFrequencyPlan frequency_plan.BandName `mapstructure:"default_frequency_plan"`
 
 	// YamlStorePath indicates that gateways are stored in a
 	// YAML based file store located on the local file system.

@@ -68,6 +68,7 @@ type ForwarderGatewayConfig struct {
 
 	// Store describes how gateways are stored/loaded in the forwarder.
 	Store gateway.StoreConfig
+
 	// RecordUnknown records gateways that connect to the forwarder but
 	// are not in the forwarders gateway store. Recorded gateways can
 	// be imported later if required.

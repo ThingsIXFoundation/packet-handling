@@ -26,6 +26,7 @@ import (
 	"github.com/FastFilter/xorfilter"
 	"github.com/brocaar/lorawan"
 
+	"github.com/ThingsIXFoundation/frequency-plan/go/frequency_plan"
 	"github.com/ThingsIXFoundation/packet-handling/forwarder/broadcast"
 	"github.com/ThingsIXFoundation/router-api/go/router"
 	"github.com/sirupsen/logrus"
@@ -115,6 +116,7 @@ func (rc *RouterClient) Run(ctx context.Context) {
 		}
 		log = logrus.WithFields(logrus.Fields{
 			"endpoint": rc.router.Endpoint,
+			"band":     frequency_plan.FromBlockchain(rc.router.FrequencyPlan),
 			"default":  rc.router.Default,
 		})
 	)
@@ -198,6 +200,7 @@ func logRouterDialDetails(router *Router) {
 		"default":  router.Default,
 		"netid":    router.NetID,
 		"prefix":   fmt.Sprintf("%08x/%d", router.Prefix, router.Mask),
+		"band":     frequency_plan.FromBlockchain(router.FrequencyPlan),
 	})
 	if !router.Default {
 		log = log.WithField("owner", router.Owner)
@@ -285,6 +288,7 @@ func (rc *RouterClient) run(ctx context.Context) error {
 			rc.router.Prefix = details.Prefix
 			rc.router.Mask = details.Mask
 			rc.router.Owner = details.Owner
+			rc.router.FrequencyPlan = details.FrequencyPlan
 
 			if reconnect {
 				log.WithField("new-endpoint", rc.router.Endpoint).Info("reconnect router on new endpoint")
