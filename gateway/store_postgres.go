@@ -50,10 +50,12 @@ type pgStore struct {
 	byThingsIxID map[ThingsIxID]*Gateway
 	// thingsix gateway registry
 	registery ThingsIXRegistry
+	// default frequency plan, or invalid if not configured
+	defaultFrequencyPlan frequency_plan.BandName
 }
 
 // NewPostgresStore returns a gateway store that uses a postgresql backend.
-func NewPostgresStore(ctx context.Context, refreshInterval *time.Duration, registry ThingsIXRegistry) (*pgStore, error) {
+func NewPostgresStore(ctx context.Context, refreshInterval *time.Duration, registry ThingsIXRegistry, defaultFreqPlan frequency_plan.BandName) (*pgStore, error) {
 	// create gateway table if not already available
 	db := database.DBWithContext(ctx)
 	if err := db.AutoMigrate(&pgGateway{}, &RecordedUnknownGateway{}); err != nil {
@@ -65,18 +67,23 @@ func NewPostgresStore(ctx context.Context, refreshInterval *time.Duration, regis
 		*refresh = time.Duration(30 * time.Minute)
 	}
 
-	logrus.WithFields(logrus.Fields{
+	log := logrus.WithFields(logrus.Fields{
 		"table":   pgGateway{}.TableName(),
 		"refresh": refresh,
-	}).Info("use database based gateway store")
+	})
+	if defaultFreqPlan != frequency_plan.Invalid {
+		log = log.WithField("gw_default_freq_plan", defaultFreqPlan)
+	}
+	log.Info("use database based gateway store")
 
 	// instantiate gateway store
 	store := &pgStore{
-		refreshInterval: *refresh,
-		byLocalId:       make(map[lorawan.EUI64]*Gateway),
-		byNetId:         make(map[lorawan.EUI64]*Gateway),
-		byThingsIxID:    make(map[ThingsIxID]*Gateway),
-		registery:       registry,
+		refreshInterval:      *refresh,
+		byLocalId:            make(map[lorawan.EUI64]*Gateway),
+		byNetId:              make(map[lorawan.EUI64]*Gateway),
+		byThingsIxID:         make(map[ThingsIxID]*Gateway),
+		registery:            registry,
+		defaultFrequencyPlan: defaultFreqPlan,
 	}
 
 	// load initial set of gateways from backend
@@ -286,9 +293,15 @@ func (store *pgStore) UniqueGatewayBands() UniqueGatewayBands {
 	for _, gw := range collector.Gateways {
 		if gw.Details != nil && gw.Details.Band != nil {
 			result.addBand(frequency_plan.BandName(*gw.Details.Band))
+		} else if store.defaultFrequencyPlan != frequency_plan.Invalid { // if a default gateway freq plan is set use that
+			result.addBand(frequency_plan.BandName(store.defaultFrequencyPlan))
 		}
 	}
 	return result
+}
+
+func (store *pgStore) DefaultFrequencyPlan() frequency_plan.BandName {
+	return store.defaultFrequencyPlan
 }
 
 func (store *pgStore) syncAll(ctx context.Context) {

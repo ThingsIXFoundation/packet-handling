@@ -91,6 +91,10 @@ type GatewayStore interface {
 	// UniqueGatewayBands returns the flattened set of frequency plans for all
 	// gateways in the store.
 	UniqueGatewayBands() UniqueGatewayBands
+
+	// DefaultFrequencyPlan returns the default frequency plan if set through
+	// the configuration. If not it returns Invalid.
+	DefaultFrequencyPlan() frequency_plan.BandName
 }
 
 // UniqueGatewayBands represents the unique set of frequency plans/bands
@@ -123,9 +127,9 @@ func NewGatewayStore(ctx context.Context, storeCfg *StoreConfig, registryCfg *Re
 
 	switch storeCfg.Type() {
 	case YamlFileGatewayStore:
-		return NewYamlFileStore(ctx, *storeCfg.YamlStorePath, registery)
+		return NewYamlFileStore(ctx, *storeCfg.YamlStorePath, registery, storeCfg.DefaultGatewayFrequencyPlan)
 	case PostgresqlGatewayStore:
-		return NewPostgresStore(ctx, storeCfg.RefreshInterval, registery)
+		return NewPostgresStore(ctx, storeCfg.RefreshInterval, registery, storeCfg.DefaultGatewayFrequencyPlan)
 	case NoGatewayStoreType:
 		// no gateway store configured, fallback to default yaml gateway store
 		// in $HOME/gateway-store.yaml
@@ -134,7 +138,7 @@ func NewGatewayStore(ctx context.Context, storeCfg *StoreConfig, registryCfg *Re
 			logrus.Fatal("no gateway store configured")
 		}
 		storePath := filepath.Join(home, "gateway-store.yaml")
-		return NewYamlFileStore(ctx, storePath, registery)
+		return NewYamlFileStore(ctx, storePath, registery, storeCfg.DefaultGatewayFrequencyPlan)
 	}
 
 	return nil, ErrInvalidConfig

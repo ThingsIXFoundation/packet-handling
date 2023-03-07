@@ -49,21 +49,28 @@ type yamlFileStore struct {
 	byThingsIxID map[ThingsIxID]*Gateway
 	// thingsix gateway registry
 	registry ThingsIXRegistry
+	// default frequency plan, or invalid if not configured
+	defaultFrequencyPlan frequency_plan.BandName
 }
 
-func NewYamlFileStore(ctx context.Context, path string, registry ThingsIXRegistry) (*yamlFileStore, error) {
+func NewYamlFileStore(ctx context.Context, path string, registry ThingsIXRegistry, defaultFreqPlan frequency_plan.BandName) (*yamlFileStore, error) {
 	if path == "" {
 		return nil, fmt.Errorf("invalid gateway store file")
 	}
 
-	logrus.WithField("file", path).Info("use file based gateway store")
+	log := logrus.WithField("file", path)
+	if defaultFreqPlan != frequency_plan.Invalid {
+		log = log.WithField("gw_default_freq_plan", defaultFreqPlan)
+	}
+	log.Info("use file based gateway store")
 
 	store := &yamlFileStore{
-		path:         path,
-		byLocalId:    make(map[lorawan.EUI64]*Gateway),
-		byNetId:      make(map[lorawan.EUI64]*Gateway),
-		byThingsIxID: make(map[ThingsIxID]*Gateway),
-		registry:     registry,
+		path:                 path,
+		byLocalId:            make(map[lorawan.EUI64]*Gateway),
+		byNetId:              make(map[lorawan.EUI64]*Gateway),
+		byThingsIxID:         make(map[ThingsIxID]*Gateway),
+		registry:             registry,
+		defaultFrequencyPlan: defaultFreqPlan,
 	}
 
 	if err := store.loadFromFile(); err != nil {
@@ -270,9 +277,15 @@ func (store *yamlFileStore) UniqueGatewayBands() UniqueGatewayBands {
 	for _, gw := range collector.Gateways {
 		if gw.Details != nil && gw.Details.Band != nil {
 			result.addBand(frequency_plan.BandName(*gw.Details.Band))
+		} else if store.defaultFrequencyPlan != frequency_plan.Invalid { // if a default gateway freq plan is set use that
+			result.addBand(frequency_plan.BandName(store.defaultFrequencyPlan))
 		}
 	}
 	return result
+}
+
+func (store *yamlFileStore) DefaultFrequencyPlan() frequency_plan.BandName {
+	return store.defaultFrequencyPlan
 }
 
 // loadFromFile loads the gateway store from disk into this in-memory store.

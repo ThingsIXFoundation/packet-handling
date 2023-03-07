@@ -19,6 +19,7 @@ package forwarder
 import (
 	"time"
 
+	"github.com/ThingsIXFoundation/frequency-plan/go/frequency_plan"
 	"github.com/ThingsIXFoundation/packet-handling/database"
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	"github.com/ThingsIXFoundation/packet-handling/utils"
@@ -71,6 +72,7 @@ func getNetConfig(net string) *Config {
 	cfg.Forwarder.Gateways = ForwarderGatewayConfig{}
 	cfg.Forwarder.Gateways.HttpAPI.Address = "127.0.0.1:8080"
 	cfg.Forwarder.Gateways.Store = gateway.StoreConfig{}
+	cfg.Forwarder.Gateways.Store.DefaultGatewayFrequencyPlan = frequency_plan.Invalid
 	cfg.Forwarder.Gateways.Store.RefreshInterval = utils.Ptr(30 * time.Minute)
 	cfg.Forwarder.Gateways.Store.YamlStorePath = utils.Ptr("/etc/thingsix-forwarder/gateways.yaml")
 	cfg.Forwarder.Gateways.RecordUnknown = &gateway.ForwarderGatewayRecordUnknownConfig{}
@@ -156,6 +158,14 @@ func mustLoadConfig() *Config {
 		FullTimestamp:    true,
 		DisableTimestamp: !cfg.Log.Timestamp,
 	})
+
+	if defaultGatewayFreqPlan := viper.GetString("default_frequency_plan"); defaultGatewayFreqPlan != "" {
+		band, err := frequency_plan.GetBand(defaultGatewayFreqPlan)
+		if err != nil {
+			logrus.WithField("frequency_plan", defaultGatewayFreqPlan).Fatal("invalid default gateway frequency plan provided")
+		}
+		cfg.Forwarder.Gateways.Store.DefaultGatewayFrequencyPlan = frequency_plan.BandName(band.Name())
+	}
 
 	if net != "" {
 		logrus.Infof("***Starting ThingsIX Forwarder connected to %snet***", net)
