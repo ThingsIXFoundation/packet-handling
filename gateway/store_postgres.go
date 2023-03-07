@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ThingsIXFoundation/frequency-plan/go/frequency_plan"
 	"github.com/ThingsIXFoundation/packet-handling/database"
 	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/brocaar/lorawan"
@@ -269,6 +270,25 @@ func (store *pgStore) syncGatewayByLocalID(ctx context.Context, localID lorawan.
 	store.gwMapMu.Unlock()
 
 	return synced, nil
+}
+
+func (store *pgStore) UniqueGatewayBands() UniqueGatewayBands {
+	var (
+		collector Collector
+		result    = UniqueGatewayBands{
+			bands: make(map[frequency_plan.BandName]struct{}),
+			plans: make(map[frequency_plan.BlockchainFrequencyPlan]struct{}),
+		}
+	)
+
+	store.Range(&collector)
+
+	for _, gw := range collector.Gateways {
+		if gw.Details != nil && gw.Details.Band != nil {
+			result.addBand(frequency_plan.BandName(*gw.Details.Band))
+		}
+	}
+	return result
 }
 
 func (store *pgStore) syncAll(ctx context.Context) {

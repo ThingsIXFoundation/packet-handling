@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ThingsIXFoundation/frequency-plan/go/frequency_plan"
 	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/brocaar/lorawan"
 	"github.com/ethereum/go-ethereum/common"
@@ -86,6 +87,31 @@ type GatewayStore interface {
 	// SyncGatewayByLocalID syncs the gateway identified by the given local id
 	// and returns it after sync.
 	SyncGatewayByLocalID(ctx context.Context, localID lorawan.EUI64, force bool) (*Gateway, error)
+
+	// UniqueGatewayBands returns the flattened set of frequency plans for all
+	// gateways in the store.
+	UniqueGatewayBands() UniqueGatewayBands
+}
+
+// UniqueGatewayBands represents the unique set of frequency plans/bands
+type UniqueGatewayBands struct {
+	bands map[frequency_plan.BandName]struct{}
+	plans map[frequency_plan.BlockchainFrequencyPlan]struct{}
+}
+
+func (u *UniqueGatewayBands) addBand(band frequency_plan.BandName) {
+	u.bands[band] = struct{}{}
+	u.plans[band.ToBlockchain()] = struct{}{}
+}
+
+func (u UniqueGatewayBands) ContainsBand(band frequency_plan.BandName) bool {
+	_, found := u.bands[band]
+	return found
+}
+
+func (u UniqueGatewayBands) ContainsFrequencyPlan(plan frequency_plan.BlockchainFrequencyPlan) bool {
+	_, found := u.plans[plan]
+	return found
 }
 
 // NewGatewayStore returns a gateway store that was configured in the given cfg.

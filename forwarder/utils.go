@@ -27,6 +27,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/ThingsIXFoundation/frequency-plan/go/frequency_plan"
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	router_registry "github.com/ThingsIXFoundation/router-registry-go"
 	"github.com/brocaar/lorawan"
@@ -76,7 +77,10 @@ func fetchRoutersFromChain(cfg *Config, accounter Accounter) (RoutesUpdaterFunc,
 		}
 	}
 
-	logrus.WithField("interval", interval).Info("retrieve routes on chain")
+	logrus.WithFields(logrus.Fields{
+		"interval": interval,
+		"contract": cfg.Forwarder.Routers.OnChain.RegistryContract,
+	}).Info("retrieve routes from on-chain router registry")
 
 	return func() ([]*Router, error) {
 		client, err := dialRPCNode(cfg)
@@ -129,8 +133,8 @@ func fetchRoutersFromChain(cfg *Config, accounter Accounter) (RoutesUpdaterFunc,
 				var netidb [4]byte
 				binary.BigEndian.PutUint32(netidb[:], uint32(r.Netid.Uint64()))
 				netid := lorawan.NetID{netidb[1], netidb[2], netidb[3]}
-
-				routers = append(routers, NewRouter(r.Id, r.Endpoint, false, netid, r.Prefix, r.Mask, r.Owner, accounter))
+				freqPlan := frequency_plan.BlockchainFrequencyPlan(r.FrequencyPlan)
+				routers = append(routers, NewRouter(r.Id, r.Endpoint, false, netid, r.Prefix, r.Mask, freqPlan, r.Owner, accounter))
 			}
 		}
 
@@ -164,7 +168,7 @@ func fetchRoutersFromThingsIXAPI(cfg *Config, accounter Accounter) (RoutesUpdate
 	interval := 30 * time.Minute // default refresh interval
 	if cfg.Forwarder.Routers.ThingsIXApi.UpdateInterval != nil {
 		if *cfg.Forwarder.Routers.ThingsIXApi.UpdateInterval < (15 * time.Minute) {
-			logrus.Warn("router ThingsIX update interval too small, fall back to 30m")
+			logrus.Warnf("router ThingsIX update interval too small %s, fall back to 30m", *cfg.Forwarder.Routers.ThingsIXApi.UpdateInterval)
 		} else {
 			interval = *cfg.Forwarder.Routers.ThingsIXApi.UpdateInterval
 		}
@@ -182,12 +186,13 @@ func fetchRoutersFromThingsIXAPI(cfg *Config, accounter Accounter) (RoutesUpdate
 			BlockNumber uint64
 			ChainID     uint64 `json:"chainId"`
 			Routers     []struct {
-				Endpoint string
-				ID       string
-				Owner    common.Address
-				NetId    uint32
-				Prefix   uint32
-				Mask     uint8
+				Endpoint      string
+				ID            string
+				Owner         common.Address
+				NetId         uint32
+				Prefix        uint32
+				FrequencyPlan frequency_plan.BandName
+				Mask          uint8
 			}
 		}{}
 
@@ -217,7 +222,7 @@ func fetchRoutersFromThingsIXAPI(cfg *Config, accounter Accounter) (RoutesUpdate
 			var netidb [4]byte
 			binary.BigEndian.PutUint32(netidb[:], r.NetId)
 			netid := lorawan.NetID{netidb[1], netidb[2], netidb[3]}
-			routers[i] = NewRouter(id, r.Endpoint, false, netid, r.Prefix, r.Mask, r.Owner, accounter)
+			routers[i] = NewRouter(id, r.Endpoint, false, netid, r.Prefix, r.Mask, r.FrequencyPlan.ToBlockchain(), r.Owner, accounter)
 		}
 		logrus.WithField("#routers", len(routers)).Info("fetched routing table from ThingsIX API")
 		return routers, nil
@@ -327,7 +332,7 @@ func printOnboardsAsTable(onboards []*OnboardGatewayReply) {
 func printGatewaysAsTable(gateways []*gateway.Gateway) {
 	var (
 		table  = tablewriter.NewWriter(os.Stdout)
-		header = []string{"", "thingsix_id", "local_id", "network_id", "owner", "version", "antenna_gain", "location", "altitude"}
+		header = []string{"", "thingsix_id", "local_id", "network_id", "owner", "band", "version", "antenna_gain", "location", "altitude"}
 	)
 
 	table.SetHeader(header)
@@ -335,6 +340,7 @@ func printGatewaysAsTable(gateways []*gateway.Gateway) {
 	for i, gw := range gateways {
 		var (
 			owner       = ""
+			band        = ""
 			version     = ""
 			antennaGain = ""
 			location    = ""
@@ -345,6 +351,7 @@ func printGatewaysAsTable(gateways []*gateway.Gateway) {
 			version = fmt.Sprintf("%d", *gw.Version)
 		}
 		if gw.Details != nil {
+			band = *gw.Details.Band
 			antennaGain = *gw.Details.AntennaGain
 			location = *gw.Details.Location
 			altitude = fmt.Sprintf("%d", *gw.Details.Altitude)
@@ -355,6 +362,7 @@ func printGatewaysAsTable(gateways []*gateway.Gateway) {
 			gw.LocalID.String(),
 			gw.NetworkID.String(),
 			owner,
+			band,
 			version,
 			antennaGain,
 			location,

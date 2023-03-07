@@ -79,7 +79,7 @@ func NewExchange(ctx context.Context, cfg *Config) (*Exchange, error) {
 	}
 
 	// build routing table to determine where data must be forwarded to
-	routingTable, err := buildRoutingTable(cfg, accounter)
+	routingTable, err := buildRoutingTable(cfg, store, accounter)
 	if err != nil {
 		return nil, err
 	}
@@ -364,7 +364,7 @@ func (e *Exchange) gatewayStats(stats *gw.GatewayStats) {
 }
 
 // subscribeEvent is called by the chirpstack backend, currently only when a gateway
-// is online this callback is called.ys
+// is online this callback is called.
 func (e *Exchange) subscribeEvent(event events.Subscribe) {
 	log := logrus.WithField("gw_local_id", hex.EncodeToString(event.GatewayID[:]))
 	localGatewayID, err := gateway.BytesToGatewayID(event.GatewayID[:])

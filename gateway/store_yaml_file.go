@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ThingsIXFoundation/frequency-plan/go/frequency_plan"
 	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/brocaar/lorawan"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -69,6 +70,9 @@ func NewYamlFileStore(ctx context.Context, path string, registry ThingsIXRegistr
 		logrus.WithError(err).Fatal("unable to load gateways from disk")
 	}
 
+	// sync immediatly with registry
+	_ = store.syncAllGatewaysWithRegistry(ctx)
+
 	return store, nil
 }
 
@@ -76,9 +80,6 @@ func NewYamlFileStore(ctx context.Context, path string, registry ThingsIXRegistr
 // gateway store with the gateway store file on disk and executes commando's
 // that mutate the store. This ensures that mutations are synchronized.
 func (store *yamlFileStore) Run(ctx context.Context) {
-	// sync immediatly with registry
-	_ = store.syncAllGatewaysWithRegistry(ctx)
-
 	for {
 		select {
 		case <-time.NewTimer(30 * time.Minute).C:
@@ -253,6 +254,25 @@ func (store *yamlFileStore) syncAllGatewaysWithRegistry(ctx context.Context) err
 	}
 
 	return nil
+}
+
+func (store *yamlFileStore) UniqueGatewayBands() UniqueGatewayBands {
+	var (
+		collector Collector
+		result    = UniqueGatewayBands{
+			bands: make(map[frequency_plan.BandName]struct{}),
+			plans: make(map[frequency_plan.BlockchainFrequencyPlan]struct{}),
+		}
+	)
+
+	store.Range(&collector)
+
+	for _, gw := range collector.Gateways {
+		if gw.Details != nil && gw.Details.Band != nil {
+			result.addBand(frequency_plan.BandName(*gw.Details.Band))
+		}
+	}
+	return result
 }
 
 // loadFromFile loads the gateway store from disk into this in-memory store.

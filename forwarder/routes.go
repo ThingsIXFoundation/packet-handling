@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ThingsIXFoundation/frequency-plan/go/frequency_plan"
+	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	"github.com/ThingsIXFoundation/packet-handling/utils"
 
 	"github.com/FastFilter/xorfilter"
@@ -54,6 +56,8 @@ type RouterDetails struct {
 	Prefix uint32
 	// Mask is the DevAddr mask  that matches the DevAddr of devices the Router wants to receive traffic for
 	Mask uint8
+	// FrequencyPlan that this router is interested in
+	FrequencyPlan frequency_plan.BlockchainFrequencyPlan
 	// Owner is the routers owner
 	Owner common.Address
 }
@@ -75,6 +79,8 @@ type Router struct {
 	Mask uint8
 	// Owner is the routers owner
 	Owner common.Address
+	// FrequencyPlan is the frequency plan this router is registered for
+	FrequencyPlan frequency_plan.BlockchainFrequencyPlan
 
 	joinFilterMutex sync.RWMutex
 	// JoinFilter is the filter of devices that are allowed to join the network this router is part of
@@ -90,16 +96,17 @@ func (r *Router) String() string {
 	return r.ThingsIXID.String()
 }
 
-func NewRouter(id [32]byte, endpoint string, def bool, netID lorawan.NetID, prefix uint32, mask uint8, owner common.Address, accounting Accounter) *Router {
+func NewRouter(id [32]byte, endpoint string, def bool, netID lorawan.NetID, prefix uint32, mask uint8, frequencyPlan frequency_plan.BlockchainFrequencyPlan, owner common.Address, accounting Accounter) *Router {
 	return &Router{
-		ThingsIXID: id,
-		Endpoint:   endpoint,
-		Default:    def,
-		NetID:      netID,
-		Prefix:     prefix,
-		Mask:       mask,
-		Owner:      owner,
-		accounting: accounting,
+		ThingsIXID:    id,
+		Endpoint:      endpoint,
+		Default:       def,
+		NetID:         netID,
+		Prefix:        prefix,
+		Mask:          mask,
+		FrequencyPlan: frequencyPlan,
+		Owner:         owner,
+		accounting:    accounting,
 	}
 }
 
@@ -178,6 +185,9 @@ type RoutingTable struct {
 	// locally and always get send all data that is received from the gateways.
 	// These routers don't have to be registered in ThingsIX.
 	defaultRoutes []*Router
+
+	// gatewayStore provides access to the gateway store.
+	gatewayStore gateway.GatewayStore
 }
 
 // Run starts the integration with the routers on the ThingsIX network until the
@@ -251,11 +261,21 @@ func (r *RoutingTable) keepRouteTableUpToDate(ctx context.Context) {
 				deletedRoutesCount  = 0
 			)
 
-			// stop which routers are deleted and stop the client
+			// gather unique frequency plans for all gateways in gateway store
+			// to determine if this forwarder receives data that the router
+			// might be interested in.
+			uniqueBands := r.gatewayStore.UniqueGatewayBands()
+
+			// stop which routers are deleted or use a frequency plan that none
+			// of the gateways in the store use
 			for id, client := range existingRouters {
 				deleted := true
 				for _, r := range routers {
-					if r.ThingsIXID == id {
+					// make sure that the connected router is in the updated
+					// router set and that there is at least 1 gateway in the
+					// store that uses the routers frequency plan. Otherwise
+					// disconnect.
+					if r.ThingsIXID == id && uniqueBands.ContainsFrequencyPlan(r.FrequencyPlan) {
 						deleted = false
 						break
 					}
@@ -268,6 +288,15 @@ func (r *RoutingTable) keepRouteTableUpToDate(ctx context.Context) {
 			}
 
 			for _, router := range routers {
+				if !uniqueBands.ContainsFrequencyPlan(router.FrequencyPlan) {
+					// router supports frequency plan that non of the gateways
+					// in this store use, no need to connect to it.
+					logrus.WithFields(logrus.Fields{
+						"id":   router.ThingsIXID,
+						"band": frequency_plan.FromBlockchain(router.FrequencyPlan),
+					}).Debug("ignore router - no gateways for routers frequency plan in gateway store")
+					continue
+				}
 				// don't capture loop variable since it is used in a new go-routine
 				// and reused in the next iteration.
 				copy := router
@@ -278,11 +307,12 @@ func (r *RoutingTable) keepRouteTableUpToDate(ctx context.Context) {
 					// therefore do it in the background.
 					go func() {
 						client.details <- &RouterDetails{
-							Endpoint: copy.Endpoint,
-							NetID:    copy.NetID,
-							Prefix:   copy.Prefix,
-							Mask:     copy.Mask,
-							Owner:    copy.Owner,
+							Endpoint:      copy.Endpoint,
+							NetID:         copy.NetID,
+							Prefix:        copy.Prefix,
+							Mask:          copy.Mask,
+							Owner:         copy.Owner,
+							FrequencyPlan: copy.FrequencyPlan,
 						}
 					}()
 					existingRoutesCount++
@@ -335,7 +365,7 @@ func (r *RoutingTable) runDefaultRouting(ctx context.Context) {
 }
 
 // buildRoutingTable constructs a new routing table
-func buildRoutingTable(cfg *Config, accounter Accounter) (*RoutingTable, error) {
+func buildRoutingTable(cfg *Config, gatewayStore gateway.GatewayStore, accounter Accounter) (*RoutingTable, error) {
 	routes, interval, err := obtainThingsIXRoutesFunc(cfg, accounter)
 	if err != nil {
 		return nil, fmt.Errorf("unable to determine method to fetch ThingsIX routes: %w", err)
@@ -349,6 +379,7 @@ func buildRoutingTable(cfg *Config, accounter Accounter) (*RoutingTable, error) 
 		defaultRoutes:           cfg.Forwarder.Routers.Default,
 		networkEvents:           make(chan *NetworkEvent, 1024),
 		gatewayEvents:           broadcast.New[*GatewayEvent](1024).Run(),
+		gatewayStore:            gatewayStore,
 	}, nil
 }
 
