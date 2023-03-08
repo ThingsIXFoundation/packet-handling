@@ -41,6 +41,8 @@ func UplinkAirtime(frame *gw.UplinkFrame) (time.Duration, error) {
 		codingrate = airtime.CodingRate46
 	case gw.CodeRate_CR_4_7:
 		codingrate = airtime.CodingRate47
+	case gw.CodeRate_CR_4_8:
+		codingrate = airtime.CodingRate48
 	default:
 		return 0, fmt.Errorf("invalid code rate: %s", lora.CodeRate)
 	}
@@ -67,6 +69,8 @@ func DownlinkAirtime(frame *gw.DownlinkFrame) (time.Duration, error) {
 		codingrate = airtime.CodingRate46
 	case gw.CodeRate_CR_4_7:
 		codingrate = airtime.CodingRate47
+	case gw.CodeRate_CR_4_8:
+		codingrate = airtime.CodingRate48
 	default:
 		return 0, fmt.Errorf("invalid code rate: %s", lora.CodeRate)
 	}

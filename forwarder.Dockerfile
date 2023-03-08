@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-FROM --platform=$BUILDPLATFORM golang:1.19.3-alpine as build
+FROM --platform=$BUILDPLATFORM golang:1.20.0-alpine as build
 
 RUN apk add --update-cache ca-certificates && rm -rf /var/cache/apk/*
 

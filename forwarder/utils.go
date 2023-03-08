@@ -25,11 +25,9 @@ import (
 	"math/big"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
-	gateway_registry "github.com/ThingsIXFoundation/gateway-registry-go"
-	h3light "github.com/ThingsIXFoundation/h3-light"
+	"github.com/ThingsIXFoundation/frequency-plan/go/frequency_plan"
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	router_registry "github.com/ThingsIXFoundation/router-registry-go"
 	"github.com/brocaar/lorawan"
@@ -79,7 +77,10 @@ func fetchRoutersFromChain(cfg *Config, accounter Accounter) (RoutesUpdaterFunc,
 		}
 	}
 
-	logrus.WithField("interval", interval).Info("retrieve routes on chain")
+	logrus.WithFields(logrus.Fields{
+		"interval": interval,
+		"contract": cfg.Forwarder.Routers.OnChain.RegistryContract,
+	}).Info("retrieve routes from on-chain router registry")
 
 	return func() ([]*Router, error) {
 		client, err := dialRPCNode(cfg)
@@ -132,8 +133,8 @@ func fetchRoutersFromChain(cfg *Config, accounter Accounter) (RoutesUpdaterFunc,
 				var netidb [4]byte
 				binary.BigEndian.PutUint32(netidb[:], uint32(r.Netid.Uint64()))
 				netid := lorawan.NetID{netidb[1], netidb[2], netidb[3]}
-
-				routers = append(routers, NewRouter(r.Id, r.Endpoint, false, netid, r.Prefix, r.Mask, r.Owner, accounter))
+				freqPlan := frequency_plan.BlockchainFrequencyPlan(r.FrequencyPlan)
+				routers = append(routers, NewRouter(r.Id, r.Endpoint, false, netid, r.Prefix, r.Mask, freqPlan, r.Owner, accounter))
 			}
 		}
 
@@ -167,7 +168,7 @@ func fetchRoutersFromThingsIXAPI(cfg *Config, accounter Accounter) (RoutesUpdate
 	interval := 30 * time.Minute // default refresh interval
 	if cfg.Forwarder.Routers.ThingsIXApi.UpdateInterval != nil {
 		if *cfg.Forwarder.Routers.ThingsIXApi.UpdateInterval < (15 * time.Minute) {
-			logrus.Warn("router ThingsIX update interval too small, fall back to 30m")
+			logrus.Warnf("router ThingsIX update interval too small %s, fall back to 30m", *cfg.Forwarder.Routers.ThingsIXApi.UpdateInterval)
 		} else {
 			interval = *cfg.Forwarder.Routers.ThingsIXApi.UpdateInterval
 		}
@@ -180,24 +181,27 @@ func fetchRoutersFromThingsIXAPI(cfg *Config, accounter Accounter) (RoutesUpdate
 		if err != nil {
 			return nil, err
 		}
-		defer resp.Body.Close()
 
 		snapshot := struct {
 			BlockNumber uint64
 			ChainID     uint64 `json:"chainId"`
 			Routers     []struct {
-				Endpoint string
-				ID       string
-				Owner    common.Address
-				NetId    uint32
-				Prefix   uint32
-				Mask     uint8
+				Endpoint      string
+				ID            string
+				Owner         common.Address
+				NetId         uint32
+				Prefix        uint32
+				FrequencyPlan frequency_plan.BandName
+				Mask          uint8
 			}
 		}{}
 
 		if err := json.NewDecoder(resp.Body).Decode(&snapshot); err != nil {
+			_ = resp.Body.Close()
 			return nil, err
 		}
+		_ = resp.Body.Close()
+
 		if snapshot.ChainID != cfg.BlockChain.Polygon.ChainID {
 			return nil, fmt.Errorf("router snapshot from wrong chain, got %d, want %d", snapshot.ChainID, cfg.BlockChain.Polygon.ChainID)
 		}
@@ -208,9 +212,9 @@ func fetchRoutersFromThingsIXAPI(cfg *Config, accounter Accounter) (RoutesUpdate
 			var (
 				id [32]byte
 			)
-			rID, err := hex.DecodeString(r.ID)
-			if err != nil {
-				logrus.WithError(err).Error("unable to decode router id")
+			rID := common.FromHex(r.ID)
+			if len(rID) != 32 {
+				logrus.WithError(err).Error("invalid router id")
 				continue
 			}
 
@@ -218,7 +222,7 @@ func fetchRoutersFromThingsIXAPI(cfg *Config, accounter Accounter) (RoutesUpdate
 			var netidb [4]byte
 			binary.BigEndian.PutUint32(netidb[:], r.NetId)
 			netid := lorawan.NetID{netidb[1], netidb[2], netidb[3]}
-			routers[i] = NewRouter(id, r.Endpoint, false, netid, r.Prefix, r.Mask, r.Owner, accounter)
+			routers[i] = NewRouter(id, r.Endpoint, false, netid, r.Prefix, r.Mask, r.FrequencyPlan.ToBlockchain(), r.Owner, accounter)
 		}
 		logrus.WithField("#routers", len(routers)).Info("fetched routing table from ThingsIX API")
 		return routers, nil
@@ -268,22 +272,6 @@ func mustDecodeGatewayID(input string) lorawan.EUI64 {
 	return id
 }
 
-func mustDecodeThingsIXID(input string) [32]byte {
-	if strings.HasPrefix(input, "0x") || strings.HasPrefix(input, "0X") {
-		input = input[2:]
-	}
-	thingsIXID, err := hex.DecodeString(input)
-	if err != nil {
-		logrus.WithError(err).Fatal("invalid gateway ThingsIX id")
-	}
-	if len(thingsIXID) != 32 {
-		logrus.Fatal("invalid ThingsIX id")
-	}
-	var ret [32]byte
-	copy(ret[:], thingsIXID)
-	return ret
-}
-
 type GatewayCollector struct {
 	Gateways []*gateway.Gateway
 }
@@ -293,38 +281,101 @@ func (c *GatewayCollector) Do(gw *gateway.Gateway) bool {
 	return true
 }
 
-func printGatewaysAsTable(gateways []*gateway.Gateway, registry *gateway_registry.GatewayRegistry) {
+func printOnboards(json bool, onboards []*OnboardGatewayReply) {
+	if json {
+		printOnboardsAsJSON(onboards)
+	} else {
+		printOnboardsAsTable(onboards)
+	}
+}
+
+func printOnboardsAsJSON(onboards []*OnboardGatewayReply) {
+	var res []map[string]interface{}
+	for _, onb := range onboards {
+		res = append(res, map[string]interface{}{
+			"owner":                     onb.Owner,
+			"gateway_id":                onb.GatewayID,
+			"version":                   onb.Version,
+			"local_id":                  onb.LocalID,
+			"network_id":                onb.NetworkID,
+			"address":                   onb.Address,
+			"chain_id":                  onb.ChainID,
+			"gateway_onboard_signature": onb.GatewayOnboardSignature,
+		})
+	}
+	_ = json.NewEncoder(os.Stdout).Encode(res)
+}
+
+func printOnboardsAsTable(onboards []*OnboardGatewayReply) {
 	var (
 		table  = tablewriter.NewWriter(os.Stdout)
-		header = []string{"", "thingsix_id", "local_id", "network_id"}
+		header = []string{"", "gateway_id", "local_id",
+			"owner", "version", "gateway_onboard_signature"}
 	)
-	if registry != nil {
-		header = append(header, "owner", "antenna_gain", "location", "altitude")
+
+	table.SetHeader(header)
+
+	for i, onb := range onboards {
+		table.Append([]string{
+			fmt.Sprintf("%d", i+1),
+			onb.GatewayID.String(),
+			onb.LocalID.String(),
+			onb.Owner.String(),
+			fmt.Sprintf("%d", onb.Version),
+			onb.GatewayOnboardSignature,
+		})
 	}
+
+	table.Render()
+}
+
+func printGatewaysAsTable(gateways []*gateway.Gateway) {
+	var (
+		table  = tablewriter.NewWriter(os.Stdout)
+		header = []string{"", "thingsix_id", "local_id", "network_id", "owner", "band", "version", "antenna_gain", "location", "altitude"}
+	)
+
 	table.SetHeader(header)
 
 	for i, gw := range gateways {
+		var (
+			owner       = ""
+			band        = ""
+			version     = ""
+			antennaGain = ""
+			location    = ""
+			altitude    = ""
+		)
+		if gw.Owner != nil {
+			owner = gw.Owner.String()
+			version = fmt.Sprintf("%d", *gw.Version)
+		}
+		if gw.Details != nil {
+			band = *gw.Details.Band
+			antennaGain = *gw.Details.AntennaGain
+			location = *gw.Details.Location
+			altitude = fmt.Sprintf("%d", *gw.Details.Altitude)
+		}
 		row := []string{
 			fmt.Sprintf("%d", i+1),
 			hex.EncodeToString(gw.ThingsIxID[:]),
 			gw.LocalID.String(),
 			gw.NetworkID.String(),
-		}
-
-		if registry != nil {
-			if gateway, err := registry.Gateways(nil, gw.ThingsIxID); err == nil {
-				if gateway.Owner != (common.Address{}) {
-					row = append(row, gateway.Owner.Hex()) // guaranteed to be set
-					if gateway.AntennaGain != 0 {
-						location := h3light.Cell(gateway.Location)
-						row = append(row, fmt.Sprintf("%.1f", float32(gateway.AntennaGain)/10.0))
-						row = append(row, location.String())
-						row = append(row, fmt.Sprintf("%d", uint64(gateway.Altitude)*3))
-					}
-				}
-			}
+			owner,
+			band,
+			version,
+			antennaGain,
+			location,
+			altitude,
 		}
 		table.Append(row)
 	}
 	table.Render()
+}
+
+func mustParseAddress(addr string) common.Address {
+	if !common.IsHexAddress(addr) {
+		logrus.Fatalf("invalid address %s", addr)
+	}
+	return common.HexToAddress(addr)
 }

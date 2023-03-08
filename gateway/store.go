@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ThingsIXFoundation/frequency-plan/go/frequency_plan"
 	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/brocaar/lorawan"
 	"github.com/ethereum/go-ethereum/common"
@@ -41,6 +42,9 @@ func (fn GatewayRangerFunc) Do(gw *Gateway) bool {
 }
 
 type GatewayStore interface {
+	// Run the background tasks in the store until the given ctx expires.
+	Run(ctx context.Context)
+
 	// Count returns the number of gateways in the store.
 	Count() int
 
@@ -79,15 +83,53 @@ type GatewayStore interface {
 	// Add creates a net gateway record based on the given localID and key and
 	// adds it to the store.
 	Add(ctx context.Context, localID lorawan.EUI64, key *ecdsa.PrivateKey) (*Gateway, error)
+
+	// SyncGatewayByLocalID syncs the gateway identified by the given local id
+	// and returns it after sync.
+	SyncGatewayByLocalID(ctx context.Context, localID lorawan.EUI64, force bool) (*Gateway, error)
+
+	// UniqueGatewayBands returns the flattened set of frequency plans for all
+	// gateways in the store.
+	UniqueGatewayBands() UniqueGatewayBands
+
+	// DefaultFrequencyPlan returns the default frequency plan if set through
+	// the configuration. If not it returns Invalid.
+	DefaultFrequencyPlan() frequency_plan.BandName
+}
+
+// UniqueGatewayBands represents the unique set of frequency plans/bands
+type UniqueGatewayBands struct {
+	bands map[frequency_plan.BandName]struct{}
+	plans map[frequency_plan.BlockchainFrequencyPlan]struct{}
+}
+
+func (u *UniqueGatewayBands) addBand(band frequency_plan.BandName) {
+	u.bands[band] = struct{}{}
+	u.plans[band.ToBlockchain()] = struct{}{}
+}
+
+func (u UniqueGatewayBands) ContainsBand(band frequency_plan.BandName) bool {
+	_, found := u.bands[band]
+	return found
+}
+
+func (u UniqueGatewayBands) ContainsFrequencyPlan(plan frequency_plan.BlockchainFrequencyPlan) bool {
+	_, found := u.plans[plan]
+	return found
 }
 
 // NewGatewayStore returns a gateway store that was configured in the given cfg.
-func NewGatewayStore(ctx context.Context, cfg *StoreConfig) (GatewayStore, error) {
-	switch cfg.Type() {
+func NewGatewayStore(ctx context.Context, storeCfg *StoreConfig, registryCfg *RegistrySyncConfig) (GatewayStore, error) {
+	registery, err := NewThingsIXGatewayRegistry(registryCfg)
+	if err != nil {
+		return nil, err
+	}
+
+	switch storeCfg.Type() {
 	case YamlFileGatewayStore:
-		return NewYamlFileStore(ctx, *cfg.YamlStorePath, cfg.RefreshInterval)
+		return NewYamlFileStore(ctx, *storeCfg.YamlStorePath, registery, storeCfg.DefaultGatewayFrequencyPlan)
 	case PostgresqlGatewayStore:
-		return NewPostgresStore(ctx, cfg.RefreshInterval)
+		return NewPostgresStore(ctx, storeCfg.RefreshInterval, registery, storeCfg.DefaultGatewayFrequencyPlan)
 	case NoGatewayStoreType:
 		// no gateway store configured, fallback to default yaml gateway store
 		// in $HOME/gateway-store.yaml
@@ -96,7 +138,7 @@ func NewGatewayStore(ctx context.Context, cfg *StoreConfig) (GatewayStore, error
 			logrus.Fatal("no gateway store configured")
 		}
 		storePath := filepath.Join(home, "gateway-store.yaml")
-		return NewYamlFileStore(ctx, storePath, cfg.RefreshInterval)
+		return NewYamlFileStore(ctx, storePath, registery, storeCfg.DefaultGatewayFrequencyPlan)
 	}
 
 	return nil, ErrInvalidConfig
@@ -141,7 +183,19 @@ func NewGateway(LocalID lorawan.EUI64, priv *ecdsa.PrivateKey) (*Gateway, error)
 		PublicKey:      &priv.PublicKey,
 		ThingsIxID:     utils.DeriveThingsIxID(&priv.PublicKey),
 		PublicKeyBytes: utils.CalculatePublicKeyBytes(&priv.PublicKey),
-		Owner:          common.Address{}, // TODO: set once gateway onboard are required
+	}, nil
+}
+
+func NewOnboardedGateway(LocalID lorawan.EUI64, priv *ecdsa.PrivateKey, owner common.Address, version uint8) (*Gateway, error) {
+	return &Gateway{
+		LocalID:        LocalID,
+		NetworkID:      GatewayNetworkIDFromPrivateKey(priv),
+		PrivateKey:     priv,
+		PublicKey:      &priv.PublicKey,
+		ThingsIxID:     utils.DeriveThingsIxID(&priv.PublicKey),
+		PublicKeyBytes: utils.CalculatePublicKeyBytes(&priv.PublicKey),
+		Owner:          &owner,
+		Version:        &version,
 	}, nil
 }
 

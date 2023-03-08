@@ -30,30 +30,56 @@ type ForwarderBackendSemtechUDPConfig struct {
 	FakeRxTime *bool   `mapstructure:"fake_rx_time"`
 }
 
+type BasicStationBackendConfig struct {
+	Bind             *string        `mapstructure:"bind"`
+	TLSCert          *string        `mapstructure:"tls_cert"`
+	TLSKey           *string        `mapstructure:"tls_key"`
+	CACert           *string        `mapstructure:"ca_cert"`
+	StatsInterval    *time.Duration `mapstructure:"stats_interval"`
+	PingInterval     *time.Duration `mapstructure:"ping_interval"`
+	TimesyncInterval *time.Duration `mapstructure:"timesync_interval"`
+	ReadTimeout      *time.Duration `mapstructure:"read_timeout"`
+	WriteTimeout     *time.Duration `mapstructure:"write_timeout"`
+	Region           string         `mapstructure:"region"`
+}
+
 type ForwarderBackendConfig struct {
 	SemtechUDP    *ForwarderBackendSemtechUDPConfig `mapstructure:"semtech_udp"`
-	BasicStation  *struct{}                         `mapstructure:"basic_station"`
+	BasicStation  *BasicStationBackendConfig        `mapstructure:"basic_station"`
 	Concentratord *struct{}                         `mapstructure:"concentratord"`
 }
 
+type ForwarderHttpApiConfig struct {
+	Address string `mapstructure:"address"`
+}
+
 type ForwarderGatewayConfig struct {
+	// Onboarder configures the gateway onboarder smart contract plugin.
+	Onboarder struct {
+		// Address is the smart contract chain address
+		Address common.Address `mapstructure:"address"`
+	} `mapstructure:"onboarder"`
+
+	// BatchOnboarder configures the gateway batch onboarder smart contract plugin.
+	BatchOnboarder struct {
+		// Address is the smart contract chain address
+		Address common.Address `mapstructure:"address"`
+	} `mapstructure:"batch_onboarder"`
+
 	// Store describes how gateways are stored/loaded in the forwarder.
 	Store gateway.StoreConfig
+
 	// RecordUnknown records gateways that connect to the forwarder but
 	// are not in the forwarders gateway store. Recorded gateways can
 	// be imported later if required.
 	RecordUnknown *gateway.ForwarderGatewayRecordUnknownConfig `mapstructure:"record_unknown"`
-	// RegistryAddress holds the address where the gateway registry is
-	// deployed on chain. It is used to retrieve gateway details to
-	// determine which gateways in the store are onboarded on ThingsIX
-	// and have their details. Once token support is integrated to ThingsIX
-	// only data for these gateways will be forwarded.
-	RegistryAddress *common.Address `mapstructure:"gateway_registry"`
 
-	// Refresh indicates the interval in which the gateway registry is
-	// used to check if gateways from the forwarders store are onboarded
-	// have their gateways set.
-	Refresh *time.Duration
+	// Registry describes how gateway data is retrieved from the ThingsIX
+	// gateway registry.
+	Registry gateway.RegistrySyncConfig `mapstructure:"registry"`
+
+	// HttpAPI configures the private Forwarder HTTP API
+	HttpAPI ForwarderHttpApiConfig `mapstructure:"api"`
 }
 
 type ForwarderRoutersOnChainConfig struct {

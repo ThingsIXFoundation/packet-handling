@@ -40,6 +40,7 @@ the gateway.`,
 func init() {
 	rootCmd.PersistentFlags().String("config", "", "configuration file")
 	rootCmd.PersistentFlags().String("net", "main", "the network to load the default parameters for (\"dev\", \"test\", \"main\" or \"\")")
+	rootCmd.PersistentFlags().String("default_frequency_plan", "", "default gateway frequency plan")
 
 	if err := viper.BindPFlags(rootCmd.PersistentFlags()); err != nil {
 		logrus.WithError(err).Fatal("could not bind command line flags")

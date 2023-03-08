@@ -61,6 +61,7 @@ func (p PushDataPacket) GetGatewayStats() (*gw.GatewayStats, error) {
 		RxPacketsReceivedOk: p.Payload.Stat.RXOK,
 		TxPacketsEmitted:    p.Payload.Stat.TXNb,
 		TxPacketsReceived:   p.Payload.Stat.DWNb,
+		Metadata:            p.Payload.Stat.Meta,
 	}
 
 	// time
@@ -80,17 +81,17 @@ func (p PushDataPacket) GetGatewayStats() (*gw.GatewayStats, error) {
 }
 
 // GetUplinkFrames returns a slice of gw.UplinkFrame.
-func (p PushDataPacket) GetUplinkFrames(FakeRxInfoTime bool) ([]*gw.UplinkFrame, error) {
+func (p PushDataPacket) GetUplinkFrames(skipCRCCheck bool, FakeRxInfoTime bool) ([]*gw.UplinkFrame, error) {
 	var frames []*gw.UplinkFrame
 
 	for i := range p.Payload.RXPK {
 		// validate CRC
-		if p.Payload.RXPK[i].Stat != 1 {
+		if p.Payload.RXPK[i].Stat != 1 && !skipCRCCheck {
 			continue
 		}
 
 		if len(p.Payload.RXPK[i].RSig) == 0 {
-			frame, err := getUplinkFrame(p.GatewayMAC, p.Payload.RXPK[i], FakeRxInfoTime)
+			frame, err := getUplinkFrame(p.GatewayMAC, p.Payload.Stat, p.Payload.RXPK[i], FakeRxInfoTime)
 			if err != nil {
 				return nil, errors.Wrap(err, "backend/semtechudp/packets: get uplink frame error")
 			}
@@ -98,7 +99,7 @@ func (p PushDataPacket) GetUplinkFrames(FakeRxInfoTime bool) ([]*gw.UplinkFrame,
 			frames = append(frames, frame)
 		} else {
 			for j := range p.Payload.RXPK[i].RSig {
-				frame, err := getUplinkFrame(p.GatewayMAC, p.Payload.RXPK[i], FakeRxInfoTime)
+				frame, err := getUplinkFrame(p.GatewayMAC, p.Payload.Stat, p.Payload.RXPK[i], FakeRxInfoTime)
 				if err != nil {
 					return nil, errors.Wrap(err, "backend/semtechudp/packets: get uplink frame error")
 				}
@@ -126,7 +127,7 @@ func setUplinkFrameRSig(frame *gw.UplinkFrame, rxPK RXPK, rSig RSig) *gw.UplinkF
 	return frame
 }
 
-func getUplinkFrame(gatewayID lorawan.EUI64, rxpk RXPK, FakeRxInfoTime bool) (*gw.UplinkFrame, error) {
+func getUplinkFrame(gatewayID lorawan.EUI64, stat *Stat, rxpk RXPK, FakeRxInfoTime bool) (*gw.UplinkFrame, error) {
 	frame := gw.UplinkFrame{
 		PhyPayload: rxpk.Data,
 		TxInfo: &gw.UplinkTxInfo{
@@ -140,7 +141,29 @@ func getUplinkFrame(gatewayID lorawan.EUI64, rxpk RXPK, FakeRxInfoTime bool) (*g
 			Channel:   uint32(rxpk.Chan),
 			Board:     uint32(rxpk.Brd),
 			Context:   make([]byte, 4),
+			Metadata:  rxpk.Meta,
 		},
+	}
+
+	// If a Stat is present and it contains a location, immediately set the location for this uplink.
+	// This is for example the case of Helium, where the UDP frame contains both a rxpk and stat
+	// payload to provide additional gateway context.
+	if stat != nil && (stat.Lati != 0 || stat.Long != 0 || stat.Alti != 0) {
+		frame.RxInfo.Location = &common.Location{
+			Latitude:  stat.Lati,
+			Longitude: stat.Long,
+			Altitude:  float64(stat.Alti),
+			Source:    common.LocationSource_GPS,
+		}
+	}
+
+	switch rxpk.Stat {
+	case 1:
+		frame.RxInfo.CrcStatus = gw.CRCStatus_CRC_OK
+	case -1:
+		frame.RxInfo.CrcStatus = gw.CRCStatus_BAD_CRC
+	default:
+		frame.RxInfo.CrcStatus = gw.CRCStatus_NO_CRC
 	}
 
 	// Context
@@ -330,39 +353,41 @@ type PushDataPayload struct {
 
 // Stat contains the status of the gateway.
 type Stat struct {
-	Time ExpandedTime `json:"time"` // UTC 'system' time of the gateway, ISO 8601 'expanded' format (e.g 2014-01-12 08:59:28 GMT)
-	Lati float64      `json:"lati"` // GPS latitude of the gateway in degree (float, N is +)
-	Long float64      `json:"long"` // GPS latitude of the gateway in degree (float, E is +)
-	Alti int32        `json:"alti"` // GPS altitude of the gateway in meter RX (integer)
-	RXNb uint32       `json:"rxnb"` // Number of radio packets received (unsigned integer)
-	RXOK uint32       `json:"rxok"` // Number of radio packets received with a valid PHY CRC
-	RXFW uint32       `json:"rxfw"` // Number of radio packets forwarded (unsigned integer)
-	ACKR float64      `json:"ackr"` // Percentage of upstream datagrams that were acknowledged
-	DWNb uint32       `json:"dwnb"` // Number of downlink datagrams received (unsigned integer)
-	TXNb uint32       `json:"txnb"` // Number of packets emitted (unsigned integer)
+	Time ExpandedTime      `json:"time"` // UTC 'system' time of the gateway, ISO 8601 'expanded' format (e.g 2014-01-12 08:59:28 GMT)
+	Lati float64           `json:"lati"` // GPS latitude of the gateway in degree (float, N is +)
+	Long float64           `json:"long"` // GPS latitude of the gateway in degree (float, E is +)
+	Alti int32             `json:"alti"` // GPS altitude of the gateway in meter RX (integer)
+	RXNb uint32            `json:"rxnb"` // Number of radio packets received (unsigned integer)
+	RXOK uint32            `json:"rxok"` // Number of radio packets received with a valid PHY CRC
+	RXFW uint32            `json:"rxfw"` // Number of radio packets forwarded (unsigned integer)
+	ACKR float64           `json:"ackr"` // Percentage of upstream datagrams that were acknowledged
+	DWNb uint32            `json:"dwnb"` // Number of downlink datagrams received (unsigned integer)
+	TXNb uint32            `json:"txnb"` // Number of packets emitted (unsigned integer)
+	Meta map[string]string `json:"meta"` // Custom meta-data (Optional, not part of PROTOCOL.TXT)
 }
 
 // RXPK contain a RF packet and associated metadata.
 type RXPK struct {
-	Time  *CompactTime `json:"time"`  // UTC time of pkt RX, us precision, ISO 8601 'compact' format (e.g. 2013-03-31T16:21:17.528002Z)
-	Tmms  *int64       `json:"tmms"`  // GPS time of pkt RX, number of milliseconds since 06.Jan.1980
-	Tmst  uint32       `json:"tmst"`  // Internal timestamp of "RX finished" event (32b unsigned)
-	FTime *uint32      `json:"ftime"` // Fine timestamp, number of nanoseconds since last PPS [0..999999999] (Optional)
-	AESK  uint8        `json:"aesk"`  // AES key index used for encrypting fine timestamps
-	Chan  uint8        `json:"chan"`  // Concentrator "IF" channel used for RX (unsigned integer)
-	RFCh  uint8        `json:"rfch"`  // Concentrator "RF chain" used for RX (unsigned integer)
-	Stat  int8         `json:"stat"`  // CRC status: 1 = OK, -1 = fail, 0 = no CRC
-	Freq  float64      `json:"freq"`  // RX central frequency in MHz (unsigned float, Hz precision)
-	Brd   uint32       `json:"brd"`   // Concentrator board used for RX (unsigned integer)
-	RSSI  int16        `json:"rssi"`  // RSSI in dBm (signed integer, 1 dB precision)
-	Size  uint16       `json:"size"`  // RF packet payload size in bytes (unsigned integer)
-	DatR  DatR         `json:"datr"`  // LoRa datarate identifier (eg. SF12BW500) || FSK datarate (unsigned, in bits per second)
-	Modu  string       `json:"modu"`  // Modulation identifier "LORA" or "FSK"
-	CodR  string       `json:"codr"`  // LoRa ECC coding rate identifier
-	LSNR  float64      `json:"lsnr"`  // Lora SNR ratio in dB (signed float, 0.1 dB precision)
-	HPW   uint8        `json:"hpw"`   // LR-FHSS hopping grid number of steps.
-	Data  []byte       `json:"data"`  // Base64 encoded RF packet payload, padded
-	RSig  []RSig       `json:"rsig"`  // Received signal information, per antenna (Optional)
+	Time  *CompactTime      `json:"time"`  // UTC time of pkt RX, us precision, ISO 8601 'compact' format (e.g. 2013-03-31T16:21:17.528002Z)
+	Tmms  *int64            `json:"tmms"`  // GPS time of pkt RX, number of milliseconds since 06.Jan.1980
+	Tmst  uint32            `json:"tmst"`  // Internal timestamp of "RX finished" event (32b unsigned)
+	FTime *uint32           `json:"ftime"` // Fine timestamp, number of nanoseconds since last PPS [0..999999999] (Optional)
+	AESK  uint8             `json:"aesk"`  // AES key index used for encrypting fine timestamps
+	Chan  uint8             `json:"chan"`  // Concentrator "IF" channel used for RX (unsigned integer)
+	RFCh  uint8             `json:"rfch"`  // Concentrator "RF chain" used for RX (unsigned integer)
+	Stat  int8              `json:"stat"`  // CRC status: 1 = OK, -1 = fail, 0 = no CRC
+	Freq  float64           `json:"freq"`  // RX central frequency in MHz (unsigned float, Hz precision)
+	Brd   uint32            `json:"brd"`   // Concentrator board used for RX (unsigned integer)
+	RSSI  int16             `json:"rssi"`  // RSSI in dBm (signed integer, 1 dB precision)
+	Size  uint16            `json:"size"`  // RF packet payload size in bytes (unsigned integer)
+	DatR  DatR              `json:"datr"`  // LoRa datarate identifier (eg. SF12BW500) || FSK datarate (unsigned, in bits per second)
+	Modu  string            `json:"modu"`  // Modulation identifier "LORA" or "FSK"
+	CodR  string            `json:"codr"`  // LoRa ECC coding rate identifier
+	LSNR  float64           `json:"lsnr"`  // Lora SNR ratio in dB (signed float, 0.1 dB precision)
+	HPW   uint8             `json:"hpw"`   // LR-FHSS hopping grid number of steps.
+	Data  []byte            `json:"data"`  // Base64 encoded RF packet payload, padded
+	RSig  []RSig            `json:"rsig"`  // Received signal information, per antenna (Optional)
+	Meta  map[string]string `json:"meta"`  // Custom meta-data (Optional, not part of PROTOCOL.TXT)
 }
 
 // RSig contains the received signal information per antenna.

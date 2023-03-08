@@ -19,10 +19,12 @@ package gateway
 import (
 	"context"
 	"crypto/ecdsa"
+	"database/sql"
 	"fmt"
 	"sync"
 	"time"
 
+	"github.com/ThingsIXFoundation/frequency-plan/go/frequency_plan"
 	"github.com/ThingsIXFoundation/packet-handling/database"
 	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/brocaar/lorawan"
@@ -37,7 +39,7 @@ import (
 type pgStore struct {
 	// refreshInterval indicates how often the store must be loaded from the
 	// database
-	refreshInterval *time.Duration
+	refreshInterval time.Duration
 	// guards byLocalId and byNetId
 	gwMapMu sync.RWMutex
 	// collection of gateways indexed by their local ID
@@ -46,35 +48,42 @@ type pgStore struct {
 	byNetId map[lorawan.EUI64]*Gateway
 	// collectio of gateways indexed by their ThingsIX ID
 	byThingsIxID map[ThingsIxID]*Gateway
-	// filters gateways retrieved from the backend before adding them to this
-	// store. Can be used to filter out not onboarded gateways
-	filterer GatewayFiltererFunc
+	// thingsix gateway registry
+	registery ThingsIXRegistry
+	// default frequency plan, or invalid if not configured
+	defaultFrequencyPlan frequency_plan.BandName
 }
 
 // NewPostgresStore returns a gateway store that uses a postgresql backend.
-func NewPostgresStore(ctx context.Context, refreshInterval *time.Duration) (*pgStore, error) {
-	return NewPostgresStoreWithFilterer(ctx, refreshInterval, NoGatewayFilterer)
-}
-
-// NewPostgresStore returns a gateway store that uses a postgresql backend and
-// only imports gateways into the store for which the given filterer passes.
-func NewPostgresStoreWithFilterer(ctx context.Context, refreshInterval *time.Duration, filterer GatewayFiltererFunc) (*pgStore, error) {
-	logrus.WithField("table", pgGateway{}.TableName()).
-		Info("use database based gateway store")
-
+func NewPostgresStore(ctx context.Context, refreshInterval *time.Duration, registry ThingsIXRegistry, defaultFreqPlan frequency_plan.BandName) (*pgStore, error) {
 	// create gateway table if not already available
 	db := database.DBWithContext(ctx)
-	if err := db.AutoMigrate(&pgGateway{}); err != nil {
+	if err := db.AutoMigrate(&pgGateway{}, &RecordedUnknownGateway{}); err != nil {
 		return nil, err
 	}
 
+	refresh := refreshInterval
+	if refresh == nil {
+		*refresh = time.Duration(30 * time.Minute)
+	}
+
+	log := logrus.WithFields(logrus.Fields{
+		"table":   pgGateway{}.TableName(),
+		"refresh": refresh,
+	})
+	if defaultFreqPlan != frequency_plan.Invalid {
+		log = log.WithField("gw_default_freq_plan", defaultFreqPlan)
+	}
+	log.Info("use database based gateway store")
+
 	// instantiate gateway store
 	store := &pgStore{
-		refreshInterval: refreshInterval,
-		byLocalId:       make(map[lorawan.EUI64]*Gateway),
-		byNetId:         make(map[lorawan.EUI64]*Gateway),
-		byThingsIxID:    make(map[ThingsIxID]*Gateway),
-		filterer:        filterer,
+		refreshInterval:      *refresh,
+		byLocalId:            make(map[lorawan.EUI64]*Gateway),
+		byNetId:              make(map[lorawan.EUI64]*Gateway),
+		byThingsIxID:         make(map[ThingsIxID]*Gateway),
+		registery:            registry,
+		defaultFrequencyPlan: defaultFreqPlan,
 	}
 
 	// load initial set of gateways from backend
@@ -82,10 +91,20 @@ func NewPostgresStoreWithFilterer(ctx context.Context, refreshInterval *time.Dur
 		logrus.WithError(err).Error("unable to load gateways from database, retry later")
 	}
 
-	// refresh periodically gateway store with backend
-	go store.run(ctx)
-
 	return store, nil
+}
+
+func (store *pgStore) Run(ctx context.Context) {
+	for {
+		select {
+		case <-time.NewTimer(store.refreshInterval).C:
+			// reload and sync with gateway registry
+			store.syncAll(ctx)
+		case <-ctx.Done():
+			logrus.Info("stop gateway store")
+			return
+		}
+	}
 }
 
 func (store *pgStore) Count() int {
@@ -165,16 +184,22 @@ func (store *pgStore) Add(ctx context.Context, localID lorawan.EUI64, key *ecdsa
 		return nil, err
 	}
 
-	encPrivateKey := crypto.FromECDSA(gw.PrivateKey)
-
-	// add to postgresql
-	pggw := pgGateway{
-		LocalID:    gw.LocalID,
-		PrivateKey: encPrivateKey,
-	}
+	// store gateway record in db and remove it from the unknown recorded
+	// gateways if its there
+	var (
+		unknown = RecordedUnknownGateway{LocalID: gw.LocalID}
+		pggw    = pgGateway{
+			LocalID:    gw.LocalID,
+			PrivateKey: crypto.FromECDSA(gw.PrivateKey),
+			CreatedAt:  time.Now(),
+		}
+	)
 
 	db := database.DBWithContext(ctx)
 	if err = crdbgorm.ExecuteTx(ctx, db, nil, func(tx *gorm.DB) error {
+		if err := tx.Unscoped().Delete(&unknown).Error; err != nil {
+			return err
+		}
 		err := tx.Create(&pggw).Error
 		if err != nil {
 			if database.IsErrUniqueViolation(err) {
@@ -199,32 +224,107 @@ func (store *pgStore) Add(ctx context.Context, localID lorawan.EUI64, key *ecdsa
 	return gw, nil
 }
 
-func (store *pgStore) run(ctx context.Context) {
-	// fetch periodically gateways from postgres until the given ctx expired
-	logrus.Infof("refresh gateway store from database every %s", store.refreshInterval)
+func (store *pgStore) SyncGatewayByLocalID(ctx context.Context, localID lorawan.EUI64, force bool) (*Gateway, error) {
+	return store.syncGatewayByLocalID(ctx, localID, force)
+}
 
-	for {
-		select {
-		case <-time.NewTimer(*store.refreshInterval).C:
-			loadCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
-			if err := store.loadFromPostgres(loadCtx); err != nil {
-				logrus.WithError(err).Error("unable to load gateways from database")
+func (store *pgStore) syncGatewayByLocalID(ctx context.Context, localID lorawan.EUI64, force bool) (*Gateway, error) {
+	gw, err := store.ByLocalID(localID)
+	if err != nil {
+		return nil, err
+	}
+
+	owner, version, details, err := store.registery.GatewayDetails(ctx, gw.ThingsIxID, force)
+	if err != nil {
+		logrus.WithError(err).Debug("unable to retrieve gateway details from gateway registry")
+		return gw, nil
+	}
+
+	synced, err := NewOnboardedGateway(gw.LocalID, gw.PrivateKey, owner, version)
+	if err == nil {
+		synced.Details = details
+		var ( // update gateway in db
+			pggw = pgGateway{
+				LocalID:    synced.LocalID,
+				PrivateKey: crypto.FromECDSA(gw.PrivateKey),
+				Owner:      synced.Owner,
+				Version:    synced.Version,
+				Details:    synced.Details,
+				LastSynced: sql.NullTime{
+					Time:  time.Now(),
+					Valid: true,
+				},
 			}
-			cancel()
-		case <-ctx.Done():
-			return
+			db = database.DBWithContext(ctx)
+		)
+		if err = crdbgorm.ExecuteTx(ctx, db, nil, func(tx *gorm.DB) error {
+			err := tx.Save(&pggw).Error
+			if err != nil {
+				if database.IsErrUniqueViolation(err) {
+					return ErrAlreadyExists
+				}
+			}
+			return err
+		}); err != nil {
+			return nil, err
 		}
+	}
+
+	store.gwMapMu.Lock()
+	store.byLocalId[synced.LocalID] = synced
+	store.byNetId[synced.NetworkID] = synced
+	store.byThingsIxID[synced.ThingsIxID] = synced
+	store.gwMapMu.Unlock()
+
+	return synced, nil
+}
+
+func (store *pgStore) UniqueGatewayBands() UniqueGatewayBands {
+	var (
+		collector Collector
+		result    = UniqueGatewayBands{
+			bands: make(map[frequency_plan.BandName]struct{}),
+			plans: make(map[frequency_plan.BlockchainFrequencyPlan]struct{}),
+		}
+	)
+
+	store.Range(&collector)
+
+	for _, gw := range collector.Gateways {
+		if gw.Details != nil && gw.Details.Band != nil {
+			result.addBand(frequency_plan.BandName(*gw.Details.Band))
+		} else if store.defaultFrequencyPlan != frequency_plan.Invalid { // if a default gateway freq plan is set use that
+			result.addBand(frequency_plan.BandName(store.defaultFrequencyPlan))
+		}
+	}
+	return result
+}
+
+func (store *pgStore) DefaultFrequencyPlan() frequency_plan.BandName {
+	return store.defaultFrequencyPlan
+}
+
+func (store *pgStore) syncAll(ctx context.Context) {
+	var collector Collector
+	store.Range(&collector)
+
+	for _, gw := range collector.Gateways {
+		_, _ = store.syncGatewayByLocalID(ctx, gw.LocalID, false)
 	}
 }
 
 func (store *pgStore) loadFromPostgres(ctx context.Context) error {
 	var (
-		gws          []pgGateway
-		db           = database.DBWithContext(ctx)
-		byLocalId    = make(map[lorawan.EUI64]*Gateway)
-		byNetId      = make(map[lorawan.EUI64]*Gateway)
-		byThingsIxID = make(map[ThingsIxID]*Gateway)
+		gws              []*pgGateway
+		lctx, cancel     = context.WithTimeout(ctx, 10*time.Minute)
+		db               = database.DBWithContext(lctx)
+		byLocalId        = make(map[lorawan.EUI64]*Gateway)
+		byNetId          = make(map[lorawan.EUI64]*Gateway)
+		byThingsIxID     = make(map[ThingsIxID]*Gateway)
+		mustSyncLocalIDs []lorawan.EUI64
+		syncCutoff       = time.Now().Add(-10 * time.Minute)
 	)
+	defer cancel()
 
 	if err := db.Find(&gws).Error; err != nil {
 		return err
@@ -234,18 +334,14 @@ func (store *pgStore) loadFromPostgres(ctx context.Context) error {
 	for _, pggw := range gws {
 		gw, err := pggw.asGateway()
 		if err != nil {
-			return fmt.Errorf("unable to load gateway (localID=%s) from database", pggw.LocalID)
+			return fmt.Errorf("unable to load gateway (localID=%s) from database / %s", pggw.LocalID, err)
 		}
 
-		if store.filterer(gw) {
-			byLocalId[gw.LocalID] = gw
-			byNetId[gw.NetworkID] = gw
-			byThingsIxID[gw.ThingsIxID] = gw
-		} else {
-			logrus.WithFields(logrus.Fields{
-				"localID":   gw.LocalID,
-				"networkID": gw.NetworkID,
-			}).Trace("gateway didn't pass filter")
+		byLocalId[gw.LocalID] = gw
+		byNetId[gw.NetworkID] = gw
+		byThingsIxID[gw.ThingsIxID] = gw
+		if pggw.LastSynced.Valid && pggw.LastSynced.Time.Before(syncCutoff) {
+			mustSyncLocalIDs = append(mustSyncLocalIDs, gw.LocalID)
 		}
 	}
 
@@ -256,6 +352,10 @@ func (store *pgStore) loadFromPostgres(ctx context.Context) error {
 	store.byNetId = byNetId
 	store.byThingsIxID = byThingsIxID
 	store.gwMapMu.Unlock()
+
+	for _, localID := range mustSyncLocalIDs {
+		_, _ = store.syncGatewayByLocalID(lctx, localID, false)
+	}
 
 	printGatewayStoreChanges(oldByLocalId, byLocalId)
 
@@ -268,6 +368,17 @@ type pgGateway struct {
 	LocalID lorawan.EUI64 `gorm:"type:bytea;primaryKey"`
 	// PrivateKey holds the gateway ECDSA private key DER encoded
 	PrivateKey []byte `gorm:"uniqueIndex;not null"`
+	// Owner of the gateway
+	Owner *common.Address `gorm:"type:bytea"`
+	// Version as used during onboarding
+	Version *uint8
+	// Details holds details retrieved from the ThingsIX registry
+	Details *GatewayDetails `gorm:"embedded"`
+	// LastSynced keeps track when the last time the data was retrieved from the
+	// ThingsIX gateway registry
+	LastSynced sql.NullTime
+	// Set by gorm
+	CreatedAt time.Time
 }
 
 func (pgGateway) TableName() string {
@@ -280,12 +391,19 @@ func (gw pgGateway) asGateway() (*Gateway, error) {
 		return nil, err
 	}
 
+	var details *GatewayDetails
+	if gw.Details != nil && gw.Details.Band != nil {
+		details = gw.Details
+	}
+
 	return &Gateway{
 		LocalID:    gw.LocalID,
 		NetworkID:  GatewayNetworkIDFromPrivateKey(key),
 		PrivateKey: key,
 		PublicKey:  &key.PublicKey,
 		ThingsIxID: utils.DeriveThingsIxID(&key.PublicKey),
-		Owner:      common.Address{}, // TODO set once gateways must be onboarded
+		Owner:      gw.Owner,
+		Version:    gw.Version,
+		Details:    details,
 	}, nil
 }

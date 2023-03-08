@@ -68,16 +68,36 @@ func NewDiscoveryPacketFromBytes(phy []byte) (*DiscoveryPacket, error) {
 	return dp, nil
 }
 
-func (dp DiscoveryPacket) LatLon() (int32, int32) {
+func (dp *DiscoveryPacket) Version() uint8 {
+	return bitoffset.Uint8(dp.Payload(), 0, 4)
+}
+
+func (dp *DiscoveryPacket) LatLon() (int32, int32) {
 	lat := int32(bitoffset.Uint32(dp.Payload(), 4, 28))
 	lon := int32(bitoffset.Uint32(dp.Payload(), 32, 29))
 
 	return lat, lon
 }
 
-func (dp DiscoveryPacket) LatLonFloat() (float64, float64) {
+func (dp *DiscoveryPacket) LatLonFloat() (float64, float64) {
 	lat, lon := dp.LatLon()
 	return float64(lat) / 1000000, float64(lon) / 1000000
+}
+
+func (dp *DiscoveryPacket) Height() int32 {
+	return bitoffset.Int32(dp.Payload(), 61, 13) * 3
+}
+
+func (dp *DiscoveryPacket) GnssSecurityStatus() uint8 {
+	return bitoffset.Uint8(dp.Payload(), 74, 2)
+}
+
+func (dp *DiscoveryPacket) Spoofing() uint8 {
+	return bitoffset.Uint8(dp.Payload(), 76, 2)
+}
+
+func (dp *DiscoveryPacket) TOW() uint32 {
+	return bitoffset.Uint32(dp.Payload(), 84, 20)
 }
 
 type DownlinkTransmitPacket struct {
