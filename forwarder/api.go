@@ -213,11 +213,15 @@ func (svc APIService) ImportGateways(w http.ResponseWriter, r *http.Request) {
 
 				if req.PushToThingsIX {
 					var (
-						endpoint   = strings.Replace(svc.thingsIXOnboardEndpoint, "{owner}", strings.ToLower(req.Owner.String()), 1)
+						endpoint = strings.Replace(
+							strings.Replace(svc.thingsIXOnboardEndpoint, "{owner}", strings.ToLower(req.Owner.String()), 1),
+							"{onboarder}", strings.ToLower(svc.batchOnboarderAddress.String()), 1)
 						payload, _ = json.Marshal(map[string]interface{}{
 							"gatewayId":               gw.ID().String(),
 							"gatewayOnboardSignature": fmt.Sprintf("0x%x", signature),
 							"version":                 0,
+							"localId":                 gw.LocalID.String(),
+							"onboarder":               svc.batchOnboarderAddress,
 						})
 					)
 
@@ -322,7 +326,9 @@ func (svc APIService) OnboardGatewayMessage(w http.ResponseWriter, r *http.Reque
 
 	if req.PushToThingsIX {
 		var (
-			endpoint   = strings.Replace(svc.thingsIXOnboardEndpoint, "{owner}", strings.ToLower(req.Owner.String()), 1)
+			endpoint = strings.Replace(
+				strings.Replace(svc.thingsIXOnboardEndpoint, "{owner}", strings.ToLower(req.Owner.String()), 1),
+				"{onboarder}", strings.ToLower(svc.onboarderAddress.String()), 1)
 			payload, _ = json.Marshal(map[string]interface{}{
 				"gatewayId":               gw.ID().String(),
 				"gatewayOnboardSignature": fmt.Sprintf("0x%x", signature),

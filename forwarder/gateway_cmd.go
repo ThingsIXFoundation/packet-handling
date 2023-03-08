@@ -25,6 +25,8 @@ import (
 	"os"
 
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
+	"github.com/brocaar/lorawan"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -40,6 +42,13 @@ var (
 		Short: "Import recorded unknown gateways in gateway store and generate onboard message",
 		Args:  cobra.ExactArgs(1),
 		Run:   importGatewayStore,
+	}
+
+	importAndPushGatewayCmd = &cobra.Command{
+		Use:   "import-and-push <owner>",
+		Short: "Import recorded unknown gateways in gateway store, generate onboard message and push onboard message to ThingsIX",
+		Args:  cobra.ExactArgs(1),
+		Run:   importAndPushGatewayStore,
 	}
 
 	listGatewayCmd = &cobra.Command{
@@ -63,6 +72,13 @@ var (
 		Run:   onboardGateway,
 	}
 
+	onboardAndPushGatewayCmd = &cobra.Command{
+		Use:   "onboard-and-push <local-id> <owner>",
+		Short: "Generate onboard message and push onboard message to ThingsIX",
+		Args:  cobra.ExactArgs(2),
+		Run:   onboardAndPushGateway,
+	}
+
 	gatewayDetailsCmd = &cobra.Command{
 		Use:   "details <local-id>",
 		Short: "Show gateway details",
@@ -70,20 +86,18 @@ var (
 		Run:   gatewayDetails,
 	}
 
-	jsonOutput     bool
-	pushToThingsIX bool
+	jsonOutput bool
 )
 
 func init() {
 	GatewayCmds.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Output in json format")
 
-	onboardGatewayCmd.PersistentFlags().BoolVar(&pushToThingsIX, "push-to-thingsix", false, "Push gateway onboard message to ThingsIX")
-	importGatewayCmd.PersistentFlags().BoolVar(&pushToThingsIX, "push-to-thingsix", false, "Push gateway onboard message to ThingsIX")
-
 	GatewayCmds.AddCommand(importGatewayCmd)
+	GatewayCmds.AddCommand(importAndPushGatewayCmd)
 	GatewayCmds.AddCommand(listGatewayCmd)
 	GatewayCmds.AddCommand(addGatewayCmd)
 	GatewayCmds.AddCommand(onboardGatewayCmd)
+	GatewayCmds.AddCommand(onboardAndPushGatewayCmd)
 	GatewayCmds.AddCommand(gatewayDetailsCmd)
 }
 
@@ -94,6 +108,20 @@ func onboardGateway(cmd *cobra.Command, args []string) {
 		owner   = mustParseAddress(args[1])
 	)
 
+	onboardGatewayInternal(cfg, localID, owner, false)
+}
+
+func onboardAndPushGateway(cmd *cobra.Command, args []string) {
+	var (
+		cfg     = mustLoadConfig()
+		localID = mustDecodeGatewayID(args[0])
+		owner   = mustParseAddress(args[1])
+	)
+
+	onboardGatewayInternal(cfg, localID, owner, true)
+}
+
+func onboardGatewayInternal(cfg *Config, localID lorawan.EUI64, owner common.Address, pushToThingsIX bool) {
 	if cfg.Forwarder.Gateways.HttpAPI.Address == "" {
 		logrus.Fatal("HTTP API endpoint missing")
 	}
@@ -105,9 +133,7 @@ func onboardGateway(cmd *cobra.Command, args []string) {
 	})
 
 	resp, err := http.Post(
-		fmt.Sprintf("http://%s/v1/gateways/onboard", cfg.Forwarder.Gateways.HttpAPI.Address),
-		"application/json",
-		bytes.NewReader(req))
+		fmt.Sprintf("http://%s/v1/gateways/onboard", cfg.Forwarder.Gateways.HttpAPI.Address), "application/json", bytes.NewReader(req))
 	if err != nil {
 		logrus.WithError(err).Fatal("unable to retrieve recorded unknown gateways")
 	}
@@ -160,6 +186,19 @@ func importGatewayStore(cmd *cobra.Command, args []string) {
 		owner = mustParseAddress(args[0])
 	)
 
+	importGatewaysInternal(cfg, owner, false)
+}
+
+func importAndPushGatewayStore(cmd *cobra.Command, args []string) {
+	var (
+		cfg   = mustLoadConfig()
+		owner = mustParseAddress(args[0])
+	)
+
+	importGatewaysInternal(cfg, owner, true)
+}
+
+func importGatewaysInternal(cfg *Config, owner common.Address, pushToThingsIX bool) {
 	if cfg.Forwarder.Gateways.HttpAPI.Address == "" {
 		logrus.Fatal("HTTP API endpoint missing")
 	}
