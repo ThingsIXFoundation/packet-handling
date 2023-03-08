@@ -70,11 +70,15 @@ var (
 		Run:   gatewayDetails,
 	}
 
-	jsonOutput bool
+	jsonOutput     bool
+	pushToThingsIX bool
 )
 
 func init() {
 	GatewayCmds.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Output in json format")
+
+	onboardGatewayCmd.PersistentFlags().BoolVar(&pushToThingsIX, "push-to-thingsix", false, "Push gateway onboard message to ThingsIX")
+	importGatewayCmd.PersistentFlags().BoolVar(&pushToThingsIX, "push-to-thingsix", false, "Push gateway onboard message to ThingsIX")
 
 	GatewayCmds.AddCommand(importGatewayCmd)
 	GatewayCmds.AddCommand(listGatewayCmd)
@@ -95,8 +99,9 @@ func onboardGateway(cmd *cobra.Command, args []string) {
 	}
 
 	req, _ := json.Marshal(map[string]interface{}{
-		"localId": localID,
-		"owner":   owner,
+		"localId":        localID,
+		"owner":          owner,
+		"pushToThingsIX": pushToThingsIX,
 	})
 
 	resp, err := http.Post(
@@ -163,7 +168,8 @@ func importGatewayStore(cmd *cobra.Command, args []string) {
 		endpoint   = fmt.Sprintf("http://%s/v1/gateways/import", cfg.Forwarder.Gateways.HttpAPI.Address)
 		onboarded  []*OnboardGatewayReply
 		payload, _ = json.Marshal(map[string]interface{}{
-			"owner": owner,
+			"owner":          owner,
+			"pushToThingsIX": pushToThingsIX,
 		})
 	)
 
