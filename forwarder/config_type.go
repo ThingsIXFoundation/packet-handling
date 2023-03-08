@@ -80,6 +80,9 @@ type ForwarderGatewayConfig struct {
 
 	// HttpAPI configures the private Forwarder HTTP API
 	HttpAPI ForwarderHttpApiConfig `mapstructure:"api"`
+
+	// ThingsIXOnboardEndpoint accepts gateway onboard messages for easy onboarding
+	ThingsIXOnboardEndpoint string
 }
 
 type ForwarderRoutersOnChainConfig struct {

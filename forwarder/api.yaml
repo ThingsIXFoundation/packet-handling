@@ -192,6 +192,10 @@ components:
           description: owner wallet address
           type: string
           example: "0xdb3082bcd200e598367ee6aa89706e82a39aa64b"
+        pushToThingsIX:
+          description: push gateway onboard message to ThingsIX for easy onboarding
+          type: boolean
+          default: false
       required:
         - localId
         - owner
@@ -203,6 +207,10 @@ components:
           description: owner wallet address
           type: string
           example: "0xdb3082bcd200e598367ee6aa89706e82a39aa64b"
+        pushToThingsIX:
+          description: push gateway onboard message to ThingsIX for easy onboarding
+          type: boolean
+          default: false
       required:
         - owner
 
