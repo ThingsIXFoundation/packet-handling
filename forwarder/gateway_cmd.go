@@ -102,8 +102,10 @@ func init() {
 }
 
 func onboardGateway(cmd *cobra.Command, args []string) {
+	logrus.SetLevel(logrus.ErrorLevel)
+
 	var (
-		cfg     = mustLoadConfig()
+		cfg     = mustLoadConfig(true)
 		localID = mustDecodeGatewayID(args[0])
 		owner   = mustParseAddress(args[1])
 	)
@@ -112,8 +114,10 @@ func onboardGateway(cmd *cobra.Command, args []string) {
 }
 
 func onboardAndPushGateway(cmd *cobra.Command, args []string) {
+	logrus.SetLevel(logrus.ErrorLevel)
+
 	var (
-		cfg     = mustLoadConfig()
+		cfg     = mustLoadConfig(true)
 		localID = mustDecodeGatewayID(args[0])
 		owner   = mustParseAddress(args[1])
 	)
@@ -153,8 +157,10 @@ func onboardGatewayInternal(cfg *Config, localID lorawan.EUI64, owner common.Add
 }
 
 func gatewayDetails(cmd *cobra.Command, args []string) {
+	logrus.SetLevel(logrus.ErrorLevel)
+
 	var (
-		cfg     = mustLoadConfig()
+		cfg     = mustLoadConfig(true)
 		localID = mustDecodeGatewayID(args[0])
 		gw      gateway.Gateway
 	)
@@ -181,8 +187,10 @@ func gatewayDetails(cmd *cobra.Command, args []string) {
 }
 
 func importGatewayStore(cmd *cobra.Command, args []string) {
+	logrus.SetLevel(logrus.ErrorLevel)
+
 	var (
-		cfg   = mustLoadConfig()
+		cfg   = mustLoadConfig(true)
 		owner = mustParseAddress(args[0])
 	)
 
@@ -190,8 +198,10 @@ func importGatewayStore(cmd *cobra.Command, args []string) {
 }
 
 func importAndPushGatewayStore(cmd *cobra.Command, args []string) {
+	logrus.SetLevel(logrus.ErrorLevel)
+
 	var (
-		cfg   = mustLoadConfig()
+		cfg   = mustLoadConfig(true)
 		owner = mustParseAddress(args[0])
 	)
 
@@ -231,8 +241,10 @@ func importGatewaysInternal(cfg *Config, owner common.Address, pushToThingsIX bo
 }
 
 func listGatewayStore(cmd *cobra.Command, args []string) {
+	logrus.SetLevel(logrus.ErrorLevel)
+
 	var (
-		cfg      = mustLoadConfig()
+		cfg      = mustLoadConfig(true)
 		gateways map[string][]*gateway.Gateway
 	)
 
@@ -259,9 +271,11 @@ func listGatewayStore(cmd *cobra.Command, args []string) {
 }
 
 func addGatewayToStore(cmd *cobra.Command, args []string) {
+	logrus.SetLevel(logrus.ErrorLevel)
+
 	var (
+		cfg        = mustLoadConfig(true)
 		localID    = mustDecodeGatewayID(args[0])
-		cfg        = mustLoadConfig()
 		reqPayload = map[string]interface{}{
 			"localId": localID,
 		}

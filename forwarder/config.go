@@ -123,7 +123,8 @@ func getNetConfig(net string) *Config {
 	return nil
 }
 
-func mustLoadConfig() *Config {
+// if ignoreLogLevel is true the log level is not set from config.
+func mustLoadConfig(ignoreLogLevel bool) *Config {
 	viper.SetConfigName("config") // name of config file (without extension)
 	viper.SetConfigType("yaml")   // REQUIRED if the config file does not have the extension in the name
 
@@ -133,10 +134,8 @@ func mustLoadConfig() *Config {
 	if configFile := viper.GetString("config"); configFile != "" {
 		viper.SetConfigFile(configFile)
 
-		logrus.Infof("use config file %s", configFile)
-
 		if err := viper.ReadInConfig(); err != nil {
-			logrus.WithError(err).Fatal("unable to read config")
+			logrus.WithError(err).WithField("file", configFile).Fatal("unable to read config")
 		}
 
 		if err := viper.Unmarshal(cfg, viper.DecodeHook(mapstructure.ComposeDecodeHookFunc(
@@ -153,11 +152,13 @@ func mustLoadConfig() *Config {
 		logrus.Fatal("neither a default network nor a config-file where provided. Provide at least one.")
 	}
 
-	logrus.SetLevel(cfg.Log.Level)
-	logrus.SetFormatter(&logrus.TextFormatter{
-		FullTimestamp:    true,
-		DisableTimestamp: !cfg.Log.Timestamp,
-	})
+	if !ignoreLogLevel {
+		logrus.SetLevel(cfg.Log.Level)
+		logrus.SetFormatter(&logrus.TextFormatter{
+			FullTimestamp:    true,
+			DisableTimestamp: !cfg.Log.Timestamp,
+		})
+	}
 
 	if defaultGatewayFreqPlan := viper.GetString("default_frequency_plan"); defaultGatewayFreqPlan != "" {
 		band, err := frequency_plan.GetBand(defaultGatewayFreqPlan)
