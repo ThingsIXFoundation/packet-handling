@@ -54,17 +54,11 @@ type ForwarderHttpApiConfig struct {
 }
 
 type ForwarderGatewayConfig struct {
-	// Onboarder configures the gateway onboarder smart contract plugin.
-	Onboarder struct {
-		// Address is the smart contract chain address
-		Address common.Address `mapstructure:"address"`
-	} `mapstructure:"onboarder"`
-
 	// BatchOnboarder configures the gateway batch onboarder smart contract plugin.
 	BatchOnboarder struct {
 		// Address is the smart contract chain address
 		Address common.Address `mapstructure:"address"`
-	} `mapstructure:"batch_onboarder"`
+	} `mapstructure:"onboarder"`
 
 	// Store describes how gateways are stored/loaded in the forwarder.
 	Store gateway.StoreConfig

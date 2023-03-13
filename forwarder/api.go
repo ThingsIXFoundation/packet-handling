@@ -56,22 +56,16 @@ func runAPI(ctx context.Context, cfg *Config, store gateway.GatewayStore, unknow
 	service := APIService{
 		gateways:                store,
 		chainID:                 new(big.Int).SetUint64(cfg.BlockChain.Polygon.ChainID),
-		onboarderAddress:        cfg.Forwarder.Gateways.Onboarder.Address,
 		batchOnboarderAddress:   cfg.Forwarder.Gateways.BatchOnboarder.Address,
 		unknown:                 unknownGateways,
 		thingsIXOnboardEndpoint: cfg.Forwarder.Gateways.ThingsIXOnboardEndpoint,
 	}
 
-	l := logrus.WithFields(logrus.Fields{
-		"chain_id":  service.chainID,
-		"api_addr":  cfg.Forwarder.Gateways.HttpAPI.Address,
-		"onboarder": cfg.Forwarder.Gateways.Onboarder.Address,
-	})
-	if cfg.Forwarder.Gateways.Onboarder.Address != (common.Address{}) {
-		l = l.WithField("onboarder", cfg.Forwarder.Gateways.Onboarder.Address)
-	}
-
-	l.Info("start forwarder HTTP API")
+	logrus.WithFields(logrus.Fields{
+		"chain_id":        service.chainID,
+		"api_addr":        cfg.Forwarder.Gateways.HttpAPI.Address,
+		"batch_onboarder": cfg.Forwarder.Gateways.BatchOnboarder.Address,
+	}).Info("start forwarder HTTP API")
 
 	root.Route("/v1", func(r chi.Router) {
 		r.Route("/gateways", func(r chi.Router) {
@@ -116,7 +110,6 @@ func replyJSON(w http.ResponseWriter, statusCode int, message interface{}) {
 type APIService struct {
 	gateways                gateway.GatewayStore
 	chainID                 *big.Int
-	onboarderAddress        common.Address
 	batchOnboarderAddress   common.Address
 	unknown                 gateway.UnknownGatewayLogger
 	thingsIXOnboardEndpoint string
@@ -317,7 +310,7 @@ func (svc APIService) OnboardGatewayMessage(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	signature, err := gateway.SignPlainBatchOnboardMessage(svc.chainID, svc.onboarderAddress, req.Owner, 0, gw)
+	signature, err := gateway.SignPlainBatchOnboardMessage(svc.chainID, svc.batchOnboarderAddress, req.Owner, 0, gw)
 	if err != nil {
 		logrus.WithError(err).Error("unable to sign onboard message")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -328,7 +321,7 @@ func (svc APIService) OnboardGatewayMessage(w http.ResponseWriter, r *http.Reque
 		var (
 			endpoint = strings.Replace(
 				strings.Replace(svc.thingsIXOnboardEndpoint, "{owner}", strings.ToLower(req.Owner.String()), 1),
-				"{onboarder}", strings.ToLower(svc.onboarderAddress.String()), 1)
+				"{onboarder}", strings.ToLower(svc.batchOnboarderAddress.String()), 1)
 			payload, _ = json.Marshal(map[string]interface{}{
 				"gatewayId":               gw.ID().String(),
 				"gatewayOnboardSignature": fmt.Sprintf("0x%x", signature),
@@ -359,7 +352,7 @@ func (svc APIService) OnboardGatewayMessage(w http.ResponseWriter, r *http.Reque
 		LocalID:                 gw.LocalID,
 		NetworkID:               gw.NetworkID,
 		Version:                 0,
-		Onboarder:               svc.onboarderAddress,
+		Onboarder:               svc.batchOnboarderAddress,
 	})
 }
 
