@@ -36,6 +36,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 )
 
 func runAPI(ctx context.Context, cfg *Config, store gateway.GatewayStore, unknownGateways gateway.UnknownGatewayLogger) {
@@ -66,6 +67,8 @@ func runAPI(ctx context.Context, cfg *Config, store gateway.GatewayStore, unknow
 		"api_addr":        cfg.Forwarder.Gateways.HttpAPI.Address,
 		"batch_onboarder": cfg.Forwarder.Gateways.BatchOnboarder.Address,
 	}).Info("start forwarder HTTP API")
+
+	root.Get("/info", Info)
 
 	root.Route("/v1", func(r chi.Router) {
 		r.Route("/gateways", func(r chi.Router) {
@@ -453,4 +456,13 @@ func (svc APIService) SyncGateway(w http.ResponseWriter, r *http.Request) {
 		logrus.WithError(err).Error("unable to sync gateway")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 	}
+}
+
+func Info(w http.ResponseWriter, r *http.Request) {
+	version, commit := utils.Info()
+	replyJSON(w, http.StatusOK, map[string]interface{}{
+		"version": version,
+		"git":     commit,
+		"network": viper.GetString("net"),
+	})
 }

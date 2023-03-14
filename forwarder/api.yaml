@@ -260,7 +260,36 @@ components:
         - chainId
         - gatewayOnboardSignature
 
+    Info:
+      description: Forwarder info
+      properties:
+        version:
+          type: string
+          example: v1.0.7
+        git:
+          type: string
+          example: 545a4c157bedb8afcfb82becc9d1e16169df53a3
+        network:
+          type: string
+          enum: ["", "dev", "test", "main"]
+          example: "main"
+      required:
+        - version
+        - git
+        - network
+
 paths:
+  /info:
+    get:
+      summary: forwarder information
+      responses:
+        200:
+          description: forwarder information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Info"
+  
   /v1/gateways:
     get:
       summary: gateways in the store
