@@ -24,3 +24,7 @@ var commit = "unknown"
 func Version() string {
 	return fmt.Sprintf("%s (commit: %s)", version, commit)
 }
+
+func Info() (string, string) {
+	return version, commit
+}
