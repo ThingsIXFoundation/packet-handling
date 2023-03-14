@@ -85,11 +85,11 @@ forwarder:
     
     # Gateways that can use this forwarder
     gateways:
-        # Smart contract that verifies the onboarding message and if valid
-        # registers the gateway in the ThingsIX gateway registry.
-        onboarder:
-            # Onboarder smart contract address.
-            address: "0x0000000000000000000000000000000000000000"
+        # Smart contract that verifies onboarding message and if valid registers
+        # the gateway in the ThingsIX gateway registry.
+        # batch_onboarder:
+        #     # Batch onboarder smart contract address.
+        #     address: "0x0000000000000000000000000000000000000000"
 
         # ThingsIX gateway registry.
         #

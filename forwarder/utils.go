@@ -293,14 +293,14 @@ func printOnboardsAsJSON(onboards []*OnboardGatewayReply) {
 	var res []map[string]interface{}
 	for _, onb := range onboards {
 		res = append(res, map[string]interface{}{
-			"owner":                     onb.Owner,
-			"gateway_id":                onb.GatewayID,
-			"version":                   onb.Version,
-			"local_id":                  onb.LocalID,
-			"network_id":                onb.NetworkID,
-			"address":                   onb.Address,
-			"chain_id":                  onb.ChainID,
-			"gateway_onboard_signature": onb.GatewayOnboardSignature,
+			"owner":     onb.Owner,
+			"gatewayId": onb.GatewayID,
+			"version":   onb.Version,
+			"localId":   onb.LocalID,
+			"networkId": onb.NetworkID,
+			"address":   onb.Address,
+			"chainId":   onb.ChainID,
+			"signature": onb.GatewayOnboardSignature,
 		})
 	}
 	_ = json.NewEncoder(os.Stdout).Encode(res)
