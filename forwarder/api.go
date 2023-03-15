@@ -230,7 +230,7 @@ func (svc APIService) ImportGateways(w http.ResponseWriter, r *http.Request) {
 					_ = resp.Body.Close()
 
 					if resp.StatusCode == http.StatusCreated {
-						logrus.WithField("id", gw.ID).Info("gateway onboard message pushed to ThingsIX")
+						logrus.WithField("id", gw.ID()).Info("gateway onboard message pushed to ThingsIX")
 					}
 				}
 
@@ -342,7 +342,7 @@ func (svc APIService) OnboardGatewayMessage(w http.ResponseWriter, r *http.Reque
 		_ = resp.Body.Close()
 
 		if resp.StatusCode == http.StatusCreated {
-			logrus.WithField("id", gw.ID).Info("gateway onboard message pushed to ThingsIX")
+			logrus.WithField("id", gw.ID()).Info("gateway onboard message pushed to ThingsIX")
 		}
 	}
 
