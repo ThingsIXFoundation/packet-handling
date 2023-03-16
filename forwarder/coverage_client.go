@@ -70,7 +70,7 @@ func (cc *CoverageClient) DeliverDownlinkConfirmationPacketReceipt(ctx context.C
 	if err != nil {
 		return err
 	}
-	r, err := http.NewRequestWithContext(ctx, "POST", "http://localhost:8090/mapping/confirmation", bytes.NewBuffer(b))
+	r, err := http.NewRequestWithContext(ctx, "POST", "http://localhost:8090/mapping/downlink", bytes.NewBuffer(b))
 	if err != nil {
 		return err
 	}

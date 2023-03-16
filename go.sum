@@ -286,6 +286,8 @@ github.com/FastFilter/xorfilter v0.1.2 h1:R8oYYHRjZPQV1TmKPVK87QnruIsR2WWZbyEen5
 github.com/FastFilter/xorfilter v0.1.2/go.mod h1:RB6+tbWbRN163V4y7z10tNfZec6n1oTsOElP0Tu5hzU=
 github.com/GoogleCloudPlatform/cloudsql-proxy v1.33.1 h1:h1qByrLm6Q80nfvIGE5FHdJbvGloDOagO6o0N6QGPkk=
 github.com/GoogleCloudPlatform/cloudsql-proxy v1.33.1/go.mod h1:n3KDPrdaY2p9Nr0B1allAdjYArwIpXQcitNbsS/Qiok=
+github.com/Kl1mn/h3-go v0.0.4 h1:RtTSZuvbnLg3SZGYJRgY/LEt7Dm0sVHbhJa+/9o5dOA=
+github.com/Kl1mn/h3-go v0.0.4/go.mod h1:z7OGXqLd+5hur6EB8s3wFftUEzmfdZ0CMrExBxmes5U=
 github.com/Masterminds/semver v1.4.2 h1:WBLTQ37jOCzSLtXNdoo8bNM8876KhNqOKvrlGITgsTc=
 github.com/Masterminds/semver v1.4.2/go.mod h1:MB6lktGJrhw8PrUyiEoblNEGEQ+RzHPF078ddwwvV3Y=
 github.com/Masterminds/semver/v3 v3.1.1 h1:hLg3sBzpNErnxhQtUy/mmLR2I9foDujNK030IGemrRc=
@@ -298,12 +300,18 @@ github.com/ThingsIXFoundation/coverage-api v1.0.1 h1:Xq4/NDmEUDA49vXyWaFjZpuAXC/
 github.com/ThingsIXFoundation/coverage-api v1.0.1/go.mod h1:JmjclCrOxQhDUZ3wM0RY/UH9LJPcIwupW8IQBLbu/oI=
 github.com/ThingsIXFoundation/frequency-plan v1.3.0 h1:QbnQqbVqxxuE/4WKZCroIb3aykGCDiZmVY3irwFBtE8=
 github.com/ThingsIXFoundation/frequency-plan v1.3.0/go.mod h1:4WhDxSybRnd2stWSGtTOGjC1Zh6ZNcoRLnXYHEGqy4Q=
+github.com/ThingsIXFoundation/gnss-system-time v1.0.0 h1:cLEcjxoEjsp+UuZMPu/+/Rl8IWvMgCs4Rg8zPeYabNg=
+github.com/ThingsIXFoundation/gnss-system-time v1.0.0/go.mod h1:UegOxZz4OzJ4pVYMMyNNuy+j589t3YekimSLhN3YvpU=
 github.com/ThingsIXFoundation/h3-light v0.0.0-20221122151216-69018e780344 h1:faZwv4wbQEytMIyLJ7MV/mQEeGXDvQLGLw1o6Z+BOUc=
 github.com/ThingsIXFoundation/h3-light v0.0.0-20221122151216-69018e780344/go.mod h1:jSChfHi3fbZIAHTaPSEy+ghN/kF32U/f+NZdQt6oDD8=
+github.com/ThingsIXFoundation/h3-light v0.0.0-20230213101106-d999cec4e0cb h1:xxXomZX5OITPfCP8oIE5ZfG1tIs29fx2SnYlw62tnw8=
+github.com/ThingsIXFoundation/h3-light v0.0.0-20230213101106-d999cec4e0cb/go.mod h1:p3V5tlZH2oU4mShm6RufV5C+dPm4IvpryDAxq6U8bbU=
 github.com/ThingsIXFoundation/router-api v1.2.0 h1:f6B8BcX1BakGYYfRSknTtVPNtRgRX4hX+/Isb2L5TYA=
 github.com/ThingsIXFoundation/router-api v1.2.0/go.mod h1:jED1RkCsj3JM6I0rbjUTPTxOeJvPTYXqAu5E1uBSmVo=
 github.com/ThingsIXFoundation/router-registry-go v1.1.0 h1:zWZMhrc4ZuLVR5X2hsu1TVSpkQJo4xM/+oWMrW7bUK0=
 github.com/ThingsIXFoundation/router-registry-go v1.1.0/go.mod h1:JA8B+SBQEL1MAvHrbNw053bSzq++BBwW7QJ/s7BH018=
+github.com/ThingsIXFoundation/types v0.0.0-20230306132054-18837b1c1bc8 h1:lEKmk2WmQndN/22B2zUmiFaNvG6+GBA+S1NjUOMvlNM=
+github.com/ThingsIXFoundation/types v0.0.0-20230306132054-18837b1c1bc8/go.mod h1:ANUUB8Cnm1sCb5ifS5RUjzTgT9u4BCams2tEJ0M5uqk=
 github.com/VictoriaMetrics/fastcache v1.6.0 h1:C/3Oi3EiBCqufydp1neRZkqcwmEiuRT9c3fqvvgKm5o=
 github.com/alecthomas/kingpin v2.2.6+incompatible/go.mod h1:59OFYbFVLKQKq+mqrL6Rw5bR0c3ACQaawgXx0QYndlE=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=

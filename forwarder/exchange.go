@@ -225,7 +225,6 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 
 		// check if the packet received could be a mapper packet and process it
 		if IsMaybeMapperPacket(frame, mac) {
-			frameLog.Info("received plausible mapper packet")
 			e.mapperForwarder.HandleMapperPacket(frame, mac)
 			return
 		}

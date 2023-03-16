@@ -21,9 +21,11 @@ import (
 	"crypto/sha256"
 	"time"
 
+	gnsssystemtime "github.com/ThingsIXFoundation/gnss-system-time"
 	h3light "github.com/ThingsIXFoundation/h3-light"
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	"github.com/ThingsIXFoundation/packet-handling/utils"
+	"github.com/ThingsIXFoundation/types"
 	"github.com/chirpstack/chirpstack/api/go/v4/gw"
 	"github.com/google/uuid"
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -87,7 +89,19 @@ func (mc *MapperForwarder) handleDiscoveryPacket(frame *gw.UplinkFrame, mac *lor
 			"network_gateway_id": frame.RxInfo.GatewayId,
 		}).Error("unknown gateway, dropping mapper packet")
 		return
+
 	}
+	frameLog := logrus.WithFields(logrus.Fields{
+		"gw_local_id":   gateway.LocalID,
+		"gw_network_id": gateway.NetworkID,
+		"rssi":          frame.GetRxInfo().GetRssi(),
+		"snr":           frame.GetRxInfo().GetSnr(),
+		"freq":          frame.GetTxInfo().GetFrequency(),
+		"sf":            frame.GetTxInfo().GetModulation().GetLora().GetSpreadingFactor(),
+		"pol":           frame.GetTxInfo().GetModulation().GetLora().GetPolarizationInversion(),
+		"coderate":      frame.GetTxInfo().GetModulation().GetLora().GetCodeRate(),
+		"bandwidth":     frame.GetTxInfo().GetModulation().GetLora().GetBandwidth(),
+	})
 
 	dp, _ := mapperpacket.NewDiscoveryPacketFromBytes(frame.PhyPayload)
 
@@ -97,31 +111,42 @@ func (mc *MapperForwarder) handleDiscoveryPacket(frame *gw.UplinkFrame, mac *lor
 
 	pkb, err := crypto.Ecrecover(h[:], sig)
 	if err != nil {
-		logrus.WithError(err).Error("could not recover public key from mapper signature, malformed packet?")
+		frameLog.WithError(err).Error("could not recover public key from mapper signature, malformed packet?")
 		return
 	}
 
 	pk, err := crypto.UnmarshalPubkey(pkb)
 	if err != nil {
-		logrus.WithError(err).Error("could not recover public key from mapper signature, malformed packet?")
+		frameLog.WithError(err).Error("could not recover public key from mapper signature, malformed packet?")
 		return
 	}
 
-	address := crypto.PubkeyToAddress(*pk)
+	mapperAddress := crypto.PubkeyToAddress(*pk)
+	mapperID := types.ID(utils.DeriveThingsIxID(pk))
 
-	logrus.Infof("received packet from mapper: %s", address)
+	frameLog = frameLog.WithFields(logrus.Fields{
+		"mapper_id": mapperID,
+	})
 
 	if !crypto.VerifySignature(pkb, h[:], sig[0:64]) {
-		logrus.Error("invalid mapper signature, malformed packet?")
+		frameLog.Error("invalid mapper signature, malformed packet?")
 		return
 	}
 	lat, lon := dp.LatLonFloat()
-	logrus.Infof("packet was mapped at: %f, %f", lat, lon)
-
+	mapTime := gnsssystemtime.GalileoTowToTime(dp.TOW(), time.Now().Add(1*time.Minute), 18)
 	region := h3light.LatLonToRes0ToCell(lat, lon)
-	logrus.Infof("packet is for region: %s", region)
 
-	mc.mapperRegionCache.Add(address.String(), region.String())
+	frameLog = frameLog.WithFields(logrus.Fields{
+		"latitude":      lat,
+		"longitude":     lon,
+		"region":        region,
+		"map_time":      mapTime,
+		"map_time_diff": time.Since(mapTime),
+	})
+
+	frameLog.Info("received mapper discovery packet, signing and delivering to coverage-mapping-service")
+
+	mc.mapperRegionCache.Add(mapperAddress.String(), region.String())
 
 	dpr := &mapper.DiscoveryPacketReceipt{
 		Frequency:        frame.TxInfo.Frequency,
@@ -137,13 +162,13 @@ func (mc *MapperForwarder) handleDiscoveryPacket(frame *gw.UplinkFrame, mac *lor
 
 	dprb, err := proto.Marshal(dpr)
 	if err != nil {
-		logrus.WithError(err).Error("could not marshal packet receipt")
+		frameLog.WithError(err).Error("could not marshal packet receipt")
 		return
 	}
 	dprbh := sha256.Sum256(dprb)
 	gwsig, err := crypto.Sign(dprbh[:], gateway.PrivateKey)
 	if err != nil {
-		logrus.WithError(err).Error("could not sign packet receipt: error while signing packet")
+		frameLog.WithError(err).Error("could not sign packet receipt: error while signing packet")
 		return
 	}
 
@@ -157,15 +182,15 @@ func (mc *MapperForwarder) handleDiscoveryPacket(frame *gw.UplinkFrame, mac *lor
 		defer cancel()
 		resp, err := coverageClient.DeliverDiscoveryPacketReceipt(ctx, dpr)
 		if err != nil {
-			logrus.WithError(err).Error("could not deliver packet receipt")
+			frameLog.WithError(err).Error("could not deliver packet receipt")
 			return
 		}
 		dtr := resp.GetDownlinkTransmitRequest()
 		if dtr == nil {
-			logrus.Info("gateway was not selected for downlink")
+			frameLog.Info("gateway was not selected for downlink")
 			return
 		} else {
-			logrus.Info("gateway was selected for downlink")
+			frameLog.Info("gateway was selected as winner!")
 		}
 
 		dfi := gw.DownlinkFrameItem{

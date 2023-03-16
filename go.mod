@@ -44,6 +44,9 @@ require (
 require (
 	cloud.google.com/go/compute v1.12.1 // indirect
 	cloud.google.com/go/compute/metadata v0.2.1 // indirect
+	github.com/Kl1mn/h3-go v0.0.4 // indirect
+	github.com/ThingsIXFoundation/gnss-system-time v1.0.0 // indirect
+	github.com/ThingsIXFoundation/types v0.0.0-20230306132054-18837b1c1bc8 // indirect
 	github.com/biter777/countries v1.5.6 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
@@ -77,7 +80,7 @@ require (
 
 require (
 	github.com/Masterminds/semver v1.4.2 // indirect
-	github.com/ThingsIXFoundation/h3-light v0.0.0-20221122151216-69018e780344
+	github.com/ThingsIXFoundation/h3-light v0.0.0-20230213101106-d999cec4e0cb
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d // indirect
 	github.com/apex/log v1.1.0 // indirect
