@@ -19,6 +19,7 @@ package gateway
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"sync"
 	"time"
@@ -234,7 +235,9 @@ func recordUnkownGatewaysToFile(unknownFile string) *yamlUnknownGatewayLogger {
 	)
 
 	if err == nil {
-		if err := yaml.NewDecoder(file).Decode(&alreadyRecorded); err != nil {
+		// Althought an io.EOF error should not happen here, we have seen it being thrown on some
+		// systems. Catching it does no harm so why not.
+		if err = yaml.NewDecoder(file).Decode(&alreadyRecorded); err != nil && err != io.EOF {
 			l.WithError(err).
 				Fatal("unable to load existing set of recorded gateways from file")
 		}
