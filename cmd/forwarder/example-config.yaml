@@ -224,8 +224,6 @@ blockchain:
     polygon:
         # Polygon node RPC endpoint
         endpoint: https://polygon-rpc.com
-        # Polygon chain id; mainnet=137, mumbai testnet=80001
-        chain_id: 137
         # Block confirmations, polygon blocks are final after 128 confirmations
         confirmations: 128
 
