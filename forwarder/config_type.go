@@ -129,7 +129,7 @@ type LogConfig struct {
 
 type BlockchainPolygonConfig struct {
 	Endpoint      string
-	ChainID       uint64 `mapstructure:"chain_id"`
+	ChainID       uint64 `mapstructure:"-"`
 	Confirmations uint64
 }
 
