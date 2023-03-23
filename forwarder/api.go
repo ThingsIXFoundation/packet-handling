@@ -19,7 +19,6 @@ package forwarder
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -55,11 +54,12 @@ func runAPI(ctx context.Context, cfg *Config, store gateway.GatewayStore, unknow
 	}))
 
 	service := APIService{
-		gateways:                store,
-		chainID:                 new(big.Int).SetUint64(cfg.BlockChain.Polygon.ChainID),
-		batchOnboarderAddress:   cfg.Forwarder.Gateways.BatchOnboarder.Address,
-		unknown:                 unknownGateways,
-		thingsIXOnboardEndpoint: cfg.Forwarder.Gateways.ThingsIXOnboardEndpoint,
+		gateways:                     store,
+		chainID:                      new(big.Int).SetUint64(cfg.BlockChain.Polygon.ChainID),
+		batchOnboarderAddress:        cfg.Forwarder.Gateways.BatchOnboarder.Address,
+		earlyAdopterOnboarderAddress: cfg.Forwarder.Gateways.EarlyAdopter.Address,
+		unknown:                      unknownGateways,
+		thingsIXOnboardEndpoint:      cfg.Forwarder.Gateways.ThingsIXOnboardEndpoint,
 	}
 
 	logrus.WithFields(logrus.Fields{
@@ -111,11 +111,12 @@ func replyJSON(w http.ResponseWriter, statusCode int, message interface{}) {
 }
 
 type APIService struct {
-	gateways                gateway.GatewayStore
-	chainID                 *big.Int
-	batchOnboarderAddress   common.Address
-	unknown                 gateway.UnknownGatewayLogger
-	thingsIXOnboardEndpoint string
+	gateways                     gateway.GatewayStore
+	chainID                      *big.Int
+	batchOnboarderAddress        common.Address
+	earlyAdopterOnboarderAddress common.Address
+	unknown                      gateway.UnknownGatewayLogger
+	thingsIXOnboardEndpoint      string
 }
 
 func (svc APIService) AddGateway(w http.ResponseWriter, r *http.Request) {
@@ -200,7 +201,14 @@ func (svc APIService) ImportGateways(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 
-				signature, err := gateway.SignPlainBatchOnboardMessage(svc.chainID, svc.batchOnboarderAddress, req.Owner, 0, gw)
+				batchOnboardSignature, err := gateway.SignPlainBatchOnboardMessage(svc.chainID, svc.batchOnboarderAddress, req.Owner, 0, gw)
+				if err != nil {
+					logrus.WithError(err).Error("unable to sign onboard message")
+					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+					return
+				}
+
+				earlyAdopterOnboardSignature, err := gateway.SignPlainBatchOnboardMessage(svc.chainID, svc.earlyAdopterOnboarderAddress, req.Owner, 0, gw)
 				if err != nil {
 					logrus.WithError(err).Error("unable to sign onboard message")
 					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -209,43 +217,53 @@ func (svc APIService) ImportGateways(w http.ResponseWriter, r *http.Request) {
 
 				if req.PushToThingsIX {
 					var (
-						endpoint = strings.Replace(
-							strings.Replace(svc.thingsIXOnboardEndpoint, "{owner}", strings.ToLower(req.Owner.String()), 1),
-							"{onboarder}", strings.ToLower(svc.batchOnboarderAddress.String()), 1)
-						payload, _ = json.Marshal(map[string]interface{}{
+						payloadBatch, _ = json.Marshal(map[string]interface{}{
 							"gatewayId":               gw.ID().String(),
-							"gatewayOnboardSignature": fmt.Sprintf("0x%x", signature),
+							"gatewayOnboardSignature": fmt.Sprintf("0x%x", batchOnboardSignature),
 							"version":                 0,
 							"localId":                 gw.LocalID.String(),
-							"onboarder":               svc.batchOnboarderAddress,
 						})
+						payloadEarlyAdopter, _ = json.Marshal(map[string]interface{}{
+							"gatewayId":               gw.ID().String(),
+							"gatewayOnboardSignature": fmt.Sprintf("0x%x", earlyAdopterOnboardSignature),
+							"version":                 0,
+							"localId":                 gw.LocalID.String(),
+						})
+						onboarders = []common.Address{svc.batchOnboarderAddress, svc.earlyAdopterOnboarderAddress}
+						payloads   = [][]byte{payloadBatch, payloadEarlyAdopter}
 					)
 
-					resp, err := http.Post(endpoint, "application/json", bytes.NewReader(payload))
-					if err != nil {
-						logrus.WithError(err).Error("unable to store gateway onboard message in ThingsIX")
-						http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-						return
-					}
-					_ = resp.Body.Close()
+					for i, payload := range payloads {
+						endpoint := strings.Replace(
+							strings.Replace(svc.thingsIXOnboardEndpoint, "{owner}", strings.ToLower(req.Owner.String()), 1),
+							"{onboarder}", strings.ToLower(onboarders[i].String()), 1)
+						resp, err := http.Post(endpoint, "application/json", bytes.NewReader(payload))
+						if err != nil {
+							logrus.WithError(err).Error("unable to store gateway onboard message in ThingsIX")
+							http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+							return
+						}
+						_ = resp.Body.Close()
 
-					if resp.StatusCode == http.StatusCreated {
-						logrus.WithField("id", gw.ID()).Info("gateway onboard message pushed to ThingsIX")
+						if resp.StatusCode == http.StatusCreated {
+							logrus.WithField("id", gw.ID()).Info("gateway onboard message pushed to ThingsIX")
+						}
 					}
 				}
 
 				statusCode = http.StatusCreated
 
 				reply = append(reply, OnboardGatewayReply{
-					Owner:                   req.Owner,
-					Address:                 gw.Address(),
-					ChainID:                 svc.chainID.Uint64(),
-					GatewayID:               gw.ID(),
-					GatewayOnboardSignature: "0x" + hex.EncodeToString(signature),
-					LocalID:                 gw.LocalID,
-					NetworkID:               gw.NetworkID,
-					Version:                 0,
-					Onboarder:               svc.batchOnboarderAddress,
+					Owner:                        req.Owner,
+					Address:                      gw.Address(),
+					ChainID:                      svc.chainID.Uint64(),
+					GatewayID:                    gw.ID(),
+					GatewayOnboardSignature:      fmt.Sprintf("0x%x", batchOnboardSignature),
+					EarlyAdopterOnboardSignature: fmt.Sprintf("0x%x", earlyAdopterOnboardSignature),
+					LocalID:                      gw.LocalID,
+					NetworkID:                    gw.NetworkID,
+					Version:                      0,
+					Onboarder:                    svc.batchOnboarderAddress,
 				})
 			}
 		}
@@ -313,7 +331,14 @@ func (svc APIService) OnboardGatewayMessage(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	signature, err := gateway.SignPlainBatchOnboardMessage(svc.chainID, svc.batchOnboarderAddress, req.Owner, 0, gw)
+	batchOnboardSignature, err := gateway.SignPlainBatchOnboardMessage(svc.chainID, svc.batchOnboarderAddress, req.Owner, 0, gw)
+	if err != nil {
+		logrus.WithError(err).Error("unable to sign onboard message")
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	earlyAdopterOnboardSignature, err := gateway.SignPlainBatchOnboardMessage(svc.chainID, svc.earlyAdopterOnboarderAddress, req.Owner, 0, gw)
 	if err != nil {
 		logrus.WithError(err).Error("unable to sign onboard message")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -322,53 +347,66 @@ func (svc APIService) OnboardGatewayMessage(w http.ResponseWriter, r *http.Reque
 
 	if req.PushToThingsIX {
 		var (
-			endpoint = strings.Replace(
-				strings.Replace(svc.thingsIXOnboardEndpoint, "{owner}", strings.ToLower(req.Owner.String()), 1),
-				"{onboarder}", strings.ToLower(svc.batchOnboarderAddress.String()), 1)
-			payload, _ = json.Marshal(map[string]interface{}{
+			payloadBatch, _ = json.Marshal(map[string]interface{}{
 				"gatewayId":               gw.ID().String(),
-				"gatewayOnboardSignature": fmt.Sprintf("0x%x", signature),
+				"gatewayOnboardSignature": fmt.Sprintf("0x%x", batchOnboardSignature),
 				"version":                 0,
 				"localId":                 gw.LocalID.String(),
 			})
+			payloadEarlyAdopter, _ = json.Marshal(map[string]interface{}{
+				"gatewayId":               gw.ID().String(),
+				"gatewayOnboardSignature": fmt.Sprintf("0x%x", earlyAdopterOnboardSignature),
+				"version":                 0,
+				"localId":                 gw.LocalID.String(),
+			})
+			onboarders = []common.Address{svc.batchOnboarderAddress, svc.earlyAdopterOnboarderAddress}
+			payloads   = [][]byte{payloadBatch, payloadEarlyAdopter}
 		)
 
-		resp, err := http.Post(endpoint, "application/json", bytes.NewReader(payload))
-		if err != nil {
-			logrus.WithError(err).Error("unable to store gateway onboard message in ThingsIX")
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			return
-		}
-		_ = resp.Body.Close()
+		for i, payload := range payloads {
+			endpoint := strings.Replace(
+				strings.Replace(svc.thingsIXOnboardEndpoint, "{owner}", strings.ToLower(req.Owner.String()), 1),
+				"{onboarder}", strings.ToLower(onboarders[i].String()), 1)
 
-		if resp.StatusCode == http.StatusCreated {
-			logrus.WithField("id", gw.ID()).Info("gateway onboard message pushed to ThingsIX")
+			resp, err := http.Post(endpoint, "application/json", bytes.NewReader(payload))
+			if err != nil {
+				logrus.WithError(err).Error("unable to store gateway onboard message in ThingsIX")
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				return
+			}
+			_ = resp.Body.Close()
+
+			if resp.StatusCode == http.StatusCreated {
+				logrus.WithField("id", gw.ID()).Info("gateway onboard message pushed to ThingsIX")
+			}
 		}
 	}
 
 	replyJSON(w, statusCode, &OnboardGatewayReply{
-		Owner:                   req.Owner,
-		Address:                 gw.Address(),
-		ChainID:                 svc.chainID.Uint64(),
-		GatewayID:               gw.ID(),
-		GatewayOnboardSignature: fmt.Sprintf("0x%x", signature),
-		LocalID:                 gw.LocalID,
-		NetworkID:               gw.NetworkID,
-		Version:                 0,
-		Onboarder:               svc.batchOnboarderAddress,
+		Owner:                        req.Owner,
+		Address:                      gw.Address(),
+		ChainID:                      svc.chainID.Uint64(),
+		GatewayID:                    gw.ID(),
+		GatewayOnboardSignature:      fmt.Sprintf("0x%x", batchOnboardSignature),
+		EarlyAdopterOnboardSignature: fmt.Sprintf("0x%x", earlyAdopterOnboardSignature),
+		LocalID:                      gw.LocalID,
+		NetworkID:                    gw.NetworkID,
+		Version:                      0,
+		Onboarder:                    svc.batchOnboarderAddress,
 	})
 }
 
 type OnboardGatewayReply struct {
-	Owner                   common.Address     `json:"owner"`
-	Address                 common.Address     `json:"address"`
-	ChainID                 uint64             `json:"chainId"`
-	GatewayID               gateway.ThingsIxID `json:"gatewayId"`
-	GatewayOnboardSignature string             `json:"gatewayOnboardSignature"`
-	LocalID                 lorawan.EUI64      `json:"localId"`
-	NetworkID               lorawan.EUI64      `json:"networkId"`
-	Version                 uint8              `json:"version"`
-	Onboarder               common.Address     `json:"onboarder"`
+	Owner                        common.Address     `json:"owner"`
+	Address                      common.Address     `json:"address"`
+	ChainID                      uint64             `json:"chainId"`
+	GatewayID                    gateway.ThingsIxID `json:"gatewayId"`
+	GatewayOnboardSignature      string             `json:"gatewayOnboardSignature"`
+	EarlyAdopterOnboardSignature string             `json:"earlyAdopterOnboardSignature"`
+	LocalID                      lorawan.EUI64      `json:"localId"`
+	NetworkID                    lorawan.EUI64      `json:"networkId"`
+	Version                      uint8              `json:"version"`
+	Onboarder                    common.Address     `json:"onboarder"`
 }
 
 func (svc APIService) ListGateways(w http.ResponseWriter, r *http.Request) {

@@ -93,6 +93,7 @@ func getNetConfig(net string) *Config {
 
 	if net == "main" {
 		cfg.Forwarder.Gateways.BatchOnboarder.Address = common.Address{} // TODO, once available
+		cfg.Forwarder.Gateways.EarlyAdopter.Address = common.Address{}   // TODO, once available
 		cfg.Forwarder.Gateways.ThingsIXOnboardEndpoint = "https://api.thingsix.com/gateways/v1/onboards/{onboarder}/{owner}"
 		cfg.Forwarder.Gateways.Registry.ThingsIxApi.Endpoint = "https://api.thingsix.com/gateways/v1/{id}"
 		cfg.Forwarder.Routers.ThingsIXApi.Endpoint = utils.Ptr("https://api.thingsix.com/routers/v1/snapshot")
@@ -102,6 +103,7 @@ func getNetConfig(net string) *Config {
 	}
 	if net == "test" {
 		cfg.Forwarder.Gateways.BatchOnboarder.Address = common.HexToAddress("0xe685A0826419Bc982c9278eA7798143Fe7CF9f11")
+		cfg.Forwarder.Gateways.EarlyAdopter.Address = common.HexToAddress("0x6A2770C1317CD69a6d81f54ea61a7E4988Abad78")
 		cfg.Forwarder.Gateways.ThingsIXOnboardEndpoint = "https://api-testnet.thingsix.com/gateways/v1/onboards/{onboarder}/{owner}"
 		cfg.Forwarder.Gateways.Registry.ThingsIxApi.Endpoint = "https://api-testnet.thingsix.com/gateways/v1/{id}"
 		cfg.Forwarder.Routers.ThingsIXApi.Endpoint = utils.Ptr("https://api-testnet.thingsix.com/routers/v1/snapshot")
@@ -111,6 +113,7 @@ func getNetConfig(net string) *Config {
 	}
 	if net == "dev" {
 		cfg.Forwarder.Gateways.BatchOnboarder.Address = common.HexToAddress("0xC7Dc48Ae9ED3e095f58ecF5320dE33F43A06cfC1")
+		cfg.Forwarder.Gateways.EarlyAdopter.Address = common.HexToAddress("0x4A3E182a6E8704b9355dE87BF92a5Ba43b7D01F4")
 		cfg.Forwarder.Gateways.ThingsIXOnboardEndpoint = "https://api-devnet.thingsix.com/gateways/v1/onboards/{onboarder}/{owner}"
 		cfg.Forwarder.Gateways.Registry.ThingsIxApi.Endpoint = "https://api-devnet.thingsix.com/gateways/v1/{id}"
 		cfg.Forwarder.Routers.ThingsIXApi.Endpoint = utils.Ptr("https://api-devnet.thingsix.com/routers/v1/snapshot")

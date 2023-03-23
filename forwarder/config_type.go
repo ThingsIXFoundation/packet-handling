@@ -60,6 +60,12 @@ type ForwarderGatewayConfig struct {
 		Address common.Address `mapstructure:"address"`
 	} `mapstructure:"batch_onboarder"`
 
+	// BatchOnboarder configures the gateway early adopter onboarder smart contract plugin.
+	EarlyAdopter struct {
+		// Address is the smart contract chain address
+		Address common.Address `mapstructure:"-"`
+	}
+
 	// Store describes how gateways are stored/loaded in the forwarder.
 	Store gateway.StoreConfig
 
