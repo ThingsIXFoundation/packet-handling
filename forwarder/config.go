@@ -80,6 +80,9 @@ func getNetConfig(net string) *Config {
 	cfg.Forwarder.Routers = ForwarderRoutersConfig{}
 	cfg.Forwarder.Routers.ThingsIXApi = &ForwarderRoutersThingsIXAPIConfig{}
 	cfg.Forwarder.Routers.ThingsIXApi.UpdateInterval = utils.Ptr(30 * time.Minute)
+	cfg.Forwarder.Mapping = ForwarderMappingConfig{}
+	cfg.Forwarder.Mapping.ThingsIXApi = &ForwarderMappingThingsIXAPIConfig{}
+	cfg.Forwarder.Mapping.ThingsIXApi.UpdateInterval = utils.Ptr(30 * time.Minute)
 	cfg.BlockChain = BlockchainConfig{}
 	cfg.BlockChain.Polygon = &BlockchainPolygonConfig{}
 	cfg.BlockChain.Polygon.Confirmations = 128
@@ -96,6 +99,7 @@ func getNetConfig(net string) *Config {
 		cfg.Forwarder.Gateways.BatchOnboarder.Address = common.Address{} // TODO, once available
 		cfg.Forwarder.Gateways.Registry.ThingsIxApi.Endpoint = "https://api.thingsix.com/gateways/v1/{id}"
 		cfg.Forwarder.Routers.ThingsIXApi.Endpoint = utils.Ptr("https://api.thingsix.com/routers/v1/snapshot")
+		cfg.Forwarder.Mapping.ThingsIXApi.IndexEndpoint = utils.Ptr("https://api.thingsix.com/coverage-mapping-index/v1/")
 		cfg.BlockChain.Polygon.Endpoint = "https://polygon-rpc.com"
 		cfg.BlockChain.Polygon.ChainID = 137
 		return &cfg
@@ -105,6 +109,7 @@ func getNetConfig(net string) *Config {
 		cfg.Forwarder.Gateways.BatchOnboarder.Address = common.HexToAddress("0xe685A0826419Bc982c9278eA7798143Fe7CF9f11")
 		cfg.Forwarder.Gateways.Registry.ThingsIxApi.Endpoint = "https://api-testnet.thingsix.com/gateways/v1/{id}"
 		cfg.Forwarder.Routers.ThingsIXApi.Endpoint = utils.Ptr("https://api-testnet.thingsix.com/routers/v1/snapshot")
+		cfg.Forwarder.Mapping.ThingsIXApi.IndexEndpoint = utils.Ptr("https://api-testnet.thingsix.com/coverage-mapping-index/v1/")
 		cfg.BlockChain.Polygon.Endpoint = "https://rpc.ankr.com/polygon_mumbai"
 		cfg.BlockChain.Polygon.ChainID = 80001
 		return &cfg
@@ -114,6 +119,7 @@ func getNetConfig(net string) *Config {
 		cfg.Forwarder.Gateways.BatchOnboarder.Address = common.HexToAddress("0xC7Dc48Ae9ED3e095f58ecF5320dE33F43A06cfC1")
 		cfg.Forwarder.Gateways.Registry.ThingsIxApi.Endpoint = "https://api-devnet.thingsix.com/gateways/v1/{id}"
 		cfg.Forwarder.Routers.ThingsIXApi.Endpoint = utils.Ptr("https://api-devnet.thingsix.com/routers/v1/snapshot")
+		cfg.Forwarder.Mapping.ThingsIXApi.IndexEndpoint = utils.Ptr("https://api-devnet.thingsix.com/coverage-mapping-index/v1/")
 		cfg.BlockChain.Polygon.Endpoint = "https://rpc.ankr.com/polygon_mumbai"
 		cfg.BlockChain.Polygon.ChainID = 80001
 		return &cfg

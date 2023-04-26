@@ -50,7 +50,7 @@ type Exchange struct {
 	// routes holds the required information to exchange data with
 	// external ThingsIX routers
 	routingTable *RoutingTable
-
+	// checks if a packet is possibly a mapper packet and if yes handles it.
 	mapperForwarder *MapperForwarder
 }
 
@@ -77,7 +77,6 @@ func NewExchange(ctx context.Context, cfg *Config) (*Exchange, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	// build routing table to determine where data must be forwarded to
 	routingTable, err := buildRoutingTable(cfg, store, accounter)
 	if err != nil {
@@ -96,7 +95,7 @@ func NewExchange(ctx context.Context, cfg *Config) (*Exchange, error) {
 		recordUnknownGateway: recorder,
 	}
 
-	if exchange.mapperForwarder, err = NewMapperForwarder(exchange, store); err != nil {
+	if exchange.mapperForwarder, err = NewMapperForwarder(cfg, exchange, store); err != nil {
 		return nil, err
 	}
 
@@ -123,6 +122,9 @@ func (e *Exchange) Run(ctx context.Context) {
 
 	// update the routing table periodically
 	go e.routingTable.Run(ctx)
+
+	// update the coverage-mapping-index periodically
+	go e.mapperForwarder.Run(ctx)
 
 	// wait for messages from the network and dispatch them to the chirpstack backend
 	for {

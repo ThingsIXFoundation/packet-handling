@@ -43,39 +43,40 @@ type MapperForwarder struct {
 	gatewayStore      gateway.GatewayStore
 	exchange          *Exchange
 	mapperRegionCache *lru.Cache[string, string]
+	coverageClient    *CoverageClient
 }
 
-func NewMapperForwarder(exchange *Exchange, gatewayStore gateway.GatewayStore) (*MapperForwarder, error) {
+func NewMapperForwarder(cfg *Config, exchange *Exchange, gatewayStore gateway.GatewayStore) (*MapperForwarder, error) {
 	mapperRegionCache, err := lru.New[string, string](64)
 	if err != nil {
 		return nil, err
 	}
-	return &MapperForwarder{exchange: exchange, gatewayStore: gatewayStore, mapperRegionCache: mapperRegionCache}, nil
+	coverageClient, err := NewCoverageClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return &MapperForwarder{exchange: exchange, gatewayStore: gatewayStore, mapperRegionCache: mapperRegionCache, coverageClient: coverageClient}, nil
 }
 
 func IsMaybeMapperPacket(frame *gw.UplinkFrame, payload *lorawan.MACPayload) bool {
 	if frame.TxInfo.GetModulation().GetLora().GetSpreadingFactor() != 7 {
-		logrus.Debug("wrong spreading factor")
 		return false
 	}
 
 	if frame.TxInfo.GetModulation().GetLora().GetBandwidth() != 125000 {
-		logrus.Debug("wrong bandwidth")
 		return false
 	}
 
 	if payload.FPort == nil {
-		logrus.Debug("wrong fport")
 		return false
 	}
 
 	if *payload.FPort != 0x01 && *payload.FPort != 0x02 {
-		logrus.Debug("wrong fport match")
 		return false
 	}
 
 	if payload.FHDR.DevAddr[0] != 0x02 {
-		logrus.Debug("wrong devaddr")
 		return false
 	}
 
@@ -134,7 +135,7 @@ func (mc *MapperForwarder) handleDiscoveryPacket(frame *gw.UplinkFrame, mac *lor
 	}
 	lat, lon := dp.LatLonFloat()
 	mapTime := gnsssystemtime.GalileoTowToTime(dp.TOW(), time.Now().Add(1*time.Minute), 18)
-	region := h3light.LatLonToRes0ToCell(lat, lon)
+	region := h3light.LatLonToCell(lat, lon, 1)
 
 	frameLog = frameLog.WithFields(logrus.Fields{
 		"latitude":      lat,
@@ -176,11 +177,9 @@ func (mc *MapperForwarder) handleDiscoveryPacket(frame *gw.UplinkFrame, mac *lor
 
 	// Deliver in goroutine as the response will take almost 1 second in optimal case
 	go func() {
-		logrus.Debug("sending discovery packet")
-		coverageClient, _ := mc.mapperClientForRegion(region)
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		resp, err := coverageClient.DeliverDiscoveryPacketReceipt(ctx, dpr)
+		resp, err := mc.coverageClient.DeliverDiscoveryPacketReceipt(ctx, region, dpr)
 		if err != nil {
 			frameLog.WithError(err).Error("could not deliver packet receipt")
 			return
@@ -311,10 +310,9 @@ func (mc *MapperForwarder) handleDownlinkConfirmationPacket(frame *gw.UplinkFram
 
 	go func() {
 		logrus.Debug("sending downlink confirmation packet")
-		coverageClient, _ := mc.mapperClientForRegion(region)
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		err := coverageClient.DeliverDownlinkConfirmationPacketReceipt(ctx, dcpr)
+		err := mc.coverageClient.DeliverDownlinkConfirmationPacketReceipt(ctx, region, dcpr)
 		if err != nil {
 			logrus.WithError(err).Error("could not deliver packet receipt")
 			return
@@ -330,6 +328,6 @@ func (mc *MapperForwarder) HandleMapperPacket(frame *gw.UplinkFrame, mac *lorawa
 	}
 }
 
-func (m *MapperForwarder) mapperClientForRegion(region h3light.Cell) (*CoverageClient, error) {
-	return NewCoverageClient()
+func (mc *MapperForwarder) Run(ctx context.Context) {
+	mc.coverageClient.Run(ctx)
 }
