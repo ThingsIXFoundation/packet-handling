@@ -106,7 +106,11 @@ func (mc *MapperForwarder) handleDiscoveryPacket(frame *gw.UplinkFrame) {
 
 	rxPacketsMapperCounter.WithLabelValues(gateway.NetworkID.String(), gateway.LocalID.String(), "discovery").Inc()
 
-	dp, _ := mapperpacket.NewDiscoveryPacketFromBytes(frame.PhyPayload)
+	dp, err := mapperpacket.NewDiscoveryPacketFromBytes(frame.PhyPayload)
+	if err != nil {
+		frameLog.WithError(err).Error("could not decode discovery packet, malformed packet?")
+		return
+	}
 
 	h := sha256.Sum256(frame.PhyPayload[0:22])
 	sig := frame.PhyPayload[22:]
@@ -246,10 +250,25 @@ func (mc *MapperForwarder) handleDownlinkConfirmationPacket(frame *gw.UplinkFram
 		}).Error("unknown gateway, dropping mapper packet")
 		return
 	}
+	frameLog := logrus.WithFields(logrus.Fields{
+		"gw_local_id":   gateway.LocalID,
+		"gw_network_id": gateway.NetworkID,
+		"rssi":          frame.GetRxInfo().GetRssi(),
+		"snr":           frame.GetRxInfo().GetSnr(),
+		"freq":          frame.GetTxInfo().GetFrequency(),
+		"sf":            frame.GetTxInfo().GetModulation().GetLora().GetSpreadingFactor(),
+		"pol":           frame.GetTxInfo().GetModulation().GetLora().GetPolarizationInversion(),
+		"coderate":      frame.GetTxInfo().GetModulation().GetLora().GetCodeRate(),
+		"bandwidth":     frame.GetTxInfo().GetModulation().GetLora().GetBandwidth(),
+	})
 
 	rxPacketsMapperCounter.WithLabelValues(gateway.NetworkID.String(), gateway.LocalID.String(), "downlink_confirmation").Inc()
 
-	logrus.Info("Received downlink confirmation message")
+	_, err = mapperpacket.NewDownlinkConfirmationPacketFromBytes(frame.PhyPayload)
+	if err != nil {
+		frameLog.WithError(err).Error("could not decode downlink-confirmation packet, malformed packet?")
+		return
+	}
 
 	h := sha256.Sum256(frame.PhyPayload[0:22])
 	sig := frame.PhyPayload[22:]
@@ -257,34 +276,39 @@ func (mc *MapperForwarder) handleDownlinkConfirmationPacket(frame *gw.UplinkFram
 
 	pkb, err := crypto.Ecrecover(h[:], sig)
 	if err != nil {
-		logrus.WithError(err).Error("could not recover public key from mapper signature, malformed packet?")
+		frameLog.WithError(err).Error("could not recover public key from mapper signature, malformed packet?")
 		return
 	}
 
 	pk, err := crypto.UnmarshalPubkey(pkb)
 	if err != nil {
-		logrus.WithError(err).Error("could not recover public key from mapper signature, malformed packet?")
+		frameLog.WithError(err).Error("could not recover public key from mapper signature, malformed packet?")
 		return
 	}
 
-	address := crypto.PubkeyToAddress(*pk)
+	mapperAddress := crypto.PubkeyToAddress(*pk)
+	mapperID := types.ID(utils.DeriveThingsIxID(pk))
 
-	logrus.Infof("received packet from mapper: %s", address)
+	frameLog = frameLog.WithFields(logrus.Fields{
+		"mapper_id": mapperID,
+	})
+
+	frameLog.Info("received mapper downlink-confirmation packet, signing and delivering to coverage-mapping-service")
 
 	if !crypto.VerifySignature(pkb, h[:], sig[0:64]) {
-		logrus.Error("invalid mapper signature, malformed packet?")
+		frameLog.Error("invalid mapper signature, malformed packet?")
 		return
 	}
 
-	regionStr, ok := mc.mapperRegionCache.Get(address.String())
+	regionStr, ok := mc.mapperRegionCache.Get(mapperAddress.String())
 	if !ok {
-		logrus.Warn("dropping packet because we didn't see the discovery packet before")
+		frameLog.Warn("dropping packet because we didn't see the discovery packet before")
 		return
 	}
 
 	region, err := h3light.CellFromString(regionStr)
 	if err != nil {
-		logrus.WithError(err).Error("error decoding region string")
+		frameLog.WithError(err).Error("error decoding region string")
 		return
 	}
 
@@ -302,25 +326,24 @@ func (mc *MapperForwarder) handleDownlinkConfirmationPacket(frame *gw.UplinkFram
 
 	dprb, err := proto.Marshal(dcpr)
 	if err != nil {
-		logrus.WithError(err).Error("could not marshal packet receipt")
+		frameLog.WithError(err).Error("could not marshal packet receipt")
 		return
 	}
 	dprbh := sha256.Sum256(dprb)
 	gwsig, err := crypto.Sign(dprbh[:], gateway.PrivateKey)
 	if err != nil {
-		logrus.WithError(err).Error("could not sign packet receipt: error while signing packet")
+		frameLog.WithError(err).Error("could not sign packet receipt: error while signing packet")
 		return
 	}
 
 	dcpr.GatewaySignature = gwsig
 
 	go func() {
-		logrus.Debug("sending downlink confirmation packet")
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		err := mc.coverageClient.DeliverDownlinkConfirmationPacketReceipt(ctx, region, dcpr)
 		if err != nil {
-			logrus.WithError(err).Error("could not deliver packet receipt")
+			frameLog.WithError(err).Error("could not deliver packet receipt")
 			return
 		}
 	}()

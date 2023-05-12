@@ -148,14 +148,17 @@ func (cc *CoverageClient) DeliverDiscoveryPacketReceipt(ctx context.Context, reg
 	}
 	defer resp.Body.Close()
 
-	logrus.Debugf("response status-code: %d", resp.StatusCode)
-
-	dprp := &mapper.DiscoveryPacketReceiptResponse{}
-
 	b, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
+
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("received error from coverage-service: %s", string(b))
+	}
+
+	dprp := &mapper.DiscoveryPacketReceiptResponse{}
+
 	err = proto.Unmarshal(b, dprp)
 	if err != nil {
 		return nil, err
@@ -185,6 +188,10 @@ func (cc *CoverageClient) DeliverDownlinkConfirmationPacketReceipt(ctx context.C
 		return err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("received error from coverage-service: %s", string(b))
+	}
 
 	return nil
 

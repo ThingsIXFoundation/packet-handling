@@ -494,6 +494,5 @@ func (e *Exchange) downlinkTxAck(txack *gw.DownlinkTxAck) {
 		},
 	}) {
 		log.Warn("unable to broadcast downlink ACK to routing table, drop packet")
-	} else {
 	}
 }
