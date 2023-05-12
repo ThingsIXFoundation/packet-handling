@@ -165,13 +165,11 @@ func (rc *RouterClient) Run(ctx context.Context) {
 		}
 
 		log.WithError(err).WithField("reconnect", reconnectInterval).Errorf("router client stopped unexpected")
-		routersDisconnectedGauge.Add(1)
 		wait := true
 		retry := time.After(nextReconnectInterval())
 		for wait {
 			select {
 			case <-retry:
-				routersDisconnectedGauge.Sub(1)
 				wait = false
 			case details := <-rc.routerDetails:
 				rc.router.Endpoint = details.Endpoint
@@ -186,7 +184,6 @@ func (rc *RouterClient) Run(ctx context.Context) {
 				})
 			case <-ctx.Done():
 				log.Trace("router client stopped")
-				routersDisconnectedGauge.Sub(1)
 				return
 			}
 		}
@@ -264,8 +261,8 @@ func (rc *RouterClient) run(ctx context.Context) error {
 	// 2. wait for events from the router and forward them to the packet exchange so it can forward
 	// the message to the appropiate gateway
 	log.Trace("start router message exchange")
-	routersConnectedGauge.Add(1)
-	defer routersConnectedGauge.Sub(1)
+	routersOnlineGauge.WithLabelValues(rc.router.String()).Set(1)
+	defer routersOnlineGauge.WithLabelValues(rc.router.String()).Set(0)
 
 	// Get the JoinFilter now and update it later every joinFilterRenewInterval
 	go rc.updateJoinFilter(ctx, client)
@@ -306,6 +303,8 @@ func (rc *RouterClient) run(ctx context.Context) error {
 							"uplink_id":     ev.uplink.event.GetUplinkFrameEvent().UplinkFrame.GetRxInfo().GetUplinkId(),
 						})
 
+						rxPacketsPerRouterCounter.WithLabelValues(ev.receivedFrom.NetworkID.String(), ev.receivedFrom.LocalID.String(), rc.router.String()).Inc()
+
 						var (
 							owner   = rc.router.Owner
 							airtime = time.Duration(ev.uplink.event.GetUplinkFrameEvent().GetAirtimeReceipt().GetAirtime()) * time.Millisecond
@@ -332,6 +331,8 @@ func (rc *RouterClient) run(ctx context.Context) error {
 							"gw_local_id":   ev.receivedFrom.LocalID,
 							"uplink_id":     ev.join.event.GetUplinkFrameEvent().UplinkFrame.GetRxInfo().GetUplinkId(),
 						})
+
+						rxPacketsPerRouterCounter.WithLabelValues(ev.receivedFrom.NetworkID.String(), ev.receivedFrom.LocalID.String(), rc.router.String()).Inc()
 
 						var (
 							owner   = rc.router.Owner

@@ -83,7 +83,7 @@ func IsMaybeMapperPacket(frame *gw.UplinkFrame, payload *lorawan.MACPayload) boo
 	return true
 }
 
-func (mc *MapperForwarder) handleDiscoveryPacket(frame *gw.UplinkFrame, mac *lorawan.MACPayload) {
+func (mc *MapperForwarder) handleDiscoveryPacket(frame *gw.UplinkFrame) {
 	gateway, err := mc.gatewayStore.ByNetworkIDString(frame.RxInfo.GatewayId)
 	if err != nil || gateway == nil {
 		logrus.WithFields(logrus.Fields{
@@ -103,6 +103,8 @@ func (mc *MapperForwarder) handleDiscoveryPacket(frame *gw.UplinkFrame, mac *lor
 		"coderate":      frame.GetTxInfo().GetModulation().GetLora().GetCodeRate(),
 		"bandwidth":     frame.GetTxInfo().GetModulation().GetLora().GetBandwidth(),
 	})
+
+	rxPacketsMapperCounter.WithLabelValues(gateway.NetworkID.String(), gateway.LocalID.String(), "discovery").Inc()
 
 	dp, _ := mapperpacket.NewDiscoveryPacketFromBytes(frame.PhyPayload)
 
@@ -192,6 +194,8 @@ func (mc *MapperForwarder) handleDiscoveryPacket(frame *gw.UplinkFrame, mac *lor
 			frameLog.Info("gateway was selected as winner!")
 		}
 
+		txPacketsMapperCounter.WithLabelValues(gateway.NetworkID.String(), gateway.LocalID.String()).Inc()
+
 		dfi := gw.DownlinkFrameItem{
 			TxInfo: &gw.DownlinkTxInfo{
 				Frequency: dtr.Frequency,
@@ -234,7 +238,7 @@ func (mc *MapperForwarder) handleDiscoveryPacket(frame *gw.UplinkFrame, mac *lor
 	}()
 }
 
-func (mc *MapperForwarder) handleDownlinkConfirmationPacket(frame *gw.UplinkFrame, mac *lorawan.MACPayload) {
+func (mc *MapperForwarder) handleDownlinkConfirmationPacket(frame *gw.UplinkFrame) {
 	gateway, err := mc.gatewayStore.ByNetworkIDString(frame.RxInfo.GatewayId)
 	if err != nil || gateway == nil {
 		logrus.WithFields(logrus.Fields{
@@ -242,6 +246,8 @@ func (mc *MapperForwarder) handleDownlinkConfirmationPacket(frame *gw.UplinkFram
 		}).Error("unknown gateway, dropping mapper packet")
 		return
 	}
+
+	rxPacketsMapperCounter.WithLabelValues(gateway.NetworkID.String(), gateway.LocalID.String(), "downlink_confirmation").Inc()
 
 	logrus.Info("Received downlink confirmation message")
 
@@ -322,9 +328,9 @@ func (mc *MapperForwarder) handleDownlinkConfirmationPacket(frame *gw.UplinkFram
 
 func (mc *MapperForwarder) HandleMapperPacket(frame *gw.UplinkFrame, mac *lorawan.MACPayload) {
 	if *mac.FPort == 0x01 {
-		mc.handleDiscoveryPacket(frame, mac)
+		mc.handleDiscoveryPacket(frame)
 	} else if *mac.FPort == 0x02 {
-		mc.handleDownlinkConfirmationPacket(frame, mac)
+		mc.handleDownlinkConfirmationPacket(frame)
 	}
 }
 
