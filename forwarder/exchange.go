@@ -230,10 +230,10 @@ func (e *Exchange) uplinkFrameCallback(frame *gw.UplinkFrame) {
 		frameLog = frameLog.WithFields(logrus.Fields{
 			"dev_addr": mac.FHDR.DevAddr,
 			"fcnt":     mac.FHDR.FCnt,
-			"nwk_id":   hex.EncodeToString(mac.FHDR.DevAddr.NwkID()),
+			"nwk_id":   utils.NwkIdString(mac.FHDR.DevAddr),
 		})
 
-		rxPacketPerNwkIdCounter.WithLabelValues(gw.NetworkID.String(), gw.LocalID.String(), hex.EncodeToString(mac.FHDR.DevAddr.NwkID())).Inc()
+		rxPacketPerNwkIdCounter.WithLabelValues(gw.NetworkID.String(), gw.LocalID.String(), utils.NwkIdString(mac.FHDR.DevAddr)).Inc()
 
 		// check if the packet received could be a mapper packet and process it
 		if IsMaybeMapperPacket(frame, mac) {
