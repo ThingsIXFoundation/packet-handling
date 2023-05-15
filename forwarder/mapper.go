@@ -21,10 +21,14 @@ import (
 	"crypto/sha256"
 	"time"
 
+	gnsssystemtime "github.com/ThingsIXFoundation/gnss-system-time"
 	h3light "github.com/ThingsIXFoundation/h3-light"
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	"github.com/ThingsIXFoundation/packet-handling/utils"
+	"github.com/ThingsIXFoundation/types"
 	"github.com/chirpstack/chirpstack/api/go/v4/gw"
+	"github.com/google/uuid"
+	lru "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/ThingsIXFoundation/coverage-api/go/mapper"
 	"github.com/ThingsIXFoundation/packet-handling/mapperpacket"
@@ -36,28 +40,77 @@ import (
 )
 
 type MapperForwarder struct {
-	gatewayStore gateway.GatewayStore
-	exchange     *Exchange
+	gatewayStore      gateway.GatewayStore
+	exchange          *Exchange
+	mapperRegionCache *lru.Cache[string, string]
+	coverageClient    *CoverageClient
 }
 
-func NewMapperForwarder(exchange *Exchange) (*MapperForwarder, error) {
-	return &MapperForwarder{exchange: exchange}, nil
+func NewMapperForwarder(cfg *Config, exchange *Exchange, gatewayStore gateway.GatewayStore) (*MapperForwarder, error) {
+	mapperRegionCache, err := lru.New[string, string](64)
+	if err != nil {
+		return nil, err
+	}
+	coverageClient, err := NewCoverageClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return &MapperForwarder{exchange: exchange, gatewayStore: gatewayStore, mapperRegionCache: mapperRegionCache, coverageClient: coverageClient}, nil
 }
 
-func IsMaybeMapperPacket(payload *lorawan.MACPayload) bool {
-	return payload.FHDR.DevAddr[0] == 0x02
+func IsMaybeMapperPacket(frame *gw.UplinkFrame, payload *lorawan.MACPayload) bool {
+	if frame.TxInfo.GetModulation().GetLora().GetSpreadingFactor() != 7 {
+		return false
+	}
+
+	if frame.TxInfo.GetModulation().GetLora().GetBandwidth() != 125000 {
+		return false
+	}
+
+	if payload.FPort == nil {
+		return false
+	}
+
+	if *payload.FPort != 0x01 && *payload.FPort != 0x02 {
+		return false
+	}
+
+	if payload.FHDR.DevAddr[0] != 0x02 {
+		return false
+	}
+
+	return true
 }
 
-func (mc *MapperForwarder) HandleMapperPacket(frame *gw.UplinkFrame, mac *lorawan.MACPayload) {
+func (mc *MapperForwarder) handleDiscoveryPacket(frame *gw.UplinkFrame) {
 	gateway, err := mc.gatewayStore.ByNetworkIDString(frame.RxInfo.GatewayId)
 	if err != nil || gateway == nil {
 		logrus.WithFields(logrus.Fields{
-			"local_gateway_id": frame.RxInfo.GatewayId,
+			"network_gateway_id": frame.RxInfo.GatewayId,
 		}).Error("unknown gateway, dropping mapper packet")
 		return
-	}
 
-	dp, _ := mapperpacket.NewDiscoveryPacketFromBytes(frame.PhyPayload)
+	}
+	frameLog := logrus.WithFields(logrus.Fields{
+		"gw_local_id":   gateway.LocalID,
+		"gw_network_id": gateway.NetworkID,
+		"rssi":          frame.GetRxInfo().GetRssi(),
+		"snr":           frame.GetRxInfo().GetSnr(),
+		"freq":          frame.GetTxInfo().GetFrequency(),
+		"sf":            frame.GetTxInfo().GetModulation().GetLora().GetSpreadingFactor(),
+		"pol":           frame.GetTxInfo().GetModulation().GetLora().GetPolarizationInversion(),
+		"coderate":      frame.GetTxInfo().GetModulation().GetLora().GetCodeRate(),
+		"bandwidth":     frame.GetTxInfo().GetModulation().GetLora().GetBandwidth(),
+	})
+
+	rxPacketsMapperCounter.WithLabelValues(gateway.NetworkID.String(), gateway.LocalID.String(), "discovery").Inc()
+
+	dp, err := mapperpacket.NewDiscoveryPacketFromBytes(frame.PhyPayload)
+	if err != nil {
+		frameLog.WithError(err).Error("could not decode discovery packet, malformed packet?")
+		return
+	}
 
 	h := sha256.Sum256(frame.PhyPayload[0:22])
 	sig := frame.PhyPayload[22:]
@@ -65,29 +118,42 @@ func (mc *MapperForwarder) HandleMapperPacket(frame *gw.UplinkFrame, mac *lorawa
 
 	pkb, err := crypto.Ecrecover(h[:], sig)
 	if err != nil {
-		logrus.WithError(err).Error("could not recover public key from mapper signature, malformed packet?")
+		frameLog.WithError(err).Error("could not recover public key from mapper signature, malformed packet?")
 		return
 	}
 
 	pk, err := crypto.UnmarshalPubkey(pkb)
 	if err != nil {
-		logrus.WithError(err).Error("could not recover public key from mapper signature, malformed packet?")
+		frameLog.WithError(err).Error("could not recover public key from mapper signature, malformed packet?")
 		return
 	}
 
-	address := crypto.PubkeyToAddress(*pk)
+	mapperAddress := crypto.PubkeyToAddress(*pk)
+	mapperID := types.ID(utils.DeriveThingsIxID(pk))
 
-	logrus.Infof("received packet from mapper: %s", address)
+	frameLog = frameLog.WithFields(logrus.Fields{
+		"mapper_id": mapperID,
+	})
 
 	if !crypto.VerifySignature(pkb, h[:], sig[0:64]) {
-		logrus.Error("invalid mapper signature, malformed packet?")
+		frameLog.Error("invalid mapper signature, malformed packet?")
 		return
 	}
 	lat, lon := dp.LatLonFloat()
-	logrus.Infof("packet was mapped at: %f, %f", float64(lat)/1000000, float64(lon)/1000000)
+	mapTime := gnsssystemtime.GalileoTowToTime(dp.TOW(), time.Now().Add(1*time.Minute), 18)
+	region := h3light.LatLonToCell(lat, lon, 1)
 
-	region := h3light.LatLonToRes0ToCell(lat, lon)
-	logrus.Infof("packet is for region: %s", region)
+	frameLog = frameLog.WithFields(logrus.Fields{
+		"latitude":      lat,
+		"longitude":     lon,
+		"region":        region,
+		"map_time":      mapTime,
+		"map_time_diff": time.Since(mapTime),
+	})
+
+	frameLog.Info("received mapper discovery packet, signing and delivering to coverage-mapping-service")
+
+	mc.mapperRegionCache.Add(mapperAddress.String(), region.String())
 
 	dpr := &mapper.DiscoveryPacketReceipt{
 		Frequency:        frame.TxInfo.Frequency,
@@ -103,37 +169,36 @@ func (mc *MapperForwarder) HandleMapperPacket(frame *gw.UplinkFrame, mac *lorawa
 
 	dprb, err := proto.Marshal(dpr)
 	if err != nil {
-		logrus.WithError(err).Error("could not marshal packet receipt")
+		frameLog.WithError(err).Error("could not marshal packet receipt")
 		return
 	}
 	dprbh := sha256.Sum256(dprb)
 	gwsig, err := crypto.Sign(dprbh[:], gateway.PrivateKey)
 	if err != nil {
-		logrus.WithError(err).Error("could not sign packet receipt: error while signing packet")
+		frameLog.WithError(err).Error("could not sign packet receipt: error while signing packet")
 		return
 	}
 
 	dpr.GatewaySignature = gwsig
 
-	coverageClient, _ := mc.mapperClientForRegion(region)
-
 	// Deliver in goroutine as the response will take almost 1 second in optimal case
 	go func() {
-		logrus.Debug("sending discovery packet")
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		resp, err := coverageClient.DeliverDiscoveryPacketReceipt(ctx, dpr)
+		resp, err := mc.coverageClient.DeliverDiscoveryPacketReceipt(ctx, region, dpr)
 		if err != nil {
-			logrus.WithError(err).Error("could not deliver packet receipt")
+			frameLog.WithError(err).Error("could not deliver packet receipt")
 			return
 		}
 		dtr := resp.GetDownlinkTransmitRequest()
 		if dtr == nil {
-			logrus.Info("gateway was not selected for downlink")
+			frameLog.Info("gateway was not selected for downlink")
 			return
 		} else {
-			logrus.Info("gateway was selected for downlink")
+			frameLog.Info("gateway was selected as winner!")
 		}
+
+		txPacketsMapperCounter.WithLabelValues(gateway.NetworkID.String(), gateway.LocalID.String()).Inc()
 
 		dfi := gw.DownlinkFrameItem{
 			TxInfo: &gw.DownlinkTxInfo{
@@ -147,8 +212,8 @@ func (mc *MapperForwarder) HandleMapperPacket(frame *gw.UplinkFrame, mac *lorawa
 				Modulation: &gw.Modulation{
 					Parameters: &gw.Modulation_Lora{
 						Lora: &gw.LoraModulationInfo{
-							Bandwidth:             125,
-							SpreadingFactor:       7,
+							Bandwidth:             dtr.Bandwidth,
+							SpreadingFactor:       dtr.SpreadingFactor,
 							CodeRateLegacy:        "4/5",
 							CodeRate:              gw.CodeRate_CR_4_5,
 							PolarizationInversion: true,
@@ -160,10 +225,13 @@ func (mc *MapperForwarder) HandleMapperPacket(frame *gw.UplinkFrame, mac *lorawa
 			PhyPayload: dtr.GetPhy(),
 		}
 
+		downlinkLegacyId := uuid.New()
+
 		df := gw.DownlinkFrame{
-			DownlinkId: utils.RandUint32(), //
-			Items:      []*gw.DownlinkFrameItem{&dfi},
-			GatewayId:  frame.RxInfo.GatewayId,
+			DownlinkId:       utils.RandUint32(), //
+			DownlinkIdLegacy: downlinkLegacyId[:],
+			Items:            []*gw.DownlinkFrameItem{&dfi},
+			GatewayId:        frame.RxInfo.GatewayId,
 		}
 
 		dfe := router.DownlinkFrameEvent{
@@ -174,6 +242,121 @@ func (mc *MapperForwarder) HandleMapperPacket(frame *gw.UplinkFrame, mac *lorawa
 	}()
 }
 
-func (m *MapperForwarder) mapperClientForRegion(region h3light.Cell) (*CoverageClient, error) {
-	return NewCoverageClient()
+func (mc *MapperForwarder) handleDownlinkConfirmationPacket(frame *gw.UplinkFrame) {
+	gateway, err := mc.gatewayStore.ByNetworkIDString(frame.RxInfo.GatewayId)
+	if err != nil || gateway == nil {
+		logrus.WithFields(logrus.Fields{
+			"network_gateway_id": frame.RxInfo.GatewayId,
+		}).Error("unknown gateway, dropping mapper packet")
+		return
+	}
+	frameLog := logrus.WithFields(logrus.Fields{
+		"gw_local_id":   gateway.LocalID,
+		"gw_network_id": gateway.NetworkID,
+		"rssi":          frame.GetRxInfo().GetRssi(),
+		"snr":           frame.GetRxInfo().GetSnr(),
+		"freq":          frame.GetTxInfo().GetFrequency(),
+		"sf":            frame.GetTxInfo().GetModulation().GetLora().GetSpreadingFactor(),
+		"pol":           frame.GetTxInfo().GetModulation().GetLora().GetPolarizationInversion(),
+		"coderate":      frame.GetTxInfo().GetModulation().GetLora().GetCodeRate(),
+		"bandwidth":     frame.GetTxInfo().GetModulation().GetLora().GetBandwidth(),
+	})
+
+	rxPacketsMapperCounter.WithLabelValues(gateway.NetworkID.String(), gateway.LocalID.String(), "downlink_confirmation").Inc()
+
+	_, err = mapperpacket.NewDownlinkConfirmationPacketFromBytes(frame.PhyPayload)
+	if err != nil {
+		frameLog.WithError(err).Error("could not decode downlink-confirmation packet, malformed packet?")
+		return
+	}
+
+	h := sha256.Sum256(frame.PhyPayload[0:22])
+	sig := frame.PhyPayload[22:]
+	sig[64] -= 27
+
+	pkb, err := crypto.Ecrecover(h[:], sig)
+	if err != nil {
+		frameLog.WithError(err).Error("could not recover public key from mapper signature, malformed packet?")
+		return
+	}
+
+	pk, err := crypto.UnmarshalPubkey(pkb)
+	if err != nil {
+		frameLog.WithError(err).Error("could not recover public key from mapper signature, malformed packet?")
+		return
+	}
+
+	mapperAddress := crypto.PubkeyToAddress(*pk)
+	mapperID := types.ID(utils.DeriveThingsIxID(pk))
+
+	frameLog = frameLog.WithFields(logrus.Fields{
+		"mapper_id": mapperID,
+	})
+
+	frameLog.Info("received mapper downlink-confirmation packet, signing and delivering to coverage-mapping-service")
+
+	if !crypto.VerifySignature(pkb, h[:], sig[0:64]) {
+		frameLog.Error("invalid mapper signature, malformed packet?")
+		return
+	}
+
+	regionStr, ok := mc.mapperRegionCache.Get(mapperAddress.String())
+	if !ok {
+		frameLog.Warn("dropping packet because we didn't see the discovery packet before")
+		return
+	}
+
+	region, err := h3light.CellFromString(regionStr)
+	if err != nil {
+		frameLog.WithError(err).Error("error decoding region string")
+		return
+	}
+
+	dcpr := &mapper.DownlinkConfirmationPacketReceipt{
+		Frequency:        frame.TxInfo.Frequency,
+		Rssi:             frame.RxInfo.Rssi,
+		LoraSnr:          float64(frame.RxInfo.Snr),
+		SpreadingFactor:  frame.TxInfo.GetModulation().GetLora().GetSpreadingFactor(),
+		Bandwidth:        frame.TxInfo.GetModulation().GetLora().GetBandwidth(),
+		CodeRate:         frame.TxInfo.GetModulation().GetLora().GetCodeRate().String(),
+		Phy:              frame.PhyPayload,
+		Time:             frame.RxInfo.Time,
+		GatewaySignature: []byte{},
+	}
+
+	dprb, err := proto.Marshal(dcpr)
+	if err != nil {
+		frameLog.WithError(err).Error("could not marshal packet receipt")
+		return
+	}
+	dprbh := sha256.Sum256(dprb)
+	gwsig, err := crypto.Sign(dprbh[:], gateway.PrivateKey)
+	if err != nil {
+		frameLog.WithError(err).Error("could not sign packet receipt: error while signing packet")
+		return
+	}
+
+	dcpr.GatewaySignature = gwsig
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		err := mc.coverageClient.DeliverDownlinkConfirmationPacketReceipt(ctx, region, dcpr)
+		if err != nil {
+			frameLog.WithError(err).Error("could not deliver packet receipt")
+			return
+		}
+	}()
+}
+
+func (mc *MapperForwarder) HandleMapperPacket(frame *gw.UplinkFrame, mac *lorawan.MACPayload) {
+	if *mac.FPort == 0x01 {
+		mc.handleDiscoveryPacket(frame)
+	} else if *mac.FPort == 0x02 {
+		mc.handleDownlinkConfirmationPacket(frame)
+	}
+}
+
+func (mc *MapperForwarder) Run(ctx context.Context) {
+	mc.coverageClient.Run(ctx)
 }

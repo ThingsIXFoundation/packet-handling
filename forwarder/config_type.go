@@ -113,6 +113,16 @@ type ForwarderRoutersConfig struct {
 	ThingsIXApi *ForwarderRoutersThingsIXAPIConfig `mapstructure:"thingsix_api"`
 }
 
+type ForwarderMappingThingsIXAPIConfig struct {
+	IndexEndpoint *string `mapstructure:"index_endpoint"`
+	// Interval indicates how often the coverage-mapping-indexes are refreshed
+	UpdateInterval *time.Duration `mapstructure:"interval"`
+}
+
+type ForwarderMappingConfig struct {
+	ThingsIXApi *ForwarderMappingThingsIXAPIConfig `mapstructure:"thingsix_api"`
+}
+
 type ForwarderConfig struct {
 	// Backend holdsconfiguration related to the forwarders gateway
 	// endpoint and supported protocol.
@@ -122,6 +132,8 @@ type ForwarderConfig struct {
 	Gateways ForwarderGatewayConfig
 
 	Routers ForwarderRoutersConfig
+
+	Mapping ForwarderMappingConfig
 
 	// Optional account strategy configuration, if not specified no account is used meaning
 	// that all packets are exchanged between gateway and routers.

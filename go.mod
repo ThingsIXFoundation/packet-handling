@@ -23,6 +23,7 @@ require (
 	github.com/goreleaser/goreleaser v0.106.0
 	github.com/goreleaser/nfpm v0.11.0
 	github.com/gorilla/websocket v1.5.0
+	github.com/hashicorp/golang-lru/v2 v2.0.1
 	github.com/jackc/pgconn v1.13.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/olekukonko/tablewriter v0.0.5
@@ -33,6 +34,7 @@ require (
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/viper v1.13.0
 	github.com/stretchr/testify v1.8.1
+	golang.org/x/exp v0.0.0-20230206171751-46f607a40771
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616
 	google.golang.org/grpc v1.50.1
 	gorm.io/driver/postgres v1.4.5
@@ -43,6 +45,8 @@ require (
 	cloud.google.com/go/compute v1.12.1 // indirect
 	cloud.google.com/go/compute/metadata v0.2.1 // indirect
 	github.com/Kl1mn/h3-go v0.0.4 // indirect
+	github.com/ThingsIXFoundation/gnss-system-time v1.0.0 // indirect
+	github.com/ThingsIXFoundation/types v0.0.0-20230306132054-18837b1c1bc8 // indirect
 	github.com/biter777/countries v1.5.6 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
@@ -63,7 +67,6 @@ require (
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.23.0 // indirect
-	golang.org/x/exp v0.0.0-20230206171751-46f607a40771 // indirect
 	golang.org/x/time v0.2.0 // indirect
 	google.golang.org/api v0.103.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
@@ -98,7 +101,7 @@ require (
 	github.com/go-zeromq/goczmq/v4 v4.2.2 // indirect
 	github.com/google/go-github v17.0.0+incompatible // indirect
 	github.com/google/go-querystring v1.0.0 // indirect
-	github.com/google/uuid v1.3.0 // indirect
+	github.com/google/uuid v1.3.0
 	github.com/gopherjs/gopherjs v0.0.0-20190430165422-3e4dfb77656c // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/imdario/mergo v0.3.6 // indirect

@@ -65,7 +65,7 @@ type TXPK struct {
 	Powe uint8   `json:"powe"`           // TX output power in dBm (unsigned integer, dBm precision)
 	Ant  uint8   `json:"ant"`            // Antenna number on which signal has been received
 	Brd  uint32  `json:"brd"`            // Concentrator board used for RX (unsigned integer)
-	Tmst *uint32 `json:"tmst,omitempty"` // Send packet on a certain timestamp value (will ignore time)
+	Tmst *uint32 `json:"tmst"`           // Send packet on a certain timestamp value (will ignore time)
 	Tmms *int64  `json:"tmms,omitempty"` // Send packet at a certain GPS time (GPS synchronization required)
 	Freq float64 `json:"freq"`           // TX central frequency in MHz (unsigned float, Hz precision)
 	Modu string  `json:"modu"`           // Modulation identifier "LORA" or "FSK"
@@ -135,7 +135,9 @@ func GetPullRespPacket(protoVersion uint8, randomToken uint16, frame *gw.Downlin
 	}
 
 	if imm := txInfo.GetTiming().GetImmediately(); imm != nil {
+		zero := uint32(0)
 		packet.Payload.TXPK.Imme = true
+		packet.Payload.TXPK.Tmst = &zero
 	}
 
 	if delay := txInfo.GetTiming().GetDelay(); delay != nil {

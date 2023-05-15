@@ -26,91 +26,97 @@ import (
 )
 
 var (
-	uplinksCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "data",
-		Name:      "uplinks",
-		Help:      "received uplink frames that could not be processed, group by gateway network id",
-	}, []string{"gw_network_id", "status"})
+	rxPacketsCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "thingsix_forwarder",
+		Name:      "rx_packets",
+		Help:      "packets received, grouped by gateway local id and gateway network id",
+	}, []string{"gw_network_id", "gw_local_id"})
 
-	downlinksCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "data",
-		Name:      "downlinks",
-		Help:      "downlink received to send to gateway",
-	}, []string{"gw_network_id", "status"})
-
-	downlinkTxAckCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "data",
-		Name:      "downlink_tx_acks",
-		Help:      "downlink tx acks that could not be processed",
-	}, []string{"gw_network_id", "status"})
-
-	routersConnectedGauge = prometheus.NewGauge(prometheus.GaugeOpts{
-		Namespace: "router",
-		Name:      "online",
-		Help:      "online routers",
-	})
-
-	routersDisconnectedGauge = prometheus.NewGauge(prometheus.GaugeOpts{
-		Namespace: "router",
-		Name:      "offline",
-		Help:      "offline routers",
-	})
-
-	gatewayRxPacketsPerFrequencyGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "gateway",
+	rxPacketPerFreqCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "thingsix_forwarder",
 		Name:      "rx_packets_per_freq",
-		Help:      "gateway received packets group by gateway and frequency",
-	}, []string{"gw_network_id", "freq"})
+		Help:      "packets received, grouped by gateway local id, gateway network id and frequency",
+	}, []string{"gw_network_id", "gw_local_id", "frequency"})
 
-	gatewayRxPacketsPerModulationGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "gateway",
+	rxPacketPerModulationCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "thingsix_forwarder",
 		Name:      "rx_packets_per_modulation",
-		Help:      "gateway received packets grouped by gateway and modulation",
-	}, []string{"gw_network_id", "bandwidth", "spreading_factor", "code_rate"})
+		Help:      "packets received, grouped by gateway local id, gateway network id and frequency",
+	}, []string{"gw_network_id", "gw_local_id", "frequency", "bandwidth", "spreading_factor"})
 
-	gatewayRxReceivedGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "gateways",
-		Name:      "rx_received",
-		Help:      "Received packets by gateway",
-	}, []string{"gw_network_id", "status"})
+	rxPacketPerNwkIdCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "thingsix_forwarder",
+		Name:      "rx_packets_per_nwkid",
+		Help:      "packets received, grouped by gateway local id, gateway network id, nwkid",
+	}, []string{"gw_network_id", "gw_local_id", "nwkid"})
 
-	gatewayTxEmittedGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "gateway",
-		Name:      "tx_emitted",
-		Help:      "Send packets by gateway",
-	}, []string{"gw_network_id"})
+	rxPacketsPerRouterCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "thingsix_forwarder",
+		Name:      "rx_packets_per_router",
+		Help:      "packets received, grouped by gateway local id, gateway network id and router",
+	}, []string{"gw_network_id", "gw_local_id", "router"})
 
-	gatewayTxPacketsPerFrequencyGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "gateway",
+	rxPacketsMapperCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "thingsix_forwarder",
+		Name:      "rx_packets_mapper",
+		Help:      "packets received, grouped by gateway local id, gateway network id and mapper packet type",
+	}, []string{"gw_network_id", "gw_local_id", "type"})
+
+	txPacketsCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "thingsix_forwarder",
+		Name:      "tx_packets",
+		Help:      "packets transmitted, grouped by gateway local id and gateway network id",
+	}, []string{"gw_network_id", "gw_local_id"})
+
+	txPacketPerFreqCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "thingsix_forwarder",
 		Name:      "tx_packets_per_freq",
-	}, []string{"gw_network_id", "freq"})
+		Help:      "packets transmitted, grouped by gateway local id, gateway network id and frequency",
+	}, []string{"gw_network_id", "gw_local_id", "frequency"})
 
-	gatewayTxPacketsPerModulationGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "gateway",
+	txPacketPerModulationCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "thingsix_forwarder",
 		Name:      "tx_packets_per_modulation",
-	}, []string{"gw_network_id", "bandwidth", "spreading_factor", "code_rate"})
+		Help:      "packets transmitted, grouped by gateway local id, gateway network id and frequency",
+	}, []string{"gw_network_id", "gw_local_id", "frequency", "bandwidth", "spreading_factor"})
 
-	gatewayTxPacketsPerStatusGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "gateway",
-		Name:      "tx_packets_status",
-	}, []string{"gw_network_id", "status"})
+	txPacketPerNwkIdCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "thingsix_forwarder",
+		Name:      "tx_packets_per_nwkid",
+		Help:      "packets transmitted, grouped by gateway local id, gateway network id, nwkid and if it was forwarded",
+	}, []string{"gw_network_id", "gw_local_id", "nwkid", "forwarded"})
 
-	gatewayTxPacketsReceivedGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "gateway",
-		Name:      "tx_received",
-	}, []string{"gw_network_id"})
+	txPacketsPerRouterCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "thingsix_forwarder",
+		Name:      "tx_packets_per_router",
+		Help:      "packets transmitted, grouped by gateway local id, gateway network id and router",
+	}, []string{"gw_network_id", "gw_local_id", "router"})
+
+	txPacketsMapperCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "thingsix_forwarder",
+		Name:      "tx_packets_mapper",
+		Help:      "packets received, grouped by gateway local id, gateway network id",
+	}, []string{"gw_network_id", "gw_local_id"})
+
+	routersOnlineGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "thingsix_forwarder",
+		Name:      "router_online",
+	}, []string{"router"})
+
+	gatewaysOnlineGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "thingsix_forwarder",
+		Name:      "gateways_online",
+	}, []string{"gw_network_id", "gw_local_id"})
 )
 
 // init registers Prometheus couters/gauges
 func init() {
-	prometheus.MustRegister(uplinksCounter, downlinksCounter, downlinkTxAckCounter,
-		routersConnectedGauge, routersDisconnectedGauge,
-		gatewayRxPacketsPerFrequencyGauge, gatewayRxPacketsPerModulationGauge,
-		gatewayRxReceivedGauge,
-		gatewayTxEmittedGauge,
-		gatewayTxPacketsPerFrequencyGauge, gatewayTxPacketsPerModulationGauge,
-		gatewayTxPacketsPerStatusGauge, gatewayTxPacketsReceivedGauge,
-	)
+	prometheus.MustRegister(
+		rxPacketsCounter, rxPacketPerFreqCounter, rxPacketPerModulationCounter, rxPacketPerNwkIdCounter, rxPacketsPerRouterCounter, rxPacketsMapperCounter,
+		txPacketsCounter, txPacketPerFreqCounter, txPacketPerModulationCounter, txPacketPerNwkIdCounter, txPacketsPerRouterCounter, txPacketsMapperCounter,
+		routersOnlineGauge,
+		gatewaysOnlineGauge)
+
 }
 
 // runPrometheusHTTPEndpoint opens a Prometheus metrics endpoint on the

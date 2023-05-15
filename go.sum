@@ -300,6 +300,8 @@ github.com/ThingsIXFoundation/coverage-api v1.0.1 h1:Xq4/NDmEUDA49vXyWaFjZpuAXC/
 github.com/ThingsIXFoundation/coverage-api v1.0.1/go.mod h1:JmjclCrOxQhDUZ3wM0RY/UH9LJPcIwupW8IQBLbu/oI=
 github.com/ThingsIXFoundation/frequency-plan v1.3.0 h1:QbnQqbVqxxuE/4WKZCroIb3aykGCDiZmVY3irwFBtE8=
 github.com/ThingsIXFoundation/frequency-plan v1.3.0/go.mod h1:4WhDxSybRnd2stWSGtTOGjC1Zh6ZNcoRLnXYHEGqy4Q=
+github.com/ThingsIXFoundation/gnss-system-time v1.0.0 h1:cLEcjxoEjsp+UuZMPu/+/Rl8IWvMgCs4Rg8zPeYabNg=
+github.com/ThingsIXFoundation/gnss-system-time v1.0.0/go.mod h1:UegOxZz4OzJ4pVYMMyNNuy+j589t3YekimSLhN3YvpU=
 github.com/ThingsIXFoundation/h3-light v0.0.0-20221122151216-69018e780344 h1:faZwv4wbQEytMIyLJ7MV/mQEeGXDvQLGLw1o6Z+BOUc=
 github.com/ThingsIXFoundation/h3-light v0.0.0-20221122151216-69018e780344/go.mod h1:jSChfHi3fbZIAHTaPSEy+ghN/kF32U/f+NZdQt6oDD8=
 github.com/ThingsIXFoundation/h3-light v0.0.0-20230213101106-d999cec4e0cb h1:xxXomZX5OITPfCP8oIE5ZfG1tIs29fx2SnYlw62tnw8=
@@ -308,6 +310,8 @@ github.com/ThingsIXFoundation/router-api v1.2.0 h1:f6B8BcX1BakGYYfRSknTtVPNtRgRX
 github.com/ThingsIXFoundation/router-api v1.2.0/go.mod h1:jED1RkCsj3JM6I0rbjUTPTxOeJvPTYXqAu5E1uBSmVo=
 github.com/ThingsIXFoundation/router-registry-go v1.1.0 h1:zWZMhrc4ZuLVR5X2hsu1TVSpkQJo4xM/+oWMrW7bUK0=
 github.com/ThingsIXFoundation/router-registry-go v1.1.0/go.mod h1:JA8B+SBQEL1MAvHrbNw053bSzq++BBwW7QJ/s7BH018=
+github.com/ThingsIXFoundation/types v0.0.0-20230306132054-18837b1c1bc8 h1:lEKmk2WmQndN/22B2zUmiFaNvG6+GBA+S1NjUOMvlNM=
+github.com/ThingsIXFoundation/types v0.0.0-20230306132054-18837b1c1bc8/go.mod h1:ANUUB8Cnm1sCb5ifS5RUjzTgT9u4BCams2tEJ0M5uqk=
 github.com/VictoriaMetrics/fastcache v1.6.0 h1:C/3Oi3EiBCqufydp1neRZkqcwmEiuRT9c3fqvvgKm5o=
 github.com/alecthomas/kingpin v2.2.6+incompatible/go.mod h1:59OFYbFVLKQKq+mqrL6Rw5bR0c3ACQaawgXx0QYndlE=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
@@ -348,8 +352,6 @@ github.com/cespare/xxhash v1.1.0/go.mod h1:XrSqR1VqqWfGrhpAt58auRo0WTKS1nRRg3ghf
 github.com/cespare/xxhash/v2 v2.1.1/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
 github.com/cespare/xxhash/v2 v2.1.2 h1:YRXhKfTDauu4ajMg1TPgFO5jnlC2HCbmLXMcTG5cbYE=
 github.com/cespare/xxhash/v2 v2.1.2/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
-github.com/chirpstack/chirpstack/api/go/v4 v4.0.2 h1:qyblQmhC66zlKFoM5gj9TjHpvCNBMZ+qt11EEpBAb6U=
-github.com/chirpstack/chirpstack/api/go/v4 v4.0.2/go.mod h1:KBW7imf70O9ifrMmoFH8+dn0+MUFS1PdC5shXH7W3dI=
 github.com/chirpstack/chirpstack/api/go/v4 v4.2.0 h1:XswPjMY3Pqqo4V8ZgjhL3MfDeIvmAUakZSxefLj+5U0=
 github.com/chirpstack/chirpstack/api/go/v4 v4.2.0/go.mod h1:KBW7imf70O9ifrMmoFH8+dn0+MUFS1PdC5shXH7W3dI=
 github.com/chzyer/logex v1.1.10/go.mod h1:+Ywpsq7O8HXn0nuIou7OrIPyXbp3wmkHB+jjWRnGsAI=
@@ -571,6 +573,8 @@ github.com/hashicorp/go-bexpr v0.1.10 h1:9kuI5PFotCboP3dkDYFr/wi0gg0QVbSNz5oFRpx
 github.com/hashicorp/golang-lru v0.5.0/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ4Ao+sR/qLZy8=
 github.com/hashicorp/golang-lru v0.5.1/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ4Ao+sR/qLZy8=
 github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d h1:dg1dEPuWpEqDnvIw251EVy4zlP8gWbsGj4BsUKCRpYs=
+github.com/hashicorp/golang-lru/v2 v2.0.1 h1:5pv5N1lT1fjLg2VQ5KWc7kmucp2x/kvFOnxuVTqZ6x4=
+github.com/hashicorp/golang-lru/v2 v2.0.1/go.mod h1:QeFd9opnmA6QUJc5vARoKUSoFhyfM2/ZepoAG6RGpeM=
 github.com/hashicorp/hcl v1.0.0 h1:0Anlzjpi4vEasTeNFn2mLJgTSwt0+6sfsiTG8qcWGx4=
 github.com/hashicorp/hcl v1.0.0/go.mod h1:E5yfLk+7swimpb2L/Alb/PJmXilQ/rhwaUYs4T20WEQ=
 github.com/holiman/bloomfilter/v2 v2.0.3 h1:73e0e/V0tCydx14a0SCYS/EWCxgwLZ18CZcZKVu0fao=
@@ -792,8 +796,6 @@ github.com/prometheus/tsdb v0.7.1 h1:YZcsG11NqnK4czYLrWd9mpEuAJIHVQLwdrleYfszMAA
 github.com/rivo/uniseg v0.2.0/go.mod h1:J6wj4VEh+S6ZtnVlnTBMWIodfgj8LQOQFoIToxlJtxc=
 github.com/rivo/uniseg v0.4.2 h1:YwD0ulJSJytLpiaWua0sBDusfsCZohxjxzVTYjwxfV8=
 github.com/rivo/uniseg v0.4.2/go.mod h1:FN3SvrM+Zdj16jyLfmOkMNblXMcoc8DfTHruCPUcx88=
-github.com/rjeczalik/notify v0.9.2 h1:MiTWrPj55mNDHEiIX5YUSKefw/+lCQVoAFmD6oQm5w8=
-github.com/rjeczalik/notify v0.9.2/go.mod h1:aErll2f0sUX9PXZnVNyeiObbmTlk5jnMoCa4QEjJeqM=
 github.com/rjeczalik/notify v0.9.3 h1:6rJAzHTGKXGj76sbRgDiDcYj/HniypXmSJo1SWakZeY=
 github.com/rjeczalik/notify v0.9.3/go.mod h1:gF3zSOrafR9DQEWSE8TjfI9NkooDxbyT4UgRGKZA0lc=
 github.com/rogpeppe/fastuuid v1.2.0/go.mod h1:jVj6XXZzXRy/MSR5jhDC/2q6DgLz+nrA6LYCDYWNEvQ=
@@ -1176,8 +1178,6 @@ golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10/go.mod h1:oPkhp1MJrh7nUepCBc
 golang.org/x/sys v0.0.0-20220731174439-a90be440212d/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20220908164124-27713097b956/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.2.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
-golang.org/x/sys v0.3.0 h1:w8ZOecv6NaNa/zC8944JTU3vz4u6Lagfk4RPQxv92NQ=
-golang.org/x/sys v0.3.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.5.0 h1:MUK/U/4lj1t1oPg0HfuXDN/Z1wv31ZJ/YcPiGccS4DU=
 golang.org/x/sys v0.5.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/term v0.0.0-20201117132131-f5c789dd3221/go.mod h1:Nr5EML6q2oocZ2LXRh80K7BxOlk5/8JxuGnuhpl+muw=
