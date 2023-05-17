@@ -107,7 +107,7 @@ func getNetConfig(net string) *Config {
 	}
 	if net == "test" {
 		cfg.Forwarder.Gateways.BatchOnboarder.Address = common.HexToAddress("0xe685A0826419Bc982c9278eA7798143Fe7CF9f11")
-		cfg.Forwarder.Gateways.EarlyAdopter.Address = common.HexToAddress("0x6A2770C1317CD69a6d81f54ea61a7E4988Abad78")
+		cfg.Forwarder.Gateways.EarlyAdopter.Address = common.HexToAddress("0x016466b252c6609b0769d0DF3ca9D2a561E42192")
 		cfg.Forwarder.Gateways.ThingsIXOnboardEndpoint = "https://api-testnet.thingsix.com/gateways/v1/onboards/{onboarder}/{owner}"
 		cfg.Forwarder.Gateways.Registry.ThingsIxApi.Endpoint = "https://api-testnet.thingsix.com/gateways/v1/{id}"
 		cfg.Forwarder.Routers.ThingsIXApi.Endpoint = utils.Ptr("https://api-testnet.thingsix.com/routers/v1/snapshot")
