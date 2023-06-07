@@ -95,8 +95,8 @@ func getNetConfig(net string) *Config {
 	cfg.Metrics.Prometheus.Path = "/metrics"
 
 	if net == "main" {
-		cfg.Forwarder.Gateways.BatchOnboarder.Address = common.Address{} // TODO, once available
-		cfg.Forwarder.Gateways.EarlyAdopter.Address = common.Address{}   // TODO, once available
+		cfg.Forwarder.Gateways.BatchOnboarder.Address = common.HexToAddress("0x06dcca8EcB100E234ff03b8353C5Ae698A0Fee8e")
+		cfg.Forwarder.Gateways.EarlyAdopter.Address = common.HexToAddress("0xEe4Fd2721b05F205505cC945aC4bbbd514F2CB8e")
 		cfg.Forwarder.Gateways.ThingsIXOnboardEndpoint = "https://api.thingsix.com/gateways/v1/onboards/{onboarder}/{owner}"
 		cfg.Forwarder.Gateways.Registry.ThingsIxApi.Endpoint = "https://api.thingsix.com/gateways/v1/{id}"
 		cfg.Forwarder.Routers.ThingsIXApi.Endpoint = utils.Ptr("https://api.thingsix.com/routers/v1/snapshot")

@@ -70,9 +70,6 @@ type RouterClient struct {
 	// Tracks the last time an event for a certain gateway was sent to the router
 	// this is used to send additional online events to prevent a timeout
 	lastGatewayEvent map[lorawan.EUI64]time.Time
-
-	// TODO: mapperForwarder *MapperForwarder
-
 }
 
 // NewRouterClient create a new client that connects to a remote routers and
