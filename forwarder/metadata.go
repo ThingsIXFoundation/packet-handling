@@ -47,7 +47,7 @@ func setChaindataInFrameMetadata(frame *gw.UplinkFrame, gw *gateway.Gateway, air
 			lat, lon := c.LatLon()
 			metadata["thingsix_location_latitude"] = fmt.Sprintf("%f", lat)
 			metadata["thingsix_location_longitude"] = fmt.Sprintf("%f", lon)
-			metadata["thingsix_altitude"] = fmt.Sprintf("%d", gw.Details.Altitude)
+			metadata["thingsix_altitude"] = fmt.Sprintf("%d", *gw.Details.Altitude)
 			if frame.RxInfo.Location == nil {
 				frame.RxInfo.Location = &common.Location{
 					Source:    common.LocationSource_CONFIG,
