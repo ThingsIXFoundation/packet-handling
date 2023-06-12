@@ -17,10 +17,12 @@
 package mapperpacket
 
 import (
+	"encoding/base64"
 	"fmt"
 
 	"github.com/ThingsIXFoundation/bitoffset"
 	"github.com/brocaar/lorawan"
+	"github.com/sirupsen/logrus"
 )
 
 type MapperPacket struct {
@@ -58,6 +60,23 @@ type DiscoveryPacket struct {
 	MapperPacket
 }
 
+func MustNewDiscoveryPacketFromBytesFromString(base64Phy string) *DiscoveryPacket {
+	b, err := base64.RawStdEncoding.DecodeString(base64Phy)
+	if err != nil {
+		logrus.Fatal(err)
+	}
+
+	return MustNewDiscoveryPacketFromBytes(b)
+}
+
+func MustNewDiscoveryPacketFromBytes(phy []byte) *DiscoveryPacket {
+	dp, err := NewDiscoveryPacketFromBytes(phy)
+	if err != nil {
+		logrus.Fatal(err)
+	}
+	return dp
+}
+
 func NewDiscoveryPacketFromBytes(phy []byte) (*DiscoveryPacket, error) {
 	if len(phy) != 9+13+65 {
 		return nil, fmt.Errorf("invalid packet length: %d", len(phy))
@@ -74,7 +93,7 @@ func (dp *DiscoveryPacket) Version() uint8 {
 
 func (dp *DiscoveryPacket) LatLon() (int32, int32) {
 	lat := int32(bitoffset.Uint32(dp.Payload(), 4, 28))
-	lon := int32(bitoffset.Uint32(dp.Payload(), 32, 29))
+	lon := int32(bitoffset.Uint32(dp.Payload(), 32, 29)*10) / 10
 
 	return lat, lon
 }
