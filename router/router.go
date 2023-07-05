@@ -36,6 +36,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
@@ -144,6 +146,7 @@ func (r *Router) Run(ctx context.Context) error {
 	)
 
 	router.RegisterRouterV1Server(grpcSrv, r)
+	grpc_health_v1.RegisterHealthServer(grpcSrv, health.NewServer())
 
 	go func() {
 		defer close(grpcSrvStopped)
