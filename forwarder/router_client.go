@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/FastFilter/xorfilter"
+	"github.com/RoaringBitmap/roaring/roaring64"
 	"github.com/brocaar/lorawan"
 
 	"github.com/ThingsIXFoundation/frequency-plan/go/frequency_plan"
@@ -463,17 +464,32 @@ func (rc *RouterClient) updateJoinFilter(ctx context.Context, client router.Rout
 		return
 	}
 
-	filter := &xorfilter.Xor8{}
+	var bitmap *roaring64.Bitmap
+	var filter *xorfilter.Xor8
 
-	if resp.GetJoinFilter().GetXor8() != nil {
-		xor := resp.GetJoinFilter().GetXor8()
-		filter.Seed = xor.Seed
-		filter.Fingerprints = xor.Fingerprints
-		filter.BlockLength = xor.Blocklength
+	if len(resp.GetJoinFilter().GetRoaringBitmap()) > 0 {
+		bitmap = roaring64.New()
+		err := bitmap.UnmarshalBinary(resp.JoinFilter.RoaringBitmap)
+		if err != nil {
+			logrus.WithError(err).WithField("router", rc.router).Error("error while updating JoinFilter for router")
+			return
+		}
+	} else {
+		if resp.GetJoinFilter().GetXor8() != nil {
+			xor := resp.GetJoinFilter().GetXor8()
+			filter = &xorfilter.Xor8{}
+			filter.Seed = xor.Seed
+			filter.Fingerprints = xor.Fingerprints
+			filter.BlockLength = xor.Blocklength
+		}
 	}
 
-	rc.router.SetJoinFilter(filter)
-	logrus.WithField("router", rc.router).Infof("updated the JoinFilter with %d fingerprints", len(filter.Fingerprints))
+	rc.router.SetJoinFilter(filter, bitmap)
+	if bitmap != nil {
+		logrus.WithField("router", rc.router).Infof("updated the JoinFilter with bitmap with %d items", bitmap.GetCardinality())
+	} else if filter != nil {
+		logrus.WithField("router", rc.router).Infof("updated the JoinFilter with %d fingerprints", len(filter.Fingerprints))
+	}
 }
 
 // routerEventsChan turns the given events readable into a readable go channel
