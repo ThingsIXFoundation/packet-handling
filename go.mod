@@ -5,11 +5,12 @@ go 1.18
 require (
 	github.com/FastFilter/xorfilter v0.1.3
 	github.com/GoogleCloudPlatform/cloudsql-proxy v1.33.7
+	github.com/RoaringBitmap/roaring v1.3.0
 	github.com/ThingsIXFoundation/bitoffset v1.0.0
 	github.com/ThingsIXFoundation/coverage-api v1.0.1
 	github.com/ThingsIXFoundation/frequency-plan v1.4.1
 	github.com/ThingsIXFoundation/gnss-system-time v1.0.0
-	github.com/ThingsIXFoundation/router-api v1.2.0
+	github.com/ThingsIXFoundation/router-api v1.3.0
 	github.com/ThingsIXFoundation/types v0.0.0-20230515082853-97e74d78c30a
 	github.com/brocaar/lorawan v0.0.0-20230517133310-3a75f7499f00
 	github.com/chirpstack/chirpstack/api/go/v4 v4.3.2
@@ -45,6 +46,7 @@ require (
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	github.com/Kl1mn/h3-go v0.0.4 // indirect
 	github.com/biter777/countries v1.6.4 // indirect
+	github.com/bits-and-blooms/bitset v1.7.0 // indirect
 	github.com/deckarep/golang-set/v2 v2.3.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
@@ -61,6 +63,7 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/lib/pq v1.10.9 // indirect
+	github.com/mschoch/smat v0.2.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect

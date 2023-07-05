@@ -20,7 +20,11 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/FastFilter/xorfilter"
+	"github.com/RoaringBitmap/roaring/roaring64"
 	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/ThingsIXFoundation/router-api/go/router"
 	"github.com/chirpstack/chirpstack/api/go/v4/api"
@@ -28,8 +32,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"sync"
-	"time"
 )
 
 type JoinFilterGenerator interface {
@@ -51,17 +53,21 @@ type chirpstackGenerator struct {
 
 	filterMutex sync.RWMutex
 	filter      *xorfilter.Xor8
+	bitmapBytes []byte
 }
 
 func (c *chirpstackGenerator) JoinFilter(ctx context.Context) (*router.JoinFilter, error) {
 	c.filterMutex.RLock()
 	defer c.filterMutex.RUnlock()
 	if c.filter != nil {
-		return &router.JoinFilter{Filter: &router.JoinFilter_Xor8{Xor8: &router.Xor8Filter{
-			Seed:         c.filter.Seed,
-			Blocklength:  c.filter.BlockLength,
-			Fingerprints: c.filter.Fingerprints,
-		}}}, nil
+		return &router.JoinFilter{
+			Filter: &router.JoinFilter_Xor8{Xor8: &router.Xor8Filter{
+				Seed:         c.filter.Seed,
+				Blocklength:  c.filter.BlockLength,
+				Fingerprints: c.filter.Fingerprints,
+			}},
+			RoaringBitmap: c.bitmapBytes,
+		}, nil
 	} else {
 		return &router.JoinFilter{Filter: &router.JoinFilter_Xor8{Xor8: nil}}, nil
 	}
@@ -184,10 +190,17 @@ func (c *chirpstackGenerator) UpdateFilter(ctx context.Context) error {
 	}
 
 	var filter *xorfilter.Xor8
+	var bitmapBytes []byte
 	if len(devEUIs) > 0 {
 		filter, err = xorfilter.Populate(devEUIs)
 		if err != nil {
 			return fmt.Errorf("error while populating xor8 filter from devEUIs: %w", err)
+		}
+		bitmap := roaring64.New()
+		bitmap.AddMany(devEUIs)
+		bitmapBytes, err = bitmap.MarshalBinary()
+		if err != nil {
+			return fmt.Errorf("error while populating bitmap from devEUIs: %w", err)
 		}
 	} else {
 		filter = nil
@@ -195,9 +208,10 @@ func (c *chirpstackGenerator) UpdateFilter(ctx context.Context) error {
 
 	c.filterMutex.Lock()
 	c.filter = filter
+	c.bitmapBytes = bitmapBytes
 	c.filterMutex.Unlock()
 
-	logrus.Infof("processed %d devEUIs from Chirpstack into Xor8 filter for joining", len(devEUIs))
+	logrus.Infof("processed %d devEUIs from ChirpStack into Xor8 filter and Bitmap of size %d kb for joining", len(devEUIs), len(bitmapBytes)/1024)
 
 	return nil
 

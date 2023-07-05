@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/RoaringBitmap/roaring/roaring64"
 	"github.com/ThingsIXFoundation/frequency-plan/go/frequency_plan"
 	"github.com/ThingsIXFoundation/packet-handling/gateway"
 	"github.com/ThingsIXFoundation/packet-handling/utils"
@@ -85,6 +86,8 @@ type Router struct {
 	joinFilterMutex sync.RWMutex
 	// JoinFilter is the filter of devices that are allowed to join the network this router is part of
 	joinFilter *xorfilter.Xor8
+	joinBitmap *roaring64.Bitmap
+
 	// Accounting keeps track if this router pays for the data is received from the gateways
 	accounting Accounter
 }
@@ -132,9 +135,10 @@ func (r *Router) InterestedIn(addr lorawan.DevAddr) bool {
 	return false
 }
 
-func (r *Router) SetJoinFilter(filter *xorfilter.Xor8) {
+func (r *Router) SetJoinFilter(filter *xorfilter.Xor8, bitmap *roaring64.Bitmap) {
 	r.joinFilterMutex.Lock()
 	r.joinFilter = filter
+	r.joinBitmap = bitmap
 	r.joinFilterMutex.Unlock()
 }
 
@@ -144,10 +148,16 @@ func (r *Router) AcceptsJoin(devEUI lorawan.EUI64) bool {
 	r.joinFilterMutex.RLock()
 	defer r.joinFilterMutex.RUnlock()
 
-	if len(r.joinFilter.Fingerprints) == 0 {
-		return r.Default
+	if r.Default {
+		return true
 	}
-	return r.joinFilter.Contains(utils.Eui64ToUint64(devEUI))
+
+	if r.joinBitmap != nil {
+		return r.joinBitmap.Contains(utils.Eui64ToUint64(devEUI))
+	} else if r.joinFilter != nil {
+		return r.joinFilter.Contains(utils.Eui64ToUint64(devEUI))
+	}
+	return false
 }
 
 // RoutingTable takes care of the communication between the Packet Exchange and
