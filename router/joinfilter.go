@@ -20,6 +20,9 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/FastFilter/xorfilter"
 	"github.com/ThingsIXFoundation/packet-handling/utils"
 	"github.com/ThingsIXFoundation/router-api/go/router"
@@ -28,8 +31,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"sync"
-	"time"
 )
 
 type JoinFilterGenerator interface {
@@ -144,9 +145,22 @@ func (c *chirpstackGenerator) getDevEuisForApplication(ctx context.Context, appI
 		hasMore = len(resp.Result) >= int(limit)
 
 		for _, dev := range resp.GetResult() {
+			devResp, err := c.dsc.Get(ctx, &api.GetDeviceRequest{
+				DevEui: dev.DevEui,
+			})
+
+			if err != nil {
+				logrus.WithError(err).Warnf("could not get device details for DevEUI: %s", dev.DevEui)
+				continue
+			}
+
+			if devResp.GetDevice().IsDisabled {
+				continue
+			}
+
 			eui, err := utils.Eui64FromString(dev.DevEui)
 			if err != nil {
-				logrus.WithError(err).Warnf("could not parse DevEui from string: %s, skipping", dev.DevEui)
+				logrus.WithError(err).Warnf("could not parse DevEUI from string: %s, skipping", dev.DevEui)
 				continue
 			}
 			devEUIs = append(devEUIs, utils.Eui64ToUint64(eui))
