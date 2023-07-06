@@ -474,14 +474,12 @@ func (rc *RouterClient) updateJoinFilter(ctx context.Context, client router.Rout
 			logrus.WithError(err).WithField("router", rc.router).Error("error while updating JoinFilter for router")
 			return
 		}
-	} else {
-		if resp.GetJoinFilter().GetXor8() != nil {
-			xor := resp.GetJoinFilter().GetXor8()
-			filter = &xorfilter.Xor8{}
-			filter.Seed = xor.Seed
-			filter.Fingerprints = xor.Fingerprints
-			filter.BlockLength = xor.Blocklength
-		}
+	} else if resp.GetJoinFilter().GetXor8() != nil {
+		xor := resp.GetJoinFilter().GetXor8()
+		filter = &xorfilter.Xor8{}
+		filter.Seed = xor.Seed
+		filter.Fingerprints = xor.Fingerprints
+		filter.BlockLength = xor.Blocklength
 	}
 
 	rc.router.SetJoinFilter(filter, bitmap)
