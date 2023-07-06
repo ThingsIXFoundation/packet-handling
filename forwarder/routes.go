@@ -154,7 +154,7 @@ func (r *Router) AcceptsJoin(devEUI lorawan.EUI64) bool {
 
 	if r.joinBitmap != nil {
 		return r.joinBitmap.Contains(utils.Eui64ToUint64(devEUI))
-	} else if r.joinFilter != nil {
+	} else if r.joinFilter != nil && len(r.joinFilter.Fingerprints) > 0 {
 		return r.joinFilter.Contains(utils.Eui64ToUint64(devEUI))
 	}
 	return false
