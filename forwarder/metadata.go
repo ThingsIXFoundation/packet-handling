@@ -29,6 +29,7 @@ import (
 func setChaindataInFrameMetadata(frame *gw.UplinkFrame, gw *gateway.Gateway, airtime time.Duration) {
 	frame.RxInfo.Metadata = map[string]string{}
 	metadata := frame.RxInfo.Metadata
+	metadata["network"] = "thingsix"
 	metadata["thingsix_gateway_id"] = gw.ID().String()
 	metadata["thingsix_airtime_ms"] = fmt.Sprintf("%d", airtime.Milliseconds())
 
